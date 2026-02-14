@@ -1,0 +1,41 @@
+{
+  "id": "platform-bootstrap",
+  "name": "platform-bootstrap",
+  "title": "Platform Bootstrap",
+  "description": "Initialize fullstack project skeleton with Go Fiber backend, Next.js frontend, and Docker Compose services",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "priority": "P2",
+  "creator": "calendar",
+  "assignee": "calendar",
+  "createdAt": "2026-02-13",
+  "completedAt": "2026-02-13",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "current_phase": 3,
+  "next_action": [
+    {
+      "phase": 1,
+      "action": "implement"
+    },
+    {
+      "phase": 2,
+      "action": "check"
+    },
+    {
+      "phase": 3,
+      "action": "finish"
+    },
+    {
+      "phase": 4,
+      "action": "create-pr"
+    }
+  ],
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "relatedFiles": [],
+  "notes": ""
+}

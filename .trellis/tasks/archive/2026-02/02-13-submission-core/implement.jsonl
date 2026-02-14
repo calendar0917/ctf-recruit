@@ -1,0 +1,10 @@
+{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
+{"file": ".trellis/spec/shared/index.md", "reason": "Shared coding standards"}
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend development guide"}
+{"file": ".trellis/spec/backend/api-module.md", "reason": "API module conventions"}
+{"file": ".trellis/spec/backend/quality.md", "reason": "Code quality requirements"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Module layering conventions"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Submission and score DB patterns"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Standardized API errors"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Submission lifecycle logging"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Backend quality baseline"}

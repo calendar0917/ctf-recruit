@@ -1,0 +1,10 @@
+{
+  "name": "ctf-recruit",
+  "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "scripts": {
+    "lint": "pnpm -C frontend lint && (cd backend && go vet ./...)",
+    "type-check": "pnpm -C frontend type-check && (cd backend && go build ./...)",
+    "test": "pnpm -C frontend test && (cd backend && go test ./...)"
+  }
+}

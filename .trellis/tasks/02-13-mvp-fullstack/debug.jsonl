@@ -1,0 +1,14 @@
+{"file": ".claude/commands/trellis/check-backend.md", "reason": "Backend diagnostics checklist"}
+{"file": ".claude/commands/trellis/check-frontend.md", "reason": "Frontend diagnostics checklist"}
+{"file": "backend/internal/middleware/error_handler.go", "reason": "Unified error response middleware"}
+{"file": "backend/internal/errors/app_error.go", "reason": "Typed application errors"}
+{"file": "backend/internal/errors/helpers.go", "reason": "Canonical error constructors"}
+{"file": "backend/internal/platform/app.go", "reason": "App wiring and middleware chain"}
+{"file": "backend/internal/modules/health/handler.go", "reason": "Health endpoint for runtime diagnostics"}
+{"file": "backend/.env.example", "reason": "Backend environment baseline"}
+{"file": "frontend/.env.example", "reason": "Frontend environment baseline"}
+{"file": "backend/Makefile", "reason": "Local run build test commands"}
+{"file": "backend/Dockerfile", "reason": "Backend container runtime definition"}
+{"file": "frontend/Dockerfile", "reason": "Frontend container runtime definition"}
+{"file": "docker-compose.yml", "reason": "Service orchestration debugging"}
+{"file": "backend/cmd/worker/main.go", "reason": "Worker loop diagnostics"}

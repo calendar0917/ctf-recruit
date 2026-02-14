@@ -1,0 +1,11 @@
+{"file": ".claude/commands/trellis/finish-work.md", "reason": "Finish work checklist"}
+{"file": ".claude/commands/trellis/check-backend.md", "reason": "Backend check spec"}
+{"file": ".claude/commands/trellis/check-frontend.md", "reason": "Frontend check spec"}
+{"file": "backend/internal/modules/auth/service_test.go", "reason": "Auth behavior regression tests"}
+{"file": "backend/internal/modules/challenge/service_test.go", "reason": "Challenge business rule tests"}
+{"file": "backend/internal/modules/submission/service_test.go", "reason": "Submission scoring and enqueue tests"}
+{"file": "backend/internal/modules/judge/queue_test.go", "reason": "Dynamic judge processing tests"}
+{"file": "backend/internal/modules/scoreboard/service_test.go", "reason": "Scoreboard ranking tests"}
+{"file": "backend/internal/modules/announcement/service_test.go", "reason": "Announcement business rule tests"}
+{"file": "frontend/src/__tests__/smoke.test.ts", "reason": "Frontend smoke baseline"}
+{"file": "package.json", "reason": "Monorepo lint type-check test gates"}

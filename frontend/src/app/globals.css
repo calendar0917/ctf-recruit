@@ -1,0 +1,270 @@
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  background: linear-gradient(180deg, #f4f7fb 0%, #e9eef7 100%);
+  color: #13213a;
+}
+
+a {
+  color: inherit;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0 0 0.5rem;
+}
+
+p {
+  margin: 0;
+}
+
+.page {
+  min-height: calc(100vh - 64px);
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+}
+
+.page-content {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+  width: min(72rem, 100%);
+  margin: 0 auto;
+}
+
+.card {
+  width: 100%;
+  background: #ffffff;
+  border: 1px solid #d7e2f1;
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  box-shadow: 0 10px 30px rgba(15, 32, 67, 0.08);
+}
+
+.auth-card {
+  width: min(32rem, 100%);
+}
+
+.app-nav {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #0f213f;
+  color: #f8fbff;
+  border-bottom: 1px solid #223e70;
+}
+
+.app-nav-inner {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.brand {
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.nav-links {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.nav-links a {
+  text-decoration: none;
+  opacity: 0.9;
+}
+
+.nav-links a.active {
+  font-weight: 700;
+  opacity: 1;
+}
+
+.nav-user {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.form-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+label {
+  display: grid;
+  gap: 0.35rem;
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid #b7c7df;
+  border-radius: 0.45rem;
+  background: #fff;
+}
+
+textarea {
+  resize: vertical;
+}
+
+.button {
+  border: 1px solid #1f4ea3;
+  background: #1f4ea3;
+  color: #fff;
+  border-radius: 0.45rem;
+  padding: 0.55rem 0.9rem;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: fit-content;
+}
+
+.button.secondary {
+  background: #fff;
+  color: #1f4ea3;
+}
+
+.button.danger {
+  background: #a32323;
+  border-color: #a32323;
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.list-grid {
+  width: 100%;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+}
+
+.challenge-card {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.challenge-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.challenge-meta span {
+  background: #eef3fb;
+  border: 1px solid #d6e1f3;
+  border-radius: 999px;
+  padding: 0.1rem 0.55rem;
+  font-size: 0.85rem;
+}
+
+.stack-lg {
+  display: grid;
+  gap: 1rem;
+  width: 100%;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  border-bottom: 1px solid #dce4f2;
+  padding: 0.55rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.row-fields {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+}
+
+.inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.checkbox-label input {
+  width: auto;
+}
+
+.clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.score-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.error-text {
+  color: #9b1c1c;
+}
+
+.info-text {
+  color: #124a88;
+}
+
+.empty-text {
+  color: #496080;
+}
+
+.helper-text {
+  margin-top: 0.75rem;
+}

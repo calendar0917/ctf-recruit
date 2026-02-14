@@ -1,0 +1,36 @@
+{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
+{"file": ".trellis/spec/guides/index.md", "reason": "Project-wide development guidance index"}
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend development guide"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Backend layering contract"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Migration and transactional DB guidance"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Unified API error handling conventions"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Backend quality and testing conventions"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend development guide"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Frontend structure for MVP pages"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Frontend component architecture conventions"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Auth and server-state management guidance"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Frontend API type-safety guidance"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Cross-layer end-to-end consistency guidance"}
+{"file": "backend/internal/router/router.go", "reason": "Route composition entrypoint"}
+{"file": "backend/internal/modules/auth/service.go", "reason": "Auth business logic and JWT lifecycle"}
+{"file": "backend/internal/modules/auth/handler.go", "reason": "Auth HTTP endpoints"}
+{"file": "backend/internal/middleware/auth.go", "reason": "Token verification middleware"}
+{"file": "backend/internal/middleware/rbac.go", "reason": "Role-based access control middleware"}
+{"file": "backend/internal/modules/challenge/service.go", "reason": "Challenge CRUD and mode logic"}
+{"file": "backend/internal/modules/challenge/handler.go", "reason": "Challenge API surface"}
+{"file": "backend/internal/modules/submission/service.go", "reason": "Submission and judge dispatch flow"}
+{"file": "backend/internal/modules/judge/queue.go", "reason": "Dynamic judge processing loop"}
+{"file": "backend/internal/modules/judge/repository.go", "reason": "Transactional judge result finalization"}
+{"file": "backend/internal/modules/scoreboard/service.go", "reason": "Ranking logic"}
+{"file": "backend/internal/modules/scoreboard/repository.go", "reason": "Score aggregation query"}
+{"file": "backend/cmd/worker/main.go", "reason": "Judge worker runtime entrypoint"}
+{"file": "backend/cmd/api/main.go", "reason": "API runtime entrypoint"}
+{"file": "backend/internal/config/config.go", "reason": "Environment contract"}
+{"file": "backend/migrations/20260213193000_create_users_table.up.sql", "reason": "Users schema"}
+{"file": "backend/migrations/20260213200000_create_challenges_table.up.sql", "reason": "Challenges schema"}
+{"file": "backend/migrations/20260213220000_add_mode_to_challenges_table.up.sql", "reason": "Challenge mode schema update"}
+{"file": "backend/migrations/20260213203000_create_submissions_table.up.sql", "reason": "Submissions schema"}
+{"file": "backend/migrations/20260213221000_create_judge_jobs_table.up.sql", "reason": "Judge jobs schema"}
+{"file": "docker-compose.yml", "reason": "Ops orchestration for E2E demo"}
+{"file": "frontend/src/app/page.tsx", "reason": "Frontend MVP bootstrap page"}
+{"file": "frontend/package.json", "reason": "Frontend toolchain and scripts"}

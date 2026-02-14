@@ -1,0 +1,48 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ctf_recruit
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  backend:
+    build:
+      context: ./backend
+      extra_hosts:
+        - "host.docker.internal:host-gateway"
+      args:
+        HTTP_PROXY: http://host.docker.internal:7897
+        HTTPS_PROXY: http://host.docker.internal:7897
+        ALL_PROXY: http://host.docker.internal:7897
+        NO_PROXY: localhost,127.0.0.1,postgres,redis,backend,frontend
+        GOPROXY: https://goproxy.cn,direct
+    env_file:
+      - ./backend/.env.example
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+      - redis
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://backend:8080
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:

@@ -1,0 +1,18 @@
+{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
+{"file": ".trellis/spec/shared/index.md", "reason": "Shared coding standards"}
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend development guide"}
+{"file": ".trellis/spec/backend/api-module.md", "reason": "API module conventions"}
+{"file": ".trellis/spec/backend/quality.md", "reason": "Code quality requirements"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend development guide"}
+{"file": ".trellis/spec/frontend/components.md", "reason": "Component conventions"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Go Fiber backend layout"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Postgres/GORM/Redis conventions"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Unified API error schema"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Structured logging conventions"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Backend quality checks"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Next.js layout"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Component conventions"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "Hook/data fetching conventions"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "State management strategy"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "TS + Zod conventions"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend quality checks"}

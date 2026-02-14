@@ -1,0 +1,41 @@
+{
+  "id": "mvp-fullstack",
+  "name": "mvp-fullstack",
+  "title": "完成本项目MVP，范围包括账户与认证、题目与提交（静态+动态判题闭环）、积分与排行榜、运维与交付；以端到端可运行演示作为验收标准。",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": "fullstack",
+  "scope": "fullstack",
+  "priority": "P2",
+  "creator": "calendar",
+  "assignee": "calendar",
+  "createdAt": "2026-02-13",
+  "completedAt": null,
+  "branch": "feature/mvp-fullstack",
+  "base_branch": "master",
+  "worktree_path": "/home/calendar/Project/code/trellis-worktrees/feature/mvp-fullstack",
+  "current_phase": 0,
+  "next_action": [
+    {
+      "phase": 1,
+      "action": "implement"
+    },
+    {
+      "phase": 2,
+      "action": "check"
+    },
+    {
+      "phase": 3,
+      "action": "finish"
+    },
+    {
+      "phase": 4,
+      "action": "create-pr"
+    }
+  ],
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "relatedFiles": [],
+  "notes": ""
+}
