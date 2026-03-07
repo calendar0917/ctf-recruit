@@ -1,0 +1,22 @@
+Task 9 - TTL Sweeper focused tests
+Date: 2026-02-16
+
+Command:
+go test -v ./internal/modules/instance -run 'TestSweeperExpiresRunningInstanceAndSetsCooldown|TestSweeperStopFailureLogsContextAndIsRetriable'
+
+Result: PASS
+
+Output:
+=== RUN   TestSweeperExpiresRunningInstanceAndSetsCooldown
+2026/02/16 13:58:43 INFO instance expired by sweeper instanceId=ad392c12-31e4-4b5c-b7a0-1d3bbf519622 userId=46711ea1-cb15-42c5-98bc-6d4fed64b892 challengeId=17ec23bc-d35d-4ac6-920e-2a48f1e6f65d containerId=container-expire-1
+--- PASS: TestSweeperExpiresRunningInstanceAndSetsCooldown (0.00s)
+=== RUN   TestSweeperStopFailureLogsContextAndIsRetriable
+--- PASS: TestSweeperStopFailureLogsContextAndIsRetriable (0.00s)
+PASS
+ok  	ctf-recruit/backend/internal/modules/instance	0.004s
+
+Coverage evidence in this run:
+- Expiry detection (`expires_at <= now`) processed by sweeper
+- Transition to `expired` with cooldown application
+- Expired instance no longer active/running (`FindActiveForUser` returns nil)
+- Stop failure logs include trace context (`instanceId`, `containerId`) and retry succeeds

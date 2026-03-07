@@ -1,0 +1,257 @@
+
+> ctf-recruit-frontend@0.1.0 test:e2e /home/calendar/code/ctf-recruit/frontend
+> node ./scripts/run-e2e.mjs "--" "e2e/lifecycle.e2e.spec.ts" "e2e/admin-runtime-config.e2e.spec.ts" "--reporter=list"
+
+ ⨯ Failed to start server
+Error: listen EADDRINUSE: address already in use 127.0.0.1:3001
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at node:net:2206:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+  code: 'EADDRINUSE',
+  errno: -98,
+  syscall: 'listen',
+  address: '127.0.0.1',
+  port: 3001
+}
+[?25h
+
+Running 2 tests using 1 worker
+
+  ✘  1 [chromium] › e2e/admin-runtime-config.e2e.spec.ts:13:6 › admin runtime config journey › admin edits runtime fields and player can observe challenge detail (30.9s)
+  ✘  2 [chromium] › e2e/admin-runtime-config.e2e.spec.ts:13:6 › admin runtime config journey › admin edits runtime fields and player can observe challenge detail (retry #1) (10.8s)
+  ✘  3 [chromium] › e2e/admin-runtime-config.e2e.spec.ts:13:6 › admin runtime config journey › admin edits runtime fields and player can observe challenge detail (retry #2) (10.8s)
+  ✘  4 [chromium] › e2e/lifecycle.e2e.spec.ts:10:6 › player lifecycle journey › login -> challenge detail -> start/stop/cooldown path (12.2s)
+  ✘  5 [chromium] › e2e/lifecycle.e2e.spec.ts:10:6 › player lifecycle journey › login -> challenge detail -> start/stop/cooldown path (retry #1) (10.8s)
+  ✘  6 [chromium] › e2e/lifecycle.e2e.spec.ts:10:6 › player lifecycle journey › login -> challenge detail -> start/stop/cooldown path (retry #2) (10.8s)
+
+
+  1) [chromium] › e2e/admin-runtime-config.e2e.spec.ts:13:6 › admin runtime config journey › admin edits runtime fields and player can observe challenge detail 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: page.waitForURL: Test timeout of 30000ms exceeded.
+    =========================== logs ===========================
+    waiting for navigation to "**/challenges" until "load"
+      navigated to "http://127.0.0.1:3001/login?"
+    ============================================================
+
+       at helpers.ts:16
+
+      14 | 	await page.getByLabel("Password").fill(credentials.password);
+      15 | 	await page.getByRole("button", { name: "Sign in" }).click();
+    > 16 | 	await page.waitForURL("**/challenges", { timeout: 30_000 });
+         | 	           ^
+      17 | 	await page.getByRole("heading", { name: "Challenges" }).waitFor();
+      18 | }
+      19 |
+        at loginViaUi (/home/calendar/code/ctf-recruit/frontend/e2e/helpers.ts:16:13)
+        at /home/calendar/code/ctf-recruit/frontend/e2e/admin-runtime-config.e2e.spec.ts:17:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/admin-runtime-config.e2e-a-f2429-an-observe-challenge-detail-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/admin-runtime-config.e2e-a-f2429-an-observe-challenge-detail-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/admin-runtime-config.e2e-a-f2429-an-observe-challenge-detail-chromium/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/admin-runtime-config.e2e-a-f2429-an-observe-challenge-detail-chromium/trace.zip
+    Usage:
+
+        pnpm exec playwright show-trace test-results/admin-runtime-config.e2e-a-f2429-an-observe-challenge-detail-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    TimeoutError: locator.fill: Timeout 10000ms exceeded.
+    Call log:
+    [2m  - waiting for getByLabel('Email')[22m
+
+
+       at helpers.ts:13
+
+      11 | ): Promise<void> {
+      12 | 	await page.goto("/login");
+    > 13 | 	await page.getByLabel("Email").fill(credentials.email);
+         | 	                               ^
+      14 | 	await page.getByLabel("Password").fill(credentials.password);
+      15 | 	await page.getByRole("button", { name: "Sign in" }).click();
+      16 | 	await page.waitForURL("**/challenges", { timeout: 30_000 });
+        at loginViaUi (/home/calendar/code/ctf-recruit/frontend/e2e/helpers.ts:13:33)
+        at /home/calendar/code/ctf-recruit/frontend/e2e/admin-runtime-config.e2e.spec.ts:17:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/admin-runtime-config.e2e-a-f2429-an-observe-challenge-detail-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/admin-runtime-config.e2e-a-f2429-an-observe-challenge-detail-chromium-retry1/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/admin-runtime-config.e2e-a-f2429-an-observe-challenge-detail-chromium-retry1/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/admin-runtime-config.e2e-a-f2429-an-observe-challenge-detail-chromium-retry1/trace.zip
+    Usage:
+
+        pnpm exec playwright show-trace test-results/admin-runtime-config.e2e-a-f2429-an-observe-challenge-detail-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #2 ───────────────────────────────────────────────────────────────────────────────────────
+
+    TimeoutError: locator.fill: Timeout 10000ms exceeded.
+    Call log:
+    [2m  - waiting for getByLabel('Email')[22m
+
+
+       at helpers.ts:13
+
+      11 | ): Promise<void> {
+      12 | 	await page.goto("/login");
+    > 13 | 	await page.getByLabel("Email").fill(credentials.email);
+         | 	                               ^
+      14 | 	await page.getByLabel("Password").fill(credentials.password);
+      15 | 	await page.getByRole("button", { name: "Sign in" }).click();
+      16 | 	await page.waitForURL("**/challenges", { timeout: 30_000 });
+        at loginViaUi (/home/calendar/code/ctf-recruit/frontend/e2e/helpers.ts:13:33)
+        at /home/calendar/code/ctf-recruit/frontend/e2e/admin-runtime-config.e2e.spec.ts:17:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/admin-runtime-config.e2e-a-f2429-an-observe-challenge-detail-chromium-retry2/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/admin-runtime-config.e2e-a-f2429-an-observe-challenge-detail-chromium-retry2/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/admin-runtime-config.e2e-a-f2429-an-observe-challenge-detail-chromium-retry2/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/admin-runtime-config.e2e-a-f2429-an-observe-challenge-detail-chromium-retry2/trace.zip
+    Usage:
+
+        pnpm exec playwright show-trace test-results/admin-runtime-config.e2e-a-f2429-an-observe-challenge-detail-chromium-retry2/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [chromium] › e2e/lifecycle.e2e.spec.ts:10:6 › player lifecycle journey › login -> challenge detail -> start/stop/cooldown path 
+
+    TimeoutError: locator.fill: Timeout 10000ms exceeded.
+    Call log:
+    [2m  - waiting for getByLabel('Email')[22m
+
+
+       at helpers.ts:13
+
+      11 | ): Promise<void> {
+      12 | 	await page.goto("/login");
+    > 13 | 	await page.getByLabel("Email").fill(credentials.email);
+         | 	                               ^
+      14 | 	await page.getByLabel("Password").fill(credentials.password);
+      15 | 	await page.getByRole("button", { name: "Sign in" }).click();
+      16 | 	await page.waitForURL("**/challenges", { timeout: 30_000 });
+        at loginViaUi (/home/calendar/code/ctf-recruit/frontend/e2e/helpers.ts:13:33)
+        at /home/calendar/code/ctf-recruit/frontend/e2e/lifecycle.e2e.spec.ts:11:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/lifecycle.e2e-player-lifec-1a4e9----start-stop-cooldown-path-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/lifecycle.e2e-player-lifec-1a4e9----start-stop-cooldown-path-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/lifecycle.e2e-player-lifec-1a4e9----start-stop-cooldown-path-chromium/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/lifecycle.e2e-player-lifec-1a4e9----start-stop-cooldown-path-chromium/trace.zip
+    Usage:
+
+        pnpm exec playwright show-trace test-results/lifecycle.e2e-player-lifec-1a4e9----start-stop-cooldown-path-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    TimeoutError: locator.fill: Timeout 10000ms exceeded.
+    Call log:
+    [2m  - waiting for getByLabel('Email')[22m
+
+
+       at helpers.ts:13
+
+      11 | ): Promise<void> {
+      12 | 	await page.goto("/login");
+    > 13 | 	await page.getByLabel("Email").fill(credentials.email);
+         | 	                               ^
+      14 | 	await page.getByLabel("Password").fill(credentials.password);
+      15 | 	await page.getByRole("button", { name: "Sign in" }).click();
+      16 | 	await page.waitForURL("**/challenges", { timeout: 30_000 });
+        at loginViaUi (/home/calendar/code/ctf-recruit/frontend/e2e/helpers.ts:13:33)
+        at /home/calendar/code/ctf-recruit/frontend/e2e/lifecycle.e2e.spec.ts:11:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/lifecycle.e2e-player-lifec-1a4e9----start-stop-cooldown-path-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/lifecycle.e2e-player-lifec-1a4e9----start-stop-cooldown-path-chromium-retry1/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/lifecycle.e2e-player-lifec-1a4e9----start-stop-cooldown-path-chromium-retry1/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/lifecycle.e2e-player-lifec-1a4e9----start-stop-cooldown-path-chromium-retry1/trace.zip
+    Usage:
+
+        pnpm exec playwright show-trace test-results/lifecycle.e2e-player-lifec-1a4e9----start-stop-cooldown-path-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #2 ───────────────────────────────────────────────────────────────────────────────────────
+
+    TimeoutError: locator.fill: Timeout 10000ms exceeded.
+    Call log:
+    [2m  - waiting for getByLabel('Email')[22m
+
+
+       at helpers.ts:13
+
+      11 | ): Promise<void> {
+      12 | 	await page.goto("/login");
+    > 13 | 	await page.getByLabel("Email").fill(credentials.email);
+         | 	                               ^
+      14 | 	await page.getByLabel("Password").fill(credentials.password);
+      15 | 	await page.getByRole("button", { name: "Sign in" }).click();
+      16 | 	await page.waitForURL("**/challenges", { timeout: 30_000 });
+        at loginViaUi (/home/calendar/code/ctf-recruit/frontend/e2e/helpers.ts:13:33)
+        at /home/calendar/code/ctf-recruit/frontend/e2e/lifecycle.e2e.spec.ts:11:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/lifecycle.e2e-player-lifec-1a4e9----start-stop-cooldown-path-chromium-retry2/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/lifecycle.e2e-player-lifec-1a4e9----start-stop-cooldown-path-chromium-retry2/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/lifecycle.e2e-player-lifec-1a4e9----start-stop-cooldown-path-chromium-retry2/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/lifecycle.e2e-player-lifec-1a4e9----start-stop-cooldown-path-chromium-retry2/trace.zip
+    Usage:
+
+        pnpm exec playwright show-trace test-results/lifecycle.e2e-player-lifec-1a4e9----start-stop-cooldown-path-chromium-retry2/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [chromium] › e2e/admin-runtime-config.e2e.spec.ts:13:6 › admin runtime config journey › admin edits runtime fields and player can observe challenge detail 
+    [chromium] › e2e/lifecycle.e2e.spec.ts:10:6 › player lifecycle journey › login -> challenge detail -> start/stop/cooldown path 
+ ELIFECYCLE  Command failed with exit code 1.

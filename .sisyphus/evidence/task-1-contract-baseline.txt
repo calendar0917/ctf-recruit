@@ -1,0 +1,5 @@
+# Task 1 contract baseline evidence (backfill)
+- Verified: lifecycle contract baseline includes concurrent start guard (`only one active instance per user`) and corresponding backend test path.
+- Command context (prior run): `go test -v ./internal/modules/instance -run TestInstancesConcurrentStartOnlyOneCreated`
+- Result reference: PASS in `.sisyphus/evidence/task-7-instance-tests.txt` (`=== RUN TestInstancesConcurrentStartOnlyOneCreated` then `--- PASS`).
+- Deterministic note: this file is a backfilled pointer to already-recorded test evidence; no new execution performed in this backfill step.

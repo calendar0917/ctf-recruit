@@ -1,0 +1,15 @@
+Task 10 API evidence: A starts, B tries stop => denied
+
+Command:
+go test ./internal/modules/instance -run TestInstancesAPIEvidenceAStartsBStopDenied -v
+
+Output:
+=== RUN   TestInstancesAPIEvidenceAStartsBStopDenied
+--- PASS: TestInstancesAPIEvidenceAStartsBStopDenied (0.00s)
+PASS
+ok  	ctf-recruit/backend/internal/modules/instance	0.003s
+
+Scenario assertion:
+- User A creates instance via POST /instances/start.
+- User B calls POST /instances/stop with A's instanceId.
+- API returns 403 with code INSTANCE_FORBIDDEN.

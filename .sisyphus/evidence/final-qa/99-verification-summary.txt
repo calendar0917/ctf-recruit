@@ -1,0 +1,7 @@
+Verification summary
+
+- Changed-file diagnostics: markdown-only changes; no .md LSP server configured (see 98-lsp-diagnostics-note.txt).
+- Build status: PASS (see 91-frontend-build.txt).
+- Frontend tests: PASS (see 92-frontend-test.txt).
+- Primary integration e2e replay: PASS 2/2 (see 01-playwright-integration.log and 01-playwright-results/.last-run.json).
+- Additional rerun status: FAIL due to unstable Next dev artifact (`Cannot find module './447.js'`) after repeated reruns (see 93-e2e-rerun*.txt/md/json).

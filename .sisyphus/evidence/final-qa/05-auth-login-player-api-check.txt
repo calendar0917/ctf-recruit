@@ -1,0 +1,11 @@
+HTTP/1.1 200 OK
+Content-Length: 450
+Connection: keep-alive
+Content-Type: application/json
+Date: Tue, 17 Feb 2026 20:29:29 GMT
+Keep-Alive: timeout=4
+Proxy-Connection: keep-alive
+Vary: Origin
+X-Request-Id: req_9ba6ecd4-588a-4c52-bd88-fd181e758ff8
+
+{"accessToken":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiI4OWU5YTBhYS1iNDRmLTRjY2EtODdmNy02MDcwN2M1MjViZDMiLCJyb2xlIjoicGxheWVyIiwic3ViIjoiODllOWEwYWEtYjQ0Zi00Y2NhLTg3ZjctNjA3MDdjNTI1YmQzIiwiZXhwIjoxNzcxNDQ2NTcwLCJpYXQiOjE3NzEzNjAxNzB9.aIuLe07f87BU03pqf1CWi1IdibgOx2QudCGE1jzPcgM","tokenType":"Bearer","user":{"id":"89e9a0aa-b44f-4cca-87f7-60707c525bd3","email":"player@ctf.local","displayName":"CTF Player","role":"player","isDisabled":false}}

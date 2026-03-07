@@ -61,18 +61,24 @@ func (s *Service) Create(ctx context.Context, req CreateChallengeRequest) (*Chal
 	if req.Points <= 0 {
 		return nil, apperrors.BadRequest("CHALLENGE_VALIDATION_ERROR", "Points must be greater than zero")
 	}
+	if req.RuntimeExposedPort != nil && *req.RuntimeExposedPort <= 0 {
+		return nil, apperrors.BadRequest("CHALLENGE_VALIDATION_ERROR", "runtimeExposedPort must be greater than zero")
+	}
 
 	challenge := &Challenge{
-		Title:       req.Title,
-		Description: req.Description,
-		Category:    req.Category,
-		Difficulty:  req.Difficulty,
-		Mode:        req.Mode,
-		Points:      req.Points,
-		FlagHash:    hashFlag(req.Flag),
-		IsPublished: req.IsPublished,
-		CreatedAt:   time.Now().UTC(),
-		UpdatedAt:   time.Now().UTC(),
+		Title:              req.Title,
+		Description:        req.Description,
+		Category:           req.Category,
+		Difficulty:         req.Difficulty,
+		Mode:               req.Mode,
+		RuntimeImage:       sanitizeOptionalString(req.RuntimeImage),
+		RuntimeCommand:     sanitizeOptionalString(req.RuntimeCommand),
+		RuntimeExposedPort: req.RuntimeExposedPort,
+		Points:             req.Points,
+		FlagHash:           hashFlag(req.Flag),
+		IsPublished:        req.IsPublished,
+		CreatedAt:          time.Now().UTC(),
+		UpdatedAt:          time.Now().UTC(),
 	}
 
 	if err := s.repo.Create(ctx, challenge); err != nil {
@@ -129,6 +135,18 @@ func (s *Service) Update(ctx context.Context, id string, req UpdateChallengeRequ
 			return nil, apperrors.BadRequest("CHALLENGE_VALIDATION_ERROR", "Mode must be static or dynamic")
 		}
 		challenge.Mode = *req.Mode
+	}
+	if req.RuntimeImage != nil {
+		challenge.RuntimeImage = sanitizeOptionalString(req.RuntimeImage)
+	}
+	if req.RuntimeCommand != nil {
+		challenge.RuntimeCommand = sanitizeOptionalString(req.RuntimeCommand)
+	}
+	if req.RuntimeExposedPort != nil {
+		if *req.RuntimeExposedPort <= 0 {
+			return nil, apperrors.BadRequest("CHALLENGE_VALIDATION_ERROR", "runtimeExposedPort must be greater than zero")
+		}
+		challenge.RuntimeExposedPort = req.RuntimeExposedPort
 	}
 	if req.Points != nil {
 		if *req.Points <= 0 {
@@ -241,17 +259,31 @@ func hashFlag(flag string) string {
 
 func mapChallengeResponse(challenge *Challenge) ChallengeResponse {
 	return ChallengeResponse{
-		ID:          challenge.ID.String(),
-		Title:       challenge.Title,
-		Description: challenge.Description,
-		Category:    challenge.Category,
-		Difficulty:  challenge.Difficulty,
-		Mode:        challenge.Mode,
-		Points:      challenge.Points,
-		IsPublished: challenge.IsPublished,
-		CreatedAt:   challenge.CreatedAt.UTC().Format(time.RFC3339),
-		UpdatedAt:   challenge.UpdatedAt.UTC().Format(time.RFC3339),
+		ID:                 challenge.ID.String(),
+		Title:              challenge.Title,
+		Description:        challenge.Description,
+		Category:           challenge.Category,
+		Difficulty:         challenge.Difficulty,
+		Mode:               challenge.Mode,
+		RuntimeImage:       challenge.RuntimeImage,
+		RuntimeCommand:     challenge.RuntimeCommand,
+		RuntimeExposedPort: challenge.RuntimeExposedPort,
+		Points:             challenge.Points,
+		IsPublished:        challenge.IsPublished,
+		CreatedAt:          challenge.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt:          challenge.UpdatedAt.UTC().Format(time.RFC3339),
 	}
+}
+
+func sanitizeOptionalString(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	v := strings.TrimSpace(*value)
+	if v == "" {
+		return nil
+	}
+	return &v
 }
 
 func normalizeLimit(limit int) int {

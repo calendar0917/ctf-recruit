@@ -1,0 +1,8 @@
+=== RUN   TestInstancesConcurrentStartOnlyOneCreated
+--- PASS: TestInstancesConcurrentStartOnlyOneCreated (0.00s)
+=== RUN   TestInstancesStartBlockedByCooldownReturnsRetryAt
+--- PASS: TestInstancesStartBlockedByCooldownReturnsRetryAt (0.00s)
+=== RUN   TestInstancesInvalidTransitionRejected
+--- PASS: TestInstancesInvalidTransitionRejected (0.00s)
+PASS
+ok  	ctf-recruit/backend/internal/modules/instance	(cached)

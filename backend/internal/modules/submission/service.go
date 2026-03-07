@@ -10,11 +10,17 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
+)
+
+const (
+	defaultLimit = 20
+	maxLimit     = 100
 )
 
 type ChallengeReader interface {
@@ -32,9 +38,9 @@ func NewService(repo Repository, challenges ChallengeReader, queue judge.Queue) 
 }
 
 func (s *Service) Submit(ctx context.Context, userID string, role auth.Role, req CreateSubmissionRequest) (*SubmissionResponse, error) {
-	userID = strings.TrimSpace(userID)
-	if userID == "" {
-		return nil, apperrors.Unauthorized("AUTH_INVALID_TOKEN", "Invalid token")
+	userUUID, err := parseUserID(userID)
+	if err != nil {
+		return nil, err
 	}
 
 	challengeID := strings.TrimSpace(req.ChallengeID)
@@ -45,11 +51,6 @@ func (s *Service) Submit(ctx context.Context, userID string, role auth.Role, req
 
 	if challengeID == "" || flag == "" {
 		return nil, apperrors.BadRequest("SUBMISSION_VALIDATION_ERROR", "challengeId and flag are required")
-	}
-
-	userUUID, err := uuid.Parse(userID)
-	if err != nil {
-		return nil, apperrors.Unauthorized("AUTH_INVALID_TOKEN", "Invalid token")
 	}
 
 	challengeUUID, err := uuid.Parse(challengeID)
@@ -119,7 +120,60 @@ func (s *Service) Submit(ctx context.Context, userID string, role auth.Role, req
 
 	resp := mapSubmissionResponse(sub)
 	resp.JudgeJobID = judgeJobID
+
+	slog.Info("submission_scoring_event",
+		"userId", userUUID.String(),
+		"challengeId", challengeUUID.String(),
+		"status", status,
+		"awardedPoints", sub.AwardedPoints,
+		"at", sub.CreatedAt.UTC().Format(time.RFC3339),
+	)
+
 	return &resp, nil
+}
+
+func (s *Service) ListMine(ctx context.Context, userID string, limit, offset int) (*SubmissionListResponse, error) {
+	userUUID, err := parseUserID(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	limit, offset, err = normalizePagination(limit, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	items, err := s.repo.ListByUser(ctx, userUUID, limit, offset)
+	if err != nil {
+		return nil, apperrors.Internal("SUBMISSION_LIST_FAILED", "Failed to list submissions", fmt.Errorf("list submissions by user: %w", err))
+	}
+
+	return &SubmissionListResponse{Items: mapSubmissionResponses(items), Limit: limit, Offset: offset}, nil
+}
+
+func (s *Service) ListMineByChallenge(ctx context.Context, userID, challengeID string, limit, offset int) (*SubmissionListResponse, error) {
+	userUUID, err := parseUserID(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	challengeID = strings.TrimSpace(challengeID)
+	challengeUUID, err := uuid.Parse(challengeID)
+	if err != nil {
+		return nil, apperrors.BadRequest("SUBMISSION_VALIDATION_ERROR", "challengeId must be a valid UUID")
+	}
+
+	limit, offset, err = normalizePagination(limit, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	items, err := s.repo.ListByUserAndChallenge(ctx, userUUID, challengeUUID, limit, offset)
+	if err != nil {
+		return nil, apperrors.Internal("SUBMISSION_LIST_FAILED", "Failed to list submissions", fmt.Errorf("list submissions by user and challenge: %w", err))
+	}
+
+	return &SubmissionListResponse{Items: mapSubmissionResponses(items), Limit: limit, Offset: offset}, nil
 }
 
 func hashFlag(flag string) string {
@@ -135,6 +189,42 @@ func mapSubmissionResponse(sub *Submission) SubmissionResponse {
 		AwardedPoints: sub.AwardedPoints,
 		CreatedAt:     sub.CreatedAt.UTC().Format(time.RFC3339),
 	}
+}
+
+func mapSubmissionResponses(items []Submission) []SubmissionResponse {
+	out := make([]SubmissionResponse, 0, len(items))
+	for i := range items {
+		item := mapSubmissionResponse(&items[i])
+		out = append(out, item)
+	}
+	return out
+}
+
+func parseUserID(userID string) (uuid.UUID, error) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return uuid.Nil, apperrors.Unauthorized("AUTH_INVALID_TOKEN", "Invalid token")
+	}
+
+	userUUID, err := uuid.Parse(userID)
+	if err != nil {
+		return uuid.Nil, apperrors.Unauthorized("AUTH_INVALID_TOKEN", "Invalid token")
+	}
+
+	return userUUID, nil
+}
+
+func normalizePagination(limit, offset int) (int, int, error) {
+	if limit <= 0 {
+		limit = defaultLimit
+	}
+	if limit > maxLimit {
+		limit = maxLimit
+	}
+	if offset < 0 {
+		return 0, 0, apperrors.BadRequest("SUBMISSION_VALIDATION_ERROR", "offset must be zero or greater")
+	}
+	return limit, offset, nil
 }
 
 func isUniqueViolation(err error) bool {

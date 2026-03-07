@@ -1,0 +1,22 @@
+scenario: start -> running -> stop -> cooldown rejection
+note: retries across fresh users until one successful stop=200 path is observed
+\n=== scenario attempt 1 ===
+user_email: task12-flow-1-1771223976@ctf.local
+[register] status= 201
+[register] body= {"id":"84ebb59c-e404-4385-9652-74b46d5d41c1","email":"task12-flow-1-1771223976@ctf.local","displayName":"Task12 Flow User","role":"player","isDisabled":false}
+[login] status= 200
+[login] body= {"accessToken":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiI4NGViYjU5Yy1lNDA0LTQzODUtOTY1Mi03NGI0NmQ1ZDQxYzEiLCJyb2xlIjoicGxheWVyIiwic3ViIjoiODRlYmI1OWMtZTQwNC00Mzg1LTk2NTItNzRiNDZkNWQ0MWMxIiwiZXhwIjoxNzcxMzEwMzc3LCJpYXQiOjE3NzEyMjM5Nzd9.FtlxDa8Kkwbr1fmTnRsWj6RxxYDmQQkmS1JNzyj2iiU","tokenType":"Bearer","user":{"id":"84ebb59c-e404-4385-9652-74b46d5d41c1","email":"task12-flow-1-1771223976@ctf.local","displayName":"Task12 Flow User","role":"player","isDisabled":false}}
+[list challenges] status= 200
+[list challenges] selected_challenge_id= 6c1a9a13-383b-4774-b2c1-0448105bbe9b
+[start] status= 201
+[start] body= {"id":"7abb60c1-92ca-4b9b-9726-79db1f6a4a4e","userId":"84ebb59c-e404-4385-9652-74b46d5d41c1","challengeId":"6c1a9a13-383b-4774-b2c1-0448105bbe9b","status":"running","containerId":"76e3bc7985624e86bdf7105bd78be0cf34370b7784e29cb0a0c21cac27942ad8","accessInfo":{"host":"localhost","port":32775,"connectionString":"localhost:32775"},"startedAt":"2026-02-16T06:39:37Z","expiresAt":"2026-02-16T07:39:37Z"}
+[me while running] status= 200
+[me while running] body= {"instance":{"id":"7abb60c1-92ca-4b9b-9726-79db1f6a4a4e","userId":"84ebb59c-e404-4385-9652-74b46d5d41c1","challengeId":"6c1a9a13-383b-4774-b2c1-0448105bbe9b","status":"running","containerId":"76e3bc7985624e86bdf7105bd78be0cf34370b7784e29cb0a0c21cac27942ad8","startedAt":"2026-02-16T06:39:37Z","expiresAt":"2026-02-16T07:39:37Z"}}
+[stop] status= 200
+[stop] body= {"id":"7abb60c1-92ca-4b9b-9726-79db1f6a4a4e","userId":"84ebb59c-e404-4385-9652-74b46d5d41c1","challengeId":"6c1a9a13-383b-4774-b2c1-0448105bbe9b","status":"stopped","containerId":"76e3bc7985624e86bdf7105bd78be0cf34370b7784e29cb0a0c21cac27942ad8","startedAt":"2026-02-16T06:39:37Z","expiresAt":"2026-02-16T07:39:37Z","cooldownUntil":"2026-02-16T06:40:41Z"}
+[me after stop] status= 200
+[me after stop] body= {"instance":null}
+[start during cooldown] status= 409
+[start during cooldown] body= {"error":{"code":"INSTANCE_COOLDOWN_ACTIVE","message":"Instance is in cooldown","details":{"retryAt":"2026-02-16T06:40:41Z"}},"requestId":"req_a340ef10-8f0e-485d-b243-e45c8d2b0db2"}
+cooldown_enforced= True
+result: PASS

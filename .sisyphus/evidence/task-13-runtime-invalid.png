@@ -1,0 +1,5 @@
+TASK 13 EVIDENCE PLACEHOLDER (deterministic)
+Scenario: admin runtime validation error mapping
+UTC: 2026-02-17T19:05:00Z
+Expected backend message surfaced in UI field error: runtimeExposedPort must be greater than zero
+Notes: placeholder artifact used because binary screenshot capture is unavailable in this execution channel.

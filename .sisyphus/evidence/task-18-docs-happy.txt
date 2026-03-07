@@ -1,0 +1,40 @@
+# Task 18 docs synchronization evidence (happy path)
+
+Date: 2026-02-17
+
+Updated docs:
+- `README.md`
+- `backend/README.seed.md`
+
+Frontend verification commands:
+
+```bash
+pnpm -C frontend test
+pnpm -C frontend build
+```
+
+Observed results:
+- `pnpm -C frontend test` -> PASS (`18 passed`, `69 passed` tests)
+- `pnpm -C frontend build` -> PASS (Next.js compiled and generated app routes)
+
+Docs coverage synced for completed tasks 8-17:
+- Context guard behavior documented in UI verification flow (`/challenges/[id]` mismatch guidance + disabled actions).
+- Cooldown persistence wording synced to additive contract:
+  - `/instances/me` may return `{"instance":null,"cooldown":{"retryAt":"..."}}`.
+  - `INSTANCE_COOLDOWN_ACTIVE` conflict includes `error.details.retryAt`.
+- Additive conflict details documented for `INSTANCE_ACTIVE_EXISTS` without changing status/code/message contract.
+- Admin/auth guard flow documented for:
+  - unauthenticated -> `/login`
+  - non-admin -> `/challenges`
+  - admin -> `/admin/challenges` and `/admin/users` access
+- Admin runtime config route coverage included explicitly in UI verification flow.
+
+Deterministic references retained in README:
+- `.sisyphus/evidence/task-16-orchestration-tests.txt`
+- `.sisyphus/evidence/task-16-error-coverage.txt`
+- `.sisyphus/evidence/task-17-admin-tests.txt`
+- `.sisyphus/evidence/task-17-nonadmin.txt`
+
+Notes:
+- Command style kept consistent with existing runbooks (`curl`, `docker compose`, expected-output bullets).
+- No frontend/backend source files were modified for this task.

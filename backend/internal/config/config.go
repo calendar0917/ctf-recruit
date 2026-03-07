@@ -8,12 +8,14 @@ import (
 )
 
 type Config struct {
-	Port                string
-	DatabaseURL         string
-	JWTSecret           string
-	JWTTTL              time.Duration
-	WorkerPollInterval  time.Duration
-	WorkerMaxConcurrency int
+	Port                        string
+	DatabaseURL                 string
+	JWTSecret                   string
+	JWTTTL                      time.Duration
+	InstanceAccessHost          string
+	WorkerPollInterval          time.Duration
+	InstanceSweeperPollInterval time.Duration
+	WorkerMaxConcurrency        int
 }
 
 func Load() Config {
@@ -44,6 +46,15 @@ func Load() Config {
 		workerPollInterval = 2 * time.Second
 	}
 
+	instanceSweeperPollIntervalRaw := os.Getenv("INSTANCE_SWEEPER_POLL_INTERVAL")
+	if instanceSweeperPollIntervalRaw == "" {
+		instanceSweeperPollIntervalRaw = "5s"
+	}
+	instanceSweeperPollInterval, err := time.ParseDuration(instanceSweeperPollIntervalRaw)
+	if err != nil {
+		instanceSweeperPollInterval = 5 * time.Second
+	}
+
 	workerMaxConcurrency := 2
 	if workerMaxConcurrencyRaw := os.Getenv("WORKER_MAX_CONCURRENCY"); workerMaxConcurrencyRaw != "" {
 		if parsed, parseErr := strconv.Atoi(workerMaxConcurrencyRaw); parseErr == nil && parsed > 0 {
@@ -51,13 +62,20 @@ func Load() Config {
 		}
 	}
 
+	instanceAccessHost := os.Getenv("INSTANCE_ACCESS_HOST")
+	if instanceAccessHost == "" {
+		instanceAccessHost = "localhost"
+	}
+
 	return Config{
-		Port:                 port,
-		DatabaseURL:          databaseURL,
-		JWTSecret:            jwtSecret,
-		JWTTTL:               jwtTTL,
-		WorkerPollInterval:   workerPollInterval,
-		WorkerMaxConcurrency: workerMaxConcurrency,
+		Port:                        port,
+		DatabaseURL:                 databaseURL,
+		JWTSecret:                   jwtSecret,
+		JWTTTL:                      jwtTTL,
+		InstanceAccessHost:          instanceAccessHost,
+		WorkerPollInterval:          workerPollInterval,
+		InstanceSweeperPollInterval: instanceSweeperPollInterval,
+		WorkerMaxConcurrency:        workerMaxConcurrency,
 	}
 }
 
@@ -70,6 +88,9 @@ func (c Config) Validate() error {
 	}
 	if c.WorkerPollInterval <= 0 {
 		return fmt.Errorf("WORKER_POLL_INTERVAL must be greater than 0")
+	}
+	if c.InstanceSweeperPollInterval <= 0 {
+		return fmt.Errorf("INSTANCE_SWEEPER_POLL_INTERVAL must be greater than 0")
 	}
 	if c.WorkerMaxConcurrency <= 0 {
 		return fmt.Errorf("WORKER_MAX_CONCURRENCY must be greater than 0")

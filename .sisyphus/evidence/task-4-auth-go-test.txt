@@ -1,0 +1,38 @@
+# task-4-auth-go-test
+
+timestamp_utc=20260216T000000Z
+
+command:
+docker run --rm -v "/home/calendar/code/ctf-recruit/backend:/app" -w /app -e GOPROXY=https://goproxy.cn,direct golang:1.22-alpine go test ./internal/modules/auth -v
+
+output:
+=== RUN   TestServiceRegisterAndLoginHappyPath
+--- PASS: TestServiceRegisterAndLoginHappyPath (0.13s)
+=== RUN   TestServiceLoginInvalidCredentials
+--- PASS: TestServiceLoginInvalidCredentials (0.09s)
+=== RUN   TestServiceLoginNonExistentUserUnauthorized
+--- PASS: TestServiceLoginNonExistentUserUnauthorized (0.00s)
+=== RUN   TestServiceRegisterValidationErrors
+=== RUN   TestServiceRegisterValidationErrors/missing_email
+=== RUN   TestServiceRegisterValidationErrors/missing_password
+=== RUN   TestServiceRegisterValidationErrors/missing_display_name
+--- PASS: TestServiceRegisterValidationErrors (0.00s)
+    --- PASS: TestServiceRegisterValidationErrors/missing_email (0.00s)
+    --- PASS: TestServiceRegisterValidationErrors/missing_password (0.00s)
+    --- PASS: TestServiceRegisterValidationErrors/missing_display_name (0.00s)
+=== RUN   TestServiceRegisterDuplicateEmailConflict
+--- PASS: TestServiceRegisterDuplicateEmailConflict (0.05s)
+=== RUN   TestServiceRegisterDuplicateConflictWhenCreateFails
+--- PASS: TestServiceRegisterDuplicateConflictWhenCreateFails (0.04s)
+=== RUN   TestLoginHandlerReturnsAccessToken
+--- PASS: TestLoginHandlerReturnsAccessToken (0.09s)
+=== RUN   TestLoginHandlerInvalidCredentialsUnauthorized
+--- PASS: TestLoginHandlerInvalidCredentialsUnauthorized (0.09s)
+=== RUN   TestMeRouteWithoutTokenUnauthorized
+--- PASS: TestMeRouteWithoutTokenUnauthorized (0.00s)
+=== RUN   TestMeRouteWithMalformedTokenUnauthorized
+--- PASS: TestMeRouteWithMalformedTokenUnauthorized (0.00s)
+=== RUN   TestMeRouteWithExpiredTokenUnauthorized
+--- PASS: TestMeRouteWithExpiredTokenUnauthorized (0.00s)
+PASS
+ok  	ctf-recruit/backend/internal/modules/auth	0.491s

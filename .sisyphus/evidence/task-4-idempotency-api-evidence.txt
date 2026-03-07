@@ -1,0 +1,15 @@
+Task 4 API-level idempotency evidence (backend Fiber handler test)
+
+Command:
+go test ./internal/modules/submission/... -run TestSubmissionAPIAndScoreboardDuplicateCorrectIsStable -v
+
+Observed output:
+=== RUN   TestSubmissionAPIAndScoreboardDuplicateCorrectIsStable
+--- PASS: TestSubmissionAPIAndScoreboardDuplicateCorrectIsStable (0.00s)
+PASS
+ok  	ctf-recruit/backend/internal/modules/submission	0.004s
+
+What this test verifies:
+1) Authenticated player POSTs correct flag to /api/v1/submissions twice
+2) Reads /api/v1/scoreboard
+3) Asserts totalPoints equals challenge points once (no duplicate re-award)

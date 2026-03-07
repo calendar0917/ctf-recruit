@@ -1,0 +1,23 @@
+Task 10 regression verification
+
+Command:
+go test ./...
+
+Output:
+?   	ctf-recruit/backend/cmd/api	[no test files]
+?   	ctf-recruit/backend/cmd/seed	[no test files]
+?   	ctf-recruit/backend/cmd/worker	[no test files]
+?   	ctf-recruit/backend/internal/config	[no test files]
+?   	ctf-recruit/backend/internal/errors	[no test files]
+ok  	ctf-recruit/backend/internal/middleware	(cached)
+ok  	ctf-recruit/backend/internal/modules/announcement	(cached)
+ok  	ctf-recruit/backend/internal/modules/auth	(cached)
+ok  	ctf-recruit/backend/internal/modules/challenge	(cached)
+?   	ctf-recruit/backend/internal/modules/health	[no test files]
+ok  	ctf-recruit/backend/internal/modules/instance	0.005s
+ok  	ctf-recruit/backend/internal/modules/judge	(cached)
+ok  	ctf-recruit/backend/internal/modules/recruitment	(cached)
+ok  	ctf-recruit/backend/internal/modules/scoreboard	(cached)
+ok  	ctf-recruit/backend/internal/modules/submission	(cached)
+?   	ctf-recruit/backend/internal/platform	[no test files]
+?   	ctf-recruit/backend/internal/router	[no test files]

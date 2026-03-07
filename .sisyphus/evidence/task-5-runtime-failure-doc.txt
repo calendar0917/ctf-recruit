@@ -1,0 +1,130 @@
+# Task 5 runtime failure/recovery evidence
+
+Tue Feb 17 07:04:33 AM UTC 2026
+
+## verify docker socket + runtime controller availability
+srw-rw----    1 root     963              0 Feb 15 06:20 /var/run/docker.sock
+srw-rw----    1 root     963              0 Feb 15 06:20 /var/run/docker.sock
+Client:
+ Version:           27.3.1
+ API version:       1.47
+ Go version:        go1.23.9
+ Git commit:        ce1223035ac3ab8922717092e63a184cf67b493d
+ Built:             Thu May  8 20:02:17 2025
+ OS/Arch:           linux/amd64
+ Context:           default
+
+Server:
+ Engine:
+  Version:          29.2.1
+  API version:      1.53 (minimum version 1.44)
+  Go version:       go1.25.6 X:nodwarf5
+  Git commit:       6bc6209b88
+  Built:            Thu Feb  5 10:59:55 2026
+  OS/Arch:          linux/amd64
+  Experimental:     false
+ containerd:
+  Version:          v2.2.1
+  GitCommit:        dea7da592f5d1d2b7755e3a161be07f43fad8f75.m
+ runc:
+  Version:          1.4.0
+  GitCommit:        
+ docker-init:
+  Version:          0.19.0
+  GitCommit:        de40ad0
+Client:
+ Version:           27.3.1
+ API version:       1.47
+ Go version:        go1.23.9
+ Git commit:        ce1223035ac3ab8922717092e63a184cf67b493d
+ Built:             Thu May  8 20:02:17 2025
+ OS/Arch:           linux/amd64
+ Context:           default
+
+Server:
+ Engine:
+  Version:          29.2.1
+  API version:      1.53 (minimum version 1.44)
+  Go version:       go1.25.6 X:nodwarf5
+  Git commit:       6bc6209b88
+  Built:            Thu Feb  5 10:59:55 2026
+  OS/Arch:          linux/amd64
+  Experimental:     false
+ containerd:
+  Version:          v2.2.1
+  GitCommit:        dea7da592f5d1d2b7755e3a161be07f43fad8f75.m
+ runc:
+  Version:          1.4.0
+  GitCommit:        
+ docker-init:
+  Version:          0.19.0
+  GitCommit:        de40ad0
+
+## admin login (deterministic seeded credential)
+{"accessToken":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiJlMWI0MWM0MC05MDUzLTRiNDctYWU1Ni1mZTkxMzVhYzRjNjgiLCJyb2xlIjoiYWRtaW4iLCJzdWIiOiJlMWI0MWM0MC05MDUzLTRiNDctYWU1Ni1mZTkxMzVhYzRjNjgiLCJleHAiOjE3NzEzOTgyNzQsImlhdCI6MTc3MTMxMTg3NH0.LIsIPSOe38kFI5oCJlRQceivhznJJWFn5DAZSnbp7rA","tokenType":"Bearer","user":{"id":"e1b41c40-9053-4b47-ae56-fe9135ac4c68","email":"admin@ctf.local","displayName":"CTF Admin","role":"admin","isDisabled":false}}
+
+## register + login fresh player (avoid cooldown carryover)
+{"id":"9132ce9c-7d34-47ee-a61a-677788eb18b3","email":"runtime-failure-1771311874@ctf.local","displayName":"Runtime Failure Player","role":"player","isDisabled":false}
+{"accessToken":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiI5MTMyY2U5Yy03ZDM0LTQ3ZWUtYTYxYS02Nzc3ODhlYjE4YjMiLCJyb2xlIjoicGxheWVyIiwic3ViIjoiOTEzMmNlOWMtN2QzNC00N2VlLWE2MWEtNjc3Nzg4ZWIxOGIzIiwiZXhwIjoxNzcxMzk4Mjc0LCJpYXQiOjE3NzEzMTE4NzR9.nCXHScEi6hrN6T2EdaDbg7Swvp65L4QtoPznLN6HMI4","tokenType":"Bearer","user":{"id":"9132ce9c-7d34-47ee-a61a-677788eb18b3","email":"runtime-failure-1771311874@ctf.local","displayName":"Runtime Failure Player","role":"player","isDisabled":false}}
+
+## create dynamic challenge with invalid runtime image (forced failure)
+{"id":"162072b5-5121-49da-9a33-37eecf01858d","title":"Runtime Failure Probe","description":"Intentional runtime image failure path","category":"ops","difficulty":"easy","mode":"dynamic","runtimeImage":"nonexistent.example.invalid/ctf-runtime:latest","runtimeCommand":"httpd -f -p 8080","runtimeExposedPort":8080,"points":150,"isPublished":true,"createdAt":"2026-02-17T07:04:34Z","updatedAt":"2026-02-17T07:04:34Z"}
+
+## start invalid runtime challenge (expect 500)
+start failure status: 500
+{"error":{"code":"INSTANCE_RUNTIME_START_FAILED","message":"Failed to start challenge runtime"},"requestId":"req_05afb17b-56f4-4a11-97ad-82a3750abfe6"}
+
+## backend logs around runtime failure
+backend-1  | 
+backend-1  |  ┌───────────────────────────────────────────────────┐ 
+backend-1  |  │                   Fiber v2.52.6                   │ 
+backend-1  |  │               http://127.0.0.1:8080               │ 
+backend-1  |  │       (bound on host 0.0.0.0 and port 8080)       │ 
+backend-1  |  │                                                   │ 
+backend-1  |  │ Handlers ............ 70  Processes ........... 1 │ 
+backend-1  |  │ Prefork ....... Disabled  PID ................. 1 │ 
+backend-1  |  └───────────────────────────────────────────────────┘ 
+backend-1  | 
+backend-1  | 
+backend-1  | 2026/02/17 07:03:30 [31;1m/app/internal/modules/instance/repository.go:208 [35;1mrecord not found
+backend-1  | [0m[33m[1.428ms] [34;1m[rows:0][0m SELECT * FROM "challenge_instances" WHERE user_id = '89e9a0aa-b44f-4cca-87f7-60707c525bd3' AND status IN ('starting','running') ORDER BY created_at DESC LIMIT 1
+backend-1  | 
+backend-1  | 2026/02/17 07:03:30 [31;1m/app/internal/modules/instance/repository.go:208 [35;1mrecord not found
+backend-1  | [0m[33m[0.519ms] [34;1m[rows:0][0m SELECT * FROM "challenge_instances" WHERE user_id = '89e9a0aa-b44f-4cca-87f7-60707c525bd3' AND status IN ('cooldown','stopped','expired','failed') ORDER BY created_at DESC LIMIT 1
+backend-1  | 
+backend-1  | 2026/02/17 07:03:31 [31;1m/app/internal/modules/instance/repository.go:208 [35;1mrecord not found
+backend-1  | [0m[33m[0.406ms] [34;1m[rows:0][0m SELECT * FROM "challenge_instances" WHERE user_id = '89e9a0aa-b44f-4cca-87f7-60707c525bd3' AND status IN ('starting','running') ORDER BY created_at DESC LIMIT 1
+backend-1  | 
+backend-1  | 2026/02/17 07:04:34 [31;1m/app/internal/modules/auth/repository.go:32 [35;1mrecord not found
+backend-1  | [0m[33m[0.398ms] [34;1m[rows:0][0m SELECT * FROM "users" WHERE email = 'runtime-failure-1771311874@ctf.local' ORDER BY "users"."id" LIMIT 1
+backend-1  | 
+backend-1  | 2026/02/17 07:04:34 [31;1m/app/internal/modules/instance/repository.go:208 [35;1mrecord not found
+backend-1  | [0m[33m[0.360ms] [34;1m[rows:0][0m SELECT * FROM "challenge_instances" WHERE user_id = '9132ce9c-7d34-47ee-a61a-677788eb18b3' AND status IN ('starting','running') ORDER BY created_at DESC LIMIT 1
+backend-1  | 
+backend-1  | 2026/02/17 07:04:34 [31;1m/app/internal/modules/instance/repository.go:208 [35;1mrecord not found
+backend-1  | [0m[33m[0.178ms] [34;1m[rows:0][0m SELECT * FROM "challenge_instances" WHERE user_id = '9132ce9c-7d34-47ee-a61a-677788eb18b3' AND status IN ('cooldown','stopped','expired','failed') ORDER BY created_at DESC LIMIT 1
+backend-1  | 2026/02/17 07:04:34 ERROR application request error requestId=req_05afb17b-56f4-4a11-97ad-82a3750abfe6 code=INSTANCE_RUNTIME_START_FAILED status=500 error="Failed to start challenge runtime: docker [run --detach --rm --cpus 0.5 --memory 512m --cap-drop ALL --security-opt no-new-privileges --label ctf-recruit.challenge-id=162072b5-5121-49da-9a33-37eecf01858d --label ctf-recruit.instance-id=6e85f716-00d0-4cb9-9a5d-6f5b26a1cb05 --label ctf-recruit.user-id=9132ce9c-7d34-47ee-a61a-677788eb18b3 -p 127.0.0.1::8080 nonexistent.example.invalid/ctf-runtime:latest httpd -f -p 8080] failed: exit status 125: Unable to find image 'nonexistent.example.invalid/ctf-runtime:latest' locally\ndocker: Error response from daemon: failed to resolve reference \"nonexistent.example.invalid/ctf-runtime:latest\": failed to do request: Head \"https://nonexistent.example.invalid/v2/ctf-runtime/manifests/latest\": dial tcp: lookup nonexistent.example.invalid: no such host.\nSee 'docker run --help'."
+
+## recovery: update challenge runtime config to valid busybox runtime
+{"id":"162072b5-5121-49da-9a33-37eecf01858d","title":"Runtime Failure Probe","description":"Intentional runtime image failure path","category":"ops","difficulty":"easy","mode":"dynamic","runtimeImage":"busybox:1.36","runtimeCommand":"httpd -f -p 8080","runtimeExposedPort":8080,"points":150,"isPublished":true,"createdAt":"2026-02-17T07:04:34Z","updatedAt":"2026-02-17T07:04:34Z"}
+retry status: 409
+{"error":{"code":"INSTANCE_COOLDOWN_ACTIVE","message":"Instance is in cooldown","details":{"retryAt":"2026-02-17T07:05:34Z"}},"requestId":"req_2a2a49ab-eb8e-4bf8-9ffe-8ac71816de36"}
+cooldown retryAt: 2026-02-17T07:05:34Z
+waiting seconds: 61
+start after recovery status: 201
+{"id":"f9e0ee14-3309-4e3b-958f-870dbacc09cb","userId":"9132ce9c-7d34-47ee-a61a-677788eb18b3","challengeId":"162072b5-5121-49da-9a33-37eecf01858d","status":"running","containerId":"fb7c8d0d4cc412f29a91b1de0e58a43366b91b2358c51890f1c9c56e10b0ff84","accessInfo":{"host":"localhost","port":32790,"connectionString":"localhost:32790"},"startedAt":"2026-02-17T07:05:35Z","expiresAt":"2026-02-17T08:05:35Z"}
+recovered instance id: f9e0ee14-3309-4e3b-958f-870dbacc09cb
+recovered container id: fb7c8d0d4cc412f29a91b1de0e58a43366b91b2358c51890f1c9c56e10b0ff84
+running=true status=running image=busybox:1.36 cmd=["httpd","-f","-p","8080"]
+127.0.0.1:32790
+
+## cleanup recovered instance + challenge
+{"id":"f9e0ee14-3309-4e3b-958f-870dbacc09cb","userId":"9132ce9c-7d34-47ee-a61a-677788eb18b3","challengeId":"162072b5-5121-49da-9a33-37eecf01858d","status":"stopped","containerId":"fb7c8d0d4cc412f29a91b1de0e58a43366b91b2358c51890f1c9c56e10b0ff84","startedAt":"2026-02-17T07:05:35Z","expiresAt":"2026-02-17T08:05:35Z","cooldownUntil":"2026-02-17T07:06:35Z"}
+HTTP/1.1 204 No Content
+Connection: keep-alive
+Date: Tue, 17 Feb 2026 07:05:36 GMT
+Keep-Alive: timeout=4
+Proxy-Connection: keep-alive
+Vary: Origin
+X-Request-Id: req_6a459e69-9271-41ac-9a73-24b77c43eab5
+

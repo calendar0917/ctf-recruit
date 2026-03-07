@@ -1,0 +1,29 @@
+# Learnings (append-only)
+
+- 2026-02-16: Root/frontend script mismatch fixed by adding frontend `type-check` alias to existing `typecheck`; this avoids touching broader build logic.
+- 2026-02-16: `frontend/node_modules.root-owned.bak` is outside default `node_modules/**` matching for both TypeScript and Vitest coverage discovery, so explicit exclusion is required.
+- 2026-02-16: Announcement feature can reuse challenge page/admin patterns directly (list/detail fetch lifecycle + admin editor/table), keeping UI and state handling consistent.
+- 2026-02-16: Backend announcement endpoints already enforce publish visibility by role; frontend only needs authenticated calls and role-aware routing/UI.
+- 2026-02-16: Recruitment module can reuse existing backend handler/service/repository + RBAC patterns with minimal adaptation (player POST + admin-only GET list/detail).
+- 2026-02-16: For frontend recruitment form, extracting required-field validation into a pure helper keeps required-field checks testable without browser runtime dependencies.
+- 2026-02-16: Submission history endpoints are easiest to keep consistent with existing style by reusing limit/offset pagination contract (`items/limit/offset`) and auth-scoped query (`/submissions/me`, `/submissions/challenge/:id`).
+- 2026-02-16: Pending-status UX can stay polling-based (manual refresh + interval refresh) with no websocket changes, while still giving deterministic test coverage via static render transitions (pending -> correct).
+- 2026-02-16: Task 5 user management can extend existing auth module directly (admin routes + service/repo update fields) without creating a new module, which keeps RBAC and `/auth/me` role reflection behavior consistent.
+- 2026-02-16: A minimal in-memory per-IP/per-path limiter middleware is enough for MVP baseline protection on `/auth/login` and `/submissions`, and can be verified deterministically in unit tests.
+- 2026-02-16: Structured `slog.Info` events on admin user mutation and submission scoring provide usable audit traceability without introducing external logging infrastructure.
+- 2026-02-16: Docker startup became deterministic by adding compose healthchecks + dependency conditions (`postgres/redis healthy` and one-shot `migrate` completed) before backend/frontend/worker startup.
+- 2026-02-16: In this environment, defaulting compose runtime ports to `18080` (backend) and `13001` (frontend) avoids conflicts with existing host services while still keeping frontend off port `3000`.
+- 2026-02-16: Task 7 instance lifecycle can be kept backend-focused by exposing minimal `/instances/start` and internal `/instances/:id/transition` routes, while postponing runtime controller semantics to Task 8.
+- 2026-02-16: Combining per-user transactional row lock (`SELECT ... FOR UPDATE`) with a partial unique index on active statuses (`starting/running`) gives robust atomic start behavior under contention.
+- 2026-02-16: Cooldown retry context is easiest to keep API-consistent by returning conflict with structured `details.retryAt` in RFC3339.
+- 2026-02-16: Task 8 runtime start/stop became stable in compose after backend container gained `docker-cli` plus Docker socket mount, enabling backend-driven container lifecycle control and real inspect evidence capture.
+- 2026-02-16: Docker `run` output may include pull progress text before container ID; runtime controller needs container-id normalization to extract the final hex ID reliably before inspect/stop.
+- 2026-02-16: Task 9 strict TTL is stable with a worker sweeper that queries `running` instances by `expires_at <= now`, force-stops container first, then transitions state to `expired` to apply cooldown.
+- 2026-02-16: Allowing `stopping -> expired` in the state machine prevents TTL sweeper races with manual stop paths while keeping transitions guarded and explicit.
+- 2026-02-16: Task 10 ownership boundary is safest when `POST /instances/stop` resolves explicit `instanceId` globally and then enforces `instance.UserID == caller`, so cross-user stop attempts produce deterministic 403 instead of ambiguous not-found.
+- 2026-02-16: `GET /instances/me` can stay minimal and compatible by returning `{ "instance": null | InstanceResponse }` using existing active-instance query (`starting/running/stopping`) scoped by authenticated user.
+- 2026-02-16: Task 11 challenge detail instance UI can stay minimal by deriving lifecycle display from `instance?.status` plus a page-level `cooldownUntil` fallback captured from start conflict `details.retryAt`.
+- 2026-02-16: Removing Top5 scoreboard coupling is cleanest by deleting both `listScoreboard` calls in challenge detail page (initial load + manual refresh) and dropping scoreboard props/section from `ChallengeDetail`.
+- 2026-02-16: Task 12 API acceptance evidence confirms manual lifecycle path (`start -> running -> stop -> cooldown`) including `GET /instances/me` running/null transitions and cooldown conflict payload with `details.retryAt`.
+- 2026-02-16: TTL documentation is clearer when explicitly stated as absolute expiry (`expiresAt = startedAt + 1h`) and when giving a controlled short-path verification method (force `expires_at` in DB for sweeper validation).
+- 2026-02-16: Task 12 live blocker was resolved by mounting `/var/run/docker.sock` into `worker`; after rebuild, sweeper successfully logs `instance expired by sweeper` and lifecycle proof reaches `start -> running -> expire -> cooldown` with real API+DB evidence.

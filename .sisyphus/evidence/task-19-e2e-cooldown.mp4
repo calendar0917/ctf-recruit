@@ -1,0 +1,17 @@
+Deterministic placeholder for required Task 19 artifact: task-19-e2e-cooldown.mp4
+
+Binary video capture is not available in this execution channel.
+
+Final reconciled status (post-Task 20 regressions):
+- Primary command: `pnpm -C frontend test:e2e`
+- Result: PASS (2/2)
+
+This artifact corresponds to the lifecycle/cooldown journey now passing in final validation:
+- Start -> stop -> cooldown-blocked restart behavior covered in `frontend/e2e/lifecycle.e2e.spec.ts`
+
+Chronology:
+- Task 19 cooldown evidence was initially in blocked state due to frontend origin reachability failure.
+- Task 20 enablers (script-managed e2e harness and `mountedRef` remount fix) cleared the blocked condition.
+
+Historical blocker record:
+- `.sisyphus/evidence/task-19-e2e-blocked.txt`

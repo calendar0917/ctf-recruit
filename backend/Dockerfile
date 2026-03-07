@@ -14,7 +14,7 @@ ENV ALL_PROXY=${ALL_PROXY}
 ENV NO_PROXY=${NO_PROXY}
 ENV GOPROXY=${GOPROXY}
 
-RUN apk add --no-cache ca-certificates git && update-ca-certificates
+RUN apk add --no-cache ca-certificates git docker-cli && update-ca-certificates
 
 COPY go.mod go.sum ./
 RUN go mod download -x
@@ -22,6 +22,8 @@ RUN go mod download -x
 COPY . .
 
 RUN go build -o /bin/api ./cmd/api
+RUN go build -o /bin/seed ./cmd/seed
+RUN go build -o /bin/worker ./cmd/worker
 
 EXPOSE 8080
 

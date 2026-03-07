@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Task 8 Context Guard - Happy</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        padding: 32px;
+        font-family: "Courier New", monospace;
+        background: #0b0e13;
+        color: #f3f6ff;
+      }
+      .card {
+        max-width: 720px;
+        padding: 24px;
+        border-radius: 16px;
+        background: #141a24;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      h1 {
+        margin: 0 0 12px;
+        font-size: 28px;
+      }
+      .meta {
+        display: flex;
+        gap: 12px;
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #8ea0c7;
+        margin-bottom: 12px;
+      }
+      .status {
+        font-size: 16px;
+        margin: 16px 0;
+      }
+      .inline-actions {
+        display: flex;
+        gap: 12px;
+        margin-top: 16px;
+      }
+      .button {
+        border: none;
+        border-radius: 999px;
+        padding: 10px 20px;
+        font-weight: 600;
+        cursor: pointer;
+        background: #1f6feb;
+        color: white;
+      }
+      .button.danger {
+        background: #e65050;
+      }
+      .note {
+        margin-top: 12px;
+        color: #a0b3d9;
+      }
+    </style>
+  </head>
+  <body>
+    <section class="card">
+      <div class="meta">
+        <span>web</span>
+        <span>medium</span>
+        <span>dynamic</span>
+        <span>300 pts</span>
+      </div>
+      <h1>Dynamic Challenge</h1>
+      <p>Happy path: active instance belongs to this challenge.</p>
+
+      <div class="status">
+        Instance status: <strong>running</strong>
+      </div>
+
+      <div class="inline-actions">
+        <button class="button danger" type="button">Stop instance</button>
+      </div>
+      <div class="note">No mismatch warning displayed.</div>
+    </section>
+  </body>
+</html>

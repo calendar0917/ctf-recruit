@@ -1,0 +1,7 @@
+# Task 6 timer cleanup evidence (backfill)
+- Verified: orchestration timers are cleaned up on unmount/navigation to avoid duplicate interval work.
+- Command context (prior run): `pnpm -C frontend test "src/__tests__/challenge-detail-page-orchestration.test.tsx"`
+- Result references:
+  - `.sisyphus/evidence/task-16-error-coverage.txt` explicitly notes cleanup assertion (`clearInterval` called on unmount).
+  - `.sisyphus/evidence/task-16-orchestration-tests.txt` confirms timer registration + cleanup conditions under orchestration paths.
+- Deterministic note: this file backfills missing filename only; behavior evidence comes from existing task-16 deterministic test artifacts.

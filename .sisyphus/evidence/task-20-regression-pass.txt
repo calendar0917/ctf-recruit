@@ -1,0 +1,22 @@
+Task 20 regression pass evidence (final SUCCESS)
+
+Final verified command status:
+- `pnpm -C frontend test` -> PASS
+- `pnpm -C frontend build` -> PASS
+- `pnpm -C frontend test:e2e` -> PASS (2/2)
+
+Chronology of fixes that made e2e green:
+1) Startup reliability fix:
+   - Replaced Playwright `webServer` dependency with script-managed e2e harness (`run-e2e.mjs`) that starts Next on `127.0.0.1:3001`, probes `/login` for HTTP 200, runs Playwright, and always cleans up server PID.
+2) Functional loading-state fix:
+   - Corrected challenge-detail StrictMode mount guard by resetting `mountedRef.current = true` on mount and `false` on cleanup, preventing stale guard suppression that left UI at `Loading challenge...`.
+3) Stop contract correctness fix:
+   - Stop action now sends required payload `{ instanceId }`; orchestration unit test expectation was updated to match the intentional contract.
+
+Verification hygiene note:
+- A clean build step (`rm -rf frontend/.next`) was required during verification to avoid stale manifest corruption before confirming final green status.
+
+Outcome:
+- Task 20 startup regression (`ERR_CONNECTION_REFUSED`/false-positive readiness) is resolved.
+- Downstream challenge-detail readiness regression is resolved.
+- Final e2e journeys execute successfully end-to-end in current harness configuration.

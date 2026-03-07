@@ -1,0 +1,11 @@
+=== RUN   TestAdminUsersEndpointsPlayerForbidden
+    handler_test.go:345: player GET /api/v1/admin/users status=403
+    handler_test.go:358: player GET /api/v1/admin/users error.code=AUTH_FORBIDDEN
+--- PASS: TestAdminUsersEndpointsPlayerForbidden (0.09s)
+=== RUN   TestAdminRoleChangeReflectedInMe
+2026/02/16 12:33:13 INFO admin_user_mutation actorUserId=fd0ac4c6-8462-4243-a751-a0eae72c73a6 targetUserId=67251c64-197d-43df-8552-a29afb33ac73 updatedRole=admin updatedIsDisabled=false at=2026-02-16T04:33:13Z
+    handler_test.go:405: admin PATCH /api/v1/admin/users/:id status=200
+    handler_test.go:427: player GET /api/v1/auth/me role=admin
+--- PASS: TestAdminRoleChangeReflectedInMe (0.09s)
+PASS
+ok  	ctf-recruit/backend/internal/modules/auth	0.184s

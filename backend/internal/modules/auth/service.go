@@ -4,6 +4,7 @@ import (
 	"context"
 	apperrors "ctf-recruit/backend/internal/errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -22,6 +23,11 @@ type Service struct {
 	jwtSecret []byte
 	jwtTTL    time.Duration
 }
+
+const (
+	defaultAdminListLimit = 50
+	maxAdminListLimit     = 200
+)
 
 func NewService(repo Repository, jwtSecret string, jwtTTL time.Duration) *Service {
 	return &Service{repo: repo, jwtSecret: []byte(jwtSecret), jwtTTL: jwtTTL}
@@ -53,6 +59,9 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (*UserRespo
 	}
 
 	if err := s.repo.Create(ctx, user); err != nil {
+		if isDuplicateEmailError(err) {
+			return nil, apperrors.Conflict("AUTH_EMAIL_ALREADY_EXISTS", "Email is already registered")
+		}
 		return nil, apperrors.Internal("AUTH_REGISTER_FAILED", "Failed to register user", fmt.Errorf("create user: %w", err))
 	}
 
@@ -71,6 +80,9 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (*LoginResponse, 
 	}
 	if user == nil {
 		return nil, apperrors.Unauthorized("AUTH_INVALID_CREDENTIALS", "Invalid email or password")
+	}
+	if user.IsDisabled {
+		return nil, apperrors.Forbidden("AUTH_USER_DISABLED", "User is disabled")
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
@@ -100,6 +112,64 @@ func (s *Service) Me(ctx context.Context, userID string) (*UserResponse, error) 
 	}
 
 	resp := mapUserResponse(user)
+	return &resp, nil
+}
+
+func (s *Service) ListUsers(ctx context.Context, limit, offset int) (*AdminListUsersResponse, error) {
+	if limit <= 0 {
+		limit = defaultAdminListLimit
+	}
+	if limit > maxAdminListLimit {
+		limit = maxAdminListLimit
+	}
+	if offset < 0 {
+		return nil, apperrors.BadRequest("AUTH_VALIDATION_ERROR", "offset must be zero or greater")
+	}
+
+	users, err := s.repo.List(ctx, limit, offset)
+	if err != nil {
+		return nil, apperrors.Internal("AUTH_ADMIN_LIST_USERS_FAILED", "Failed to list users", fmt.Errorf("list users: %w", err))
+	}
+
+	items := make([]UserResponse, 0, len(users))
+	for i := range users {
+		items = append(items, mapUserResponse(&users[i]))
+	}
+
+	return &AdminListUsersResponse{Items: items}, nil
+}
+
+func (s *Service) AdminUpdateUser(ctx context.Context, operatorID string, targetUserID string, req AdminUpdateUserRequest) (*UserResponse, error) {
+	targetUserID = strings.TrimSpace(targetUserID)
+	if targetUserID == "" {
+		return nil, apperrors.BadRequest("AUTH_VALIDATION_ERROR", "user id is required")
+	}
+
+	if req.Role == nil && req.IsDisabled == nil {
+		return nil, apperrors.BadRequest("AUTH_VALIDATION_ERROR", "at least one field is required")
+	}
+
+	if req.Role != nil && *req.Role != RoleAdmin && *req.Role != RolePlayer {
+		return nil, apperrors.BadRequest("AUTH_VALIDATION_ERROR", "role must be admin or player")
+	}
+
+	updated, err := s.repo.UpdateAdminFields(ctx, targetUserID, req.Role, req.IsDisabled)
+	if err != nil {
+		return nil, apperrors.Internal("AUTH_ADMIN_UPDATE_USER_FAILED", "Failed to update user", fmt.Errorf("update user: %w", err))
+	}
+	if updated == nil {
+		return nil, apperrors.NotFound("AUTH_USER_NOT_FOUND", "User not found")
+	}
+
+	slog.Info("admin_user_mutation",
+		"actorUserId", strings.TrimSpace(operatorID),
+		"targetUserId", updated.ID.String(),
+		"updatedRole", updated.Role,
+		"updatedIsDisabled", updated.IsDisabled,
+		"at", time.Now().UTC().Format(time.RFC3339),
+	)
+
+	resp := mapUserResponse(updated)
 	return &resp, nil
 }
 
@@ -149,5 +219,18 @@ func mapUserResponse(user *User) UserResponse {
 		Email:       user.Email,
 		DisplayName: user.DisplayName,
 		Role:        user.Role,
+		IsDisabled:  user.IsDisabled,
 	}
+}
+
+func isDuplicateEmailError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	errMsg := strings.ToLower(err.Error())
+	return strings.Contains(errMsg, "duplicate key") ||
+		strings.Contains(errMsg, "duplicate entry") ||
+		strings.Contains(errMsg, "unique constraint") ||
+		strings.Contains(errMsg, "unique violation")
 }

@@ -1,0 +1,10 @@
+HTTP/1.1 201 Created
+Content-Length: 400
+Connection: keep-alive
+Content-Type: application/json
+Date: Tue, 17 Feb 2026 20:22:48 GMT
+Keep-Alive: timeout=4
+Proxy-Connection: keep-alive
+Vary: Origin
+X-Request-Id: req_d302f0da-2a69-4857-96df-d45b32b2b1af
+

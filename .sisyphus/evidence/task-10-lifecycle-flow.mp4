@@ -1,0 +1,15 @@
+DETERMINISTIC PLACEHOLDER (text stand-in for binary video)
+
+Task: 10 Start/Stop UX hardening (recovery + diagnostics)
+Artifact name reserved: task-10-lifecycle-flow.mp4
+
+Why placeholder:
+- Binary mp4 capture is unavailable in this execution channel.
+
+Canonical Task-10 lifecycle-flow evidence is stored in:
+- .sisyphus/evidence/task-10-instance-boundary-tests.txt
+- .sisyphus/evidence/task-10-a-starts-b-stop-denied.txt
+- .sisyphus/evidence/task-10-backend-go-test.txt
+- .sisyphus/evidence/task-10-lsp-diagnostics.txt
+
+These files capture deterministic lifecycle guardrails, boundary behavior, and diagnostics verification used for Task 10 closure.

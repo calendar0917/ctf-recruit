@@ -1,0 +1,33 @@
+{
+  "task": "14. Backend lifecycle contract enhancements (targeted)",
+  "contract": {
+    "endpoint": "POST /api/v1/instances/start",
+    "conflictCode": "INSTANCE_ACTIVE_EXISTS",
+    "httpStatus": 409,
+    "message": "An active instance already exists",
+    "details": {
+      "optional": true,
+      "keys": [
+        "activeInstanceId",
+        "activeUserId",
+        "activeChallengeId",
+        "activeStatus",
+        "activeStartedAt",
+        "activeExpiresAt"
+      ],
+      "timestampFormat": "RFC3339"
+    },
+    "compatibility": "Non-breaking additive details; code/message unchanged for legacy decoders"
+  },
+  "testEvidence": {
+    "command": "go test ./internal/modules/instance -run \"TestInstancesStartWithExistingActiveInstanceReturnsConflictDetails|TestInstancesStartWithExistingActiveInstanceLegacyDecodeCompatibility\" -v",
+    "results": [
+      "=== RUN   TestInstancesStartWithExistingActiveInstanceReturnsConflictDetails",
+      "--- PASS: TestInstancesStartWithExistingActiveInstanceReturnsConflictDetails (0.00s)",
+      "=== RUN   TestInstancesStartWithExistingActiveInstanceLegacyDecodeCompatibility",
+      "--- PASS: TestInstancesStartWithExistingActiveInstanceLegacyDecodeCompatibility (0.00s)",
+      "PASS",
+      "ok  \tctf-recruit/backend/internal/modules/instance\t0.005s"
+    ]
+  }
+}

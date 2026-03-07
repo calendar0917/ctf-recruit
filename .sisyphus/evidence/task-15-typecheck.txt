@@ -1,0 +1,1 @@
+Task 15 diagnostics: lsp_diagnostics clean for frontend type alignment files (types/http/instances/tests).

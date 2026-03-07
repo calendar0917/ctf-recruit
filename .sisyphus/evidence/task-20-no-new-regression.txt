@@ -1,0 +1,21 @@
+Task 20 no-new-regression verification (final SUCCESS checkpoint)
+
+Scope summary:
+- Regression work stayed focused on e2e harness/runtime reliability and challenge-detail lifecycle guard correctness.
+- No backend business logic changes were required.
+
+Final verification results:
+- `pnpm -C frontend test` -> PASS
+- `pnpm -C frontend build` -> PASS
+- `pnpm -C frontend test:e2e` -> PASS (2/2)
+
+Key regression fixes included in final pass:
+- Script-managed e2e server harness replaced flaky startup/readiness path.
+- StrictMode `mountedRef` mount reset fixed challenge-detail perpetual loading regression.
+- Stop payload contract fix (`instanceId`) plus matching orchestration test assertion update removed stale contract mismatch.
+
+Build reliability note:
+- Clean rebuild (`rm -rf frontend/.next`) was used during verification to avoid stale manifest corruption and confirm deterministic green runs.
+
+No-new-regression conclusion:
+- Unit, build, and e2e verification are all green at final Task 20 checkpoint.

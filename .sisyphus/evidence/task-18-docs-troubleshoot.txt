@@ -1,0 +1,81 @@
+# Task 18 docs synchronization evidence (troubleshooting coverage)
+
+Date: 2026-02-17
+
+This artifact records the troubleshooting signatures and concrete recovery commands now documented in:
+- `README.md`
+- `backend/README.seed.md`
+
+## 1) Runtime start failure signature
+
+Signature:
+- `POST /api/v1/instances/start` returns HTTP `500`
+- `error.code = INSTANCE_RUNTIME_START_FAILED`
+
+Checks and recovery commands documented:
+
+```bash
+docker compose ps
+docker compose logs backend --tail 200
+docker compose exec backend ls -l /var/run/docker.sock
+docker compose exec backend docker version
+docker compose exec worker docker version
+docker compose up -d --build backend worker
+docker info
+```
+
+## 2) Auth/session redirect confusion signature
+
+Signature:
+- Protected pages redirect to `/login` unexpectedly
+- Session appears missing after reload
+
+Checks and recovery commands documented:
+
+```bash
+curl -fsS -X POST http://localhost:18080/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"player@ctf.local","password":"PlayerPass123!"}'
+```
+
+Recovery steps documented:
+- Sign out and sign in again at `http://localhost:13001/login`.
+- Confirm frontend/backend ports align with runbook values.
+- Re-run deterministic seed if API login fails.
+
+## 3) Admin role guard redirect behavior signature
+
+Signature:
+- Authenticated non-admin access to `/admin/challenges` or `/admin/users` redirects to `/challenges`
+
+Expected behavior documented:
+- Unauthenticated -> `/login`
+- Non-admin -> `/challenges`
+- Admin -> admin route renders
+
+Verification commands documented:
+
+```bash
+pnpm -C frontend test "src/__tests__/admin-challenges-access.test.ts"
+pnpm -C frontend test "src/__tests__/admin-users-access.test.ts"
+```
+
+## 4) Cooldown-after-reload expectation signature
+
+Signature:
+- User assumes cooldown disappeared after reloading `/challenges/[id]` because active instance card is absent
+
+Expected contract documented:
+- `/instances/me` may return `{"instance":null,"cooldown":{"retryAt":"..."}}` during active cooldown
+- Start conflicts during cooldown return `INSTANCE_COOLDOWN_ACTIVE` with `error.details.retryAt`
+
+Check command documented:
+
+```bash
+curl -fsS http://localhost:18080/api/v1/instances/me \
+  -H "Authorization: Bearer $PLAYER_TOKEN"
+```
+
+Recovery steps documented:
+- Wait until `retryAt` before retrying start.
+- Collect API response and backend logs if cooldown metadata is missing during known active cooldown.

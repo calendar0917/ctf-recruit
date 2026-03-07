@@ -1,26 +1,30 @@
 "use client";
 
-import type { FormEvent } from "react";
-import { useEffect, useState } from "react";
+import React, { type FormEvent, useEffect, useState } from "react";
+import { AdminActionGroup, AdminEditorShell } from "@/components/admin/AdminPrimitives";
 import type {
+  AdminChallengeEditorPayload,
   Challenge,
   ChallengeDifficulty,
   ChallengeMode,
-  CreateChallengeRequest,
+  ChallengeRuntimeFieldErrors,
 } from "@/lib/types";
 
-export type ChallengeEditorValue = CreateChallengeRequest & { id?: string };
+export type ChallengeEditorValue = AdminChallengeEditorPayload;
 
 type ChallengeEditorProps = {
   initial?: Challenge | null;
   loading: boolean;
   error?: string;
+  fieldErrors?: ChallengeRuntimeFieldErrors;
   onSubmit: (value: ChallengeEditorValue) => Promise<void>;
   onCancelEdit: () => void;
 };
 
 const difficulties: ChallengeDifficulty[] = ["easy", "medium", "hard"];
 const modes: ChallengeMode[] = ["static", "dynamic"];
+
+void React;
 
 function toDefaultValue(challenge?: Challenge | null): ChallengeEditorValue {
   if (!challenge) {
@@ -30,6 +34,9 @@ function toDefaultValue(challenge?: Challenge | null): ChallengeEditorValue {
       category: "",
       difficulty: "easy",
       mode: "static",
+      runtimeImage: "",
+      runtimeCommand: "",
+      runtimeExposedPort: undefined,
       points: 100,
       flag: "",
       isPublished: false,
@@ -43,6 +50,9 @@ function toDefaultValue(challenge?: Challenge | null): ChallengeEditorValue {
     category: challenge.category,
     difficulty: challenge.difficulty,
     mode: challenge.mode,
+    runtimeImage: challenge.runtimeImage ?? "",
+    runtimeCommand: challenge.runtimeCommand ?? "",
+    runtimeExposedPort: challenge.runtimeExposedPort,
     points: challenge.points,
     flag: "",
     isPublished: challenge.isPublished,
@@ -53,6 +63,7 @@ export function ChallengeEditor({
   initial,
   loading,
   error,
+  fieldErrors,
   onSubmit,
   onCancelEdit,
 }: ChallengeEditorProps) {
@@ -64,22 +75,13 @@ export function ChallengeEditor({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await onSubmit({
-      ...value,
-      title: value.title.trim(),
-      description: value.description.trim(),
-      category: value.category.trim(),
-      flag: value.flag.trim(),
-    });
+    await onSubmit(value);
   }
 
   const editing = Boolean(initial);
 
   return (
-    <section className="card">
-      <h2>{editing ? "Edit challenge" : "Create challenge"}</h2>
-      {error ? <p className="error-text">{error}</p> : null}
-
+    <AdminEditorShell title={editing ? "Edit challenge" : "Create challenge"} error={error}>
       <form className="form-grid" onSubmit={handleSubmit}>
         <label>
           <span>Title</span>
@@ -167,6 +169,59 @@ export function ChallengeEditor({
           </label>
         </div>
 
+        <div className="row-fields">
+          <label>
+            <span>Runtime image (optional)</span>
+            <input
+              value={value.runtimeImage ?? ""}
+              onChange={(event) =>
+                setValue((prev) => ({ ...prev, runtimeImage: event.target.value }))
+              }
+              disabled={loading}
+              placeholder="busybox:1.36"
+            />
+            {fieldErrors?.runtimeImage ? (
+              <small className="error-text">{fieldErrors.runtimeImage}</small>
+            ) : null}
+          </label>
+
+          <label>
+            <span>Runtime command (optional)</span>
+            <input
+              value={value.runtimeCommand ?? ""}
+              onChange={(event) =>
+                setValue((prev) => ({ ...prev, runtimeCommand: event.target.value }))
+              }
+              disabled={loading}
+              placeholder="httpd -f -p 8080"
+            />
+            {fieldErrors?.runtimeCommand ? (
+              <small className="error-text">{fieldErrors.runtimeCommand}</small>
+            ) : null}
+          </label>
+
+          <label>
+            <span>Runtime exposed port (optional)</span>
+            <input
+              type="number"
+              min={1}
+              value={value.runtimeExposedPort ?? ""}
+              onChange={(event) => {
+                const next = event.target.value;
+                setValue((prev) => ({
+                  ...prev,
+                  runtimeExposedPort: next === "" ? undefined : Number(next),
+                }));
+              }}
+              disabled={loading}
+              placeholder="8080"
+            />
+            {fieldErrors?.runtimeExposedPort ? (
+              <small className="error-text">{fieldErrors.runtimeExposedPort}</small>
+            ) : null}
+          </label>
+        </div>
+
         <label>
           <span>{editing ? "Flag (leave empty to keep)" : "Flag"}</span>
           <input
@@ -189,7 +244,7 @@ export function ChallengeEditor({
           <span>Published</span>
         </label>
 
-        <div className="row-actions">
+        <AdminActionGroup layout="row">
           <button className="button" type="submit" disabled={loading}>
             {loading ? "Saving..." : editing ? "Update challenge" : "Create challenge"}
           </button>
@@ -204,8 +259,8 @@ export function ChallengeEditor({
               Cancel edit
             </button>
           ) : null}
-        </div>
+        </AdminActionGroup>
       </form>
-    </section>
+    </AdminEditorShell>
   );
 }

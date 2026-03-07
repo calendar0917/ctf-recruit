@@ -1,0 +1,26 @@
+task-5-login-success.txt
+
+Timestamp (local): 2026-02-16T07:11:28+08:00
+
+## 1) Register temp user
+HTTP/1.1 201 Created
+Content-Length: 132
+Connection: keep-alive
+Content-Type: application/json
+Date: Sun, 15 Feb 2026 23:11:27 GMT
+Keep-Alive: timeout=4
+Proxy-Connection: keep-alive
+X-Request-Id: req_9b157cd5-4105-4148-a7b4-a2af1c63a6d1
+
+{"id":"61421289-81b6-4030-a3fe-e4ce6feea11c","email":"task5-user-1771197088@example.com","displayName":"Task5 User","role":"player"}
+## 2) Login and observe accessToken
+HTTP/1.1 200 OK
+Content-Length: 448
+Connection: keep-alive
+Content-Type: application/json
+Date: Sun, 15 Feb 2026 23:11:27 GMT
+Keep-Alive: timeout=4
+Proxy-Connection: keep-alive
+X-Request-Id: req_d11f8eab-ed17-479e-b27f-1ab0f1f7e4db
+
+{"accessToken":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiI2MTQyMTI4OS04MWI2LTQwMzAtYTNmZS1lNGNlNmZlZWExMWMiLCJyb2xlIjoicGxheWVyIiwic3ViIjoiNjE0MjEyODktODFiNi00MDMwLWEzZmUtZTRjZTZmZWVhMTFjIiwiZXhwIjoxNzcxMjgzNDg4LCJpYXQiOjE3NzExOTcwODh9.2csBwZTclIZGV0wMo6iuA3KHvcBaOT6GEz4F6KYFLIk","tokenType":"Bearer","user":{"id":"61421289-81b6-4030-a3fe-e4ce6feea11c","email":"task5-user-1771197088@example.com","displayName":"Task5 User","role":"player"}}

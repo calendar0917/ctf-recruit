@@ -24,6 +24,15 @@ func ErrorHandler(c *fiber.Ctx, err error) error {
 
 	var appErr *apperrors.AppError
 	if errors.As(err, &appErr) {
+		if appErr.Status >= fiber.StatusInternalServerError {
+			slog.Error(
+				"application request error",
+				"requestId", requestID,
+				"code", appErr.Code,
+				"status", appErr.Status,
+				"error", err,
+			)
+		}
 		return c.Status(appErr.Status).JSON(errorResponse{
 			Error:     errorBody{Code: appErr.Code, Message: appErr.Message, Details: appErr.Details},
 			RequestID: requestID,

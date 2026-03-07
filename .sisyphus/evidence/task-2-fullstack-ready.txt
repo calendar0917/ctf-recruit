@@ -1,0 +1,43 @@
+# task-2-fullstack-ready
+
+timestamp_utc=20260216T010321Z
+
+## running services snapshot (docker compose ps)
+NAME                     IMAGE                  COMMAND                  SERVICE    CREATED         STATUS          PORTS
+ctf-recruit-backend-1    ctf-recruit-backend    "/bin/api"               backend    11 hours ago    Up 11 hours     0.0.0.0:8080->8080/tcp, [::]:8080->8080/tcp
+ctf-recruit-frontend-1   ctf-recruit-frontend   "docker-entrypoint.s…"   frontend   2 minutes ago   Up 2 minutes
+ctf-recruit-postgres-1   postgres:16-alpine     "docker-entrypoint.s…"   postgres   11 hours ago    Up 32 minutes   0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp
+ctf-recruit-redis-1      redis:7-alpine         "docker-entrypoint.s…"   redis      11 hours ago    Up 11 hours     0.0.0.0:6379->6379/tcp, [::]:6379->6379/tcp
+
+## backend ready/health
+HTTP/1.1 200 OK
+Content-Length: 35
+Connection: keep-alive
+Content-Type: application/json
+Date: Mon, 16 Feb 2026 01:01:21 GMT
+Keep-Alive: timeout=4
+Proxy-Connection: keep-alive
+X-Request-Id: req_f887fc66-c62e-47a3-9c1b-e79d7128c01f
+
+{"service":"ctf-api","status":"ok"}
+
+backend startup log excerpt:
+backend-1  |  ┌───────────────────────────────────────────────────┐
+backend-1  |  │                   Fiber v2.52.6                   │
+backend-1  |  │               http://127.0.0.1:8080               │
+backend-1  |  │       (bound on host 0.0.0.0 and port 8080)       │
+backend-1  |  └───────────────────────────────────────────────────┘
+
+## frontend readiness signal (container status + startup log line)
+- compose status: `ctf-recruit-frontend-1 ... Up`
+- startup logs:
+frontend-1  |
+frontend-1  | > ctf-recruit-frontend@0.1.0 start
+frontend-1  | > next start --hostname 0.0.0.0 --port 3000
+frontend-1  |
+frontend-1  |   ▲ Next.js 14.2.5
+frontend-1  |   - Local:        http://localhost:3000
+frontend-1  |   - Network:      http://0.0.0.0:3000
+frontend-1  |
+frontend-1  |  ✓ Starting...
+frontend-1  |  ✓ Ready in 233ms

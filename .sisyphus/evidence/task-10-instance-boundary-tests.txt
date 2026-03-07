@@ -1,0 +1,14 @@
+Task 10 boundary verification
+
+Command:
+go test ./internal/modules/instance -run 'TestInstances(StartBlockedByCooldownReturnsRetryAt|StartWithExistingActiveInstanceReturnsConflict|StopNonOwnerForbidden)' -v
+
+Output:
+=== RUN   TestInstancesStartBlockedByCooldownReturnsRetryAt
+--- PASS: TestInstancesStartBlockedByCooldownReturnsRetryAt (0.00s)
+=== RUN   TestInstancesStartWithExistingActiveInstanceReturnsConflict
+--- PASS: TestInstancesStartWithExistingActiveInstanceReturnsConflict (0.00s)
+=== RUN   TestInstancesStopNonOwnerForbidden
+--- PASS: TestInstancesStopNonOwnerForbidden (0.00s)
+PASS
+ok  	ctf-recruit/backend/internal/modules/instance	0.004s

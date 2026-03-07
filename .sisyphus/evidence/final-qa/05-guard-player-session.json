@@ -1,0 +1,11 @@
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiI4OWU5YTBhYS1iNDRmLTRjY2EtODdmNy02MDcwN2M1MjViZDMiLCJyb2xlIjoicGxheWVyIiwic3ViIjoiODllOWEwYWEtYjQ0Zi00Y2NhLTg3ZjctNjA3MDdjNTI1YmQzIiwiZXhwIjoxNzcxNDQ2NzcyLCJpYXQiOjE3NzEzNjAzNzJ9.KBToDUOkrY0IWFN1CqqRUNiB-4Tbho0BUVqjWuiH8JI",
+  "tokenType": "Bearer",
+  "user": {
+    "id": "89e9a0aa-b44f-4cca-87f7-60707c525bd3",
+    "email": "player@ctf.local",
+    "displayName": "CTF Player",
+    "role": "player",
+    "isDisabled": false
+  }
+}

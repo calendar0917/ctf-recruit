@@ -1,0 +1,6 @@
+NAME                     IMAGE                  COMMAND                  SERVICE    CREATED         STATUS                   PORTS
+ctf-recruit-backend-1    ctf-recruit-backend    "/bin/api"               backend    2 minutes ago   Up 2 minutes (healthy)   0.0.0.0:18080->8080/tcp, [::]:18080->8080/tcp
+ctf-recruit-frontend-1   ctf-recruit-frontend   "docker-entrypoint.s…"   frontend   5 minutes ago   Up 2 minutes (healthy)   0.0.0.0:13001->3000/tcp, [::]:13001->3000/tcp
+ctf-recruit-postgres-1   postgres:16-alpine     "docker-entrypoint.s…"   postgres   5 minutes ago   Up 5 minutes (healthy)   5432/tcp
+ctf-recruit-redis-1      redis:7-alpine         "docker-entrypoint.s…"   redis      5 minutes ago   Up 5 minutes (healthy)   6379/tcp
+ctf-recruit-worker-1     ctf-recruit-worker     "/bin/worker"            worker     9 minutes ago   Up 7 minutes             8080/tcp

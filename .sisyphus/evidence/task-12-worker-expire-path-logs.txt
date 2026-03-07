@@ -1,0 +1,13 @@
+Task 12 - Worker expiry path logs (runtime blocker evidence)
+Date: 2026-02-16
+
+Command:
+docker compose logs worker --since 10m
+
+Observed output:
+worker-1  | 2026/02/16 06:40:31 ERROR instance sweeper stop failed instanceId=d0c6d466-ca95-4e6b-9108-3c30b604c2be userId=6c76ebf9-9ea2-41f0-b9ce-433735e8ce49 challengeId=6c1a9a13-383b-4774-b2c1-0448105bbe9b containerId=95bdcb71b947c26b4730b27c3ab6b046d2c4cef9099d9589ed56a5b329b5af49 error="docker [rm -f 95bdcb71b947c26b4730b27c3ab6b046d2c4cef9099d9589ed56a5b329b5af49] failed: exit status 1: Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?"
+worker-1  | 2026/02/16 06:40:36 ERROR instance sweeper stop failed instanceId=d0c6d466-ca95-4e6b-9108-3c30b604c2be userId=6c76ebf9-9ea2-41f0-b9ce-433735e8ce49 challengeId=6c1a9a13-383b-4774-b2c1-0448105bbe9b containerId=95bdcb71b947c26b4730b27c3ab6b046d2c4cef9099d9589ed56a5b329b5af49 error="docker [rm -f 95bdcb71b947c26b4730b27c3ab6b046d2c4cef9099d9589ed56a5b329b5af49] failed: exit status 1: Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?"
+worker-1  | 2026/02/16 06:40:41 ERROR instance sweeper stop failed instanceId=d0c6d466-ca95-4e6b-9108-3c30b604c2be userId=6c76ebf9-9ea2-41f0-b9ce-433735e8ce49 challengeId=6c1a9a13-383b-4774-b2c1-0448105bbe9b containerId=95bdcb71b947c26b4730b27c3ab6b046d2c4cef9099d9589ed56a5b329b5af49 error="docker [rm -f 95bdcb71b947c26b4730b27c3ab6b046d2c4cef9099d9589ed56a5b329b5af49] failed: exit status 1: Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?"
+
+Conclusion:
+- Sweeper reaches expiry path but cannot complete runtime stop in current compose runtime due to Docker socket access failure inside worker.

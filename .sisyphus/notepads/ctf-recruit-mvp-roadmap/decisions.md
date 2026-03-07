@@ -1,0 +1,27 @@
+# Decisions (append-only)
+
+- 2026-02-16: Keep CI minimal (single job, push/PR, lint + type-check + test) without matrix/artifacts/coverage upload.
+- 2026-02-16: Keep backend coverage as explicit command (`go test -cover ./...`) invoked by root `test:coverage` and acceptance checks, without expanding backend Makefile scope.
+- 2026-02-16: To keep Task 1 deterministic under current repo state, add targeted exclusions for `node_modules.root-owned.bak` in frontend `tsconfig` and Vitest (test + coverage).
+- 2026-02-16: Implement announcements as dedicated frontend API module + player list/detail routes + admin CRUD page, without backend contract changes, to keep Task 2 scope minimal.
+- 2026-02-16: Keep announcement content plain text only (`white-space: pre-wrap`) and avoid rich text rendering to align with MVP XSS guardrail.
+- 2026-02-16: Recruitment schema stays minimal (name/school/grade/direction/contact/bio + user_id + timestamps) with no approval workflow, matching MVP scope guardrails.
+- 2026-02-16: Enforce admin-only visibility for recruitment submissions at route level using existing `middleware.RequireRoles(auth.RoleAdmin)` and keep player permission limited to submission.
+- 2026-02-16: Implement Task 4 idempotency evidence via backend Fiber handler test (`POST /submissions` twice + `GET /scoreboard`) to avoid relying on external seeded data or browser runtime.
+- 2026-02-16: Keep flag comparison behavior unchanged (`strings.TrimSpace` + SHA256 exact match), and add explicit tests proving trim works but case mismatch remains wrong.
+- 2026-02-16: Task 5 admin user management API contract is `GET /api/v1/admin/users` + `PATCH /api/v1/admin/users/:id` with existing `RequireRoles(auth.RoleAdmin)` RBAC, plus `isDisabled` field in user model/DTO.
+- 2026-02-16: Keep rate limiting conservative and infra-free by adding process-local middleware instances in router for login and submission create routes only.
+- 2026-02-16: For Task 6 compose defaults, do not publish Postgres/Redis host ports (internal-only network access) and publish backend/frontend as `18080/13001` to minimize host collision risk and honor the no-3000 runtime constraint.
+- 2026-02-16: Keep required verification command coverage by documenting dual health checks: mandated `localhost:8080` probe for traceability and compose-owned `localhost:18080` probe for authoritative stack status.
+- 2026-02-16: Task 7 persistence model uses `challenge_instances` with explicit lifecycle enum (`starting/running/stopping/stopped/expired/failed/cooldown`) and partial unique active-instance constraint per user.
+- 2026-02-16: TTL baseline is set when instance transitions to `running` (service transition path), while `start` creates a `starting` record only; this matches roadmap default semantics and avoids pre-runtime TTL drift.
+- 2026-02-16: Task 8 runtime controller uses Docker Engine from backend process (Docker CLI + socket mount) with strict defaults (`--cpus=0.5 --memory=512m --cap-drop=ALL --security-opt no-new-privileges`) and evidence verification via API start/stop + docker inspect/ps.
+- 2026-02-16: Implement Task 9 as an extension of existing `cmd/worker` loop (separate ticker) instead of new scheduler infra; add only one config knob `INSTANCE_SWEEPER_POLL_INTERVAL` for minimal wiring.
+- 2026-02-16: Treat runtime stop failure in sweeper as retriable (log with instance/container context and keep instance state unchanged) and treat invalid transition/not-found as benign concurrency race outcomes.
+- 2026-02-16: Task 10 stop API contract is owner-only by default: explicit non-owner stop attempts return `403 INSTANCE_FORBIDDEN`, while unknown instance still returns not found; no admin override path introduced in this task to keep scope limited.
+- 2026-02-16: Task 10 adds `GET /instances/me` as auth-scoped read endpoint returning current active instance payload or `instance: null`, reusing existing DTO mapping without frontend UI changes.
+- 2026-02-16: Task 11 challenge detail uses robust frontend states (`idle`, `starting/running/stopping`, `cooldown`, `error`) entirely from Task 10 APIs (`GET /instances/me`, `POST /instances/start`, `POST /instances/stop`) without backend changes.
+- 2026-02-16: Keep `cooldownUntil` as page-level fallback state in addition to active instance payload so 409 cooldown responses (`details.retryAt`) can immediately disable Start and render retry countdown even when `/instances/me` returns `instance: null`.
+- 2026-02-16: For Task 12 closeout, accept mixed TTL evidence strategy in current environment: real API evidence for `start/stop/cooldown`, plus worker error-path logs and focused sweeper tests as fallback for auto-expire when runtime Docker access is blocked.
+- 2026-02-16: Document troubleshooting as command-driven runbook sections in root README (start failure, TTL non-expiry, cooldown anomalies) rather than introducing new operational scripts.
+- 2026-02-16: Keep Task 12 fix minimal and infra-only by adding Docker socket mount to `worker` compose service (no sweeper/state-machine logic changes), then capture separate SUCCESS evidence files alongside prior fallback evidence.

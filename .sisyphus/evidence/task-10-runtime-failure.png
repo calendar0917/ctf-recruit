@@ -1,0 +1,14 @@
+DETERMINISTIC PLACEHOLDER (text stand-in for binary screenshot)
+
+Task: 10 Start/Stop UX hardening (recovery + diagnostics)
+Artifact name reserved: task-10-runtime-failure.png
+
+Why placeholder:
+- Binary screenshot capture is unavailable in this execution channel.
+
+Canonical Task-10 runtime-failure evidence is stored in:
+- .sisyphus/evidence/task-10-dependency-unavailable-500.json
+- .sisyphus/evidence/task-10-dependency-unavailable-500.headers
+- .sisyphus/evidence/task-10-dependency-unavailable-backend.log
+
+These files contain deterministic request/response + backend log context for runtime/dependency failure diagnostics.

@@ -1,0 +1,6 @@
+=== RUN   TestRateLimiterBlocksRapidCallsPerPathAndIP
+    rate_limit_test.go:34: rapid POST /api/v1/auth/login status=429
+    rate_limit_test.go:47: rapid POST /api/v1/auth/login error.code=RATE_LIMITED
+--- PASS: TestRateLimiterBlocksRapidCallsPerPathAndIP (0.00s)
+PASS
+ok  	ctf-recruit/backend/internal/middleware	0.004s

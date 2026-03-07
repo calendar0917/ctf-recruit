@@ -1,0 +1,28 @@
+# Issues (append-only)
+
+- 2026-02-16: Local env had a root-owned backup directory `frontend/node_modules.root-owned.bak` that polluted frontend type-check/test/coverage scans and caused false failures unrelated to business code.
+- 2026-02-16: Initial `vitest --coverage` failed with `@ampproject/remapping` TypeError until `node_modules.root-owned.bak/**` was excluded from coverage collection.
+- 2026-02-16: Local `frontend/.next` directory is root-owned, so host-side `pnpm -C frontend build` fails with EACCES; Docker image build is used as build verification workaround.
+- 2026-02-16: Task 3 frontend production build is still blocked locally by the same root-owned `frontend/.next/trace` EACCES issue; validated changes via type-check + tests instead.
+- 2026-02-16: Workspace TypeScript LSP binary (`typescript-language-server`) is unavailable in this environment, so LSP diagnostics for changed frontend TS/TSX files are blocked; used `pnpm -C frontend type-check` as fallback signal.
+- 2026-02-16: TypeScript LSP is still unavailable for Task 5 frontend files (`admin/users` page and admin-users API client), so frontend static validation remains via Vitest + existing type-check command instead of LSP diagnostics.
+- 2026-02-16: Required verification command `curl http://localhost:8080/api/v1/health` returns 200 in this host because another existing container already binds `8080`; Task 6 evidence therefore records both `8080` result and compose-owned `18080` result.
+- 2026-02-16: `docker compose run ... backend /bin/seed` initially failed (`/bin/seed` missing) because the `ctf-recruit-backend` image was stale; rebuilding `docker compose build backend` resolved it.
+- 2026-02-16: Backend LSP diagnostics for changed Go files currently returns `No active builds contain ...`; used `go test ./...` and focused module tests as verification fallback.
+- 2026-02-16: Initial Task 8 runtime evidence attempts failed with `INSTANCE_RUNTIME_START_FAILED` because backend container lacked Docker CLI/socket and later because `docker run` output included image-pull logs that broke raw container-id parsing.
+- 2026-02-16: Task 9 verification still hits Go LSP workspace limitation (`No active builds contain ...`) for changed backend files; used clean `go test ./...` + focused sweeper tests as fallback verification signal.
+- 2026-02-16: Task 10 verification still hits same Go LSP workspace limitation (`No active builds contain ...`) on changed instance files; validation relies on focused instance tests and full `go test ./...` pass.
+- 2026-02-16: Task 11 frontend TypeScript LSP diagnostics remain blocked (`typescript-language-server` missing), so changed TS/TSX validation used `pnpm -C frontend type-check` and `pnpm -C frontend test`.
+- 2026-02-16: Task 11 Playwright screenshot evidence is blocked in this environment because Playwright MCP expects Chrome at `/opt/google/chrome/chrome` and browser install failed due to sudo/password restriction.
+- 2026-02-16: Task 11 host-side `pnpm -C frontend build` still fails with EACCES on `frontend/.next/trace` (root-owned), so build signal remains blocked locally.
+- 2026-02-16: Task 12 worker auto-expire runtime evidence is blocked in compose runtime because worker cannot reach Docker daemon (`Cannot connect to the Docker daemon at unix:///var/run/docker.sock`), causing sweeper stop retries without transition to expired.
+- 2026-02-16: Task 12 stop API can intermittently return `INSTANCE_RUNTIME_STOP_FAILED` when docker reports container removal already in progress; subsequent state may already be non-running (`INSTANCE_NOT_RUNNING` on retry).
+- 2026-02-16: YAML LSP diagnostics remain unavailable in this environment (`yaml-language-server` not installed), so `docker-compose.yml` validation relied on `docker compose up -d --build worker backend` runtime success instead of LSP output.
+- 2026-02-16: Roadmap line `Definition of Done: pnpm test/lint/type-check 全部通过` remains unchecked because no Task 1 evidence file records that exact root triple command run as PASS.
+- 2026-02-16: Roadmap line `选手闭环（含公告+报名）` remains unchecked because existing e2e evidence covers register/login/challenge/submit/scoreboard but not a complete announcements+recruitment integrated loop.
+- 2026-02-16: Roadmap line `管理员闭环（公告/题目/用户/报名）` remains unchecked because no single evidence artifact proves the full admin end-to-end chain in one verified flow.
+- 2026-02-16: Task 1 and its acceptance lines remain unchecked because current evidence set lacks explicit PASS logs for `pnpm lint`, `pnpm type-check`, `pnpm test`, `pnpm -C frontend test:coverage`, and `go test -cover ./...`.
+- 2026-02-16: Task 2 acceptance lines remain unchecked because announcement-specific frontend tests and Playwright QA screenshots are missing (browser runtime blocker).
+- 2026-02-16: Task 4 frontend pending-status acceptance remains unchecked because no evidence file shows a frontend test proving pending render then resolution.
+- 2026-02-16: Task 11 and its acceptance lines remain unchecked because no Task 11 UI evidence artifact (state/controls/no-scoreboard-request) is present, with Playwright blocked in this environment.
+- 2026-02-16: Final checklist line `MVP 功能闭环可用（选手+管理员）` remains unchecked because unresolved DoD and task-level checklist items above prevent an honest full-closure mark.

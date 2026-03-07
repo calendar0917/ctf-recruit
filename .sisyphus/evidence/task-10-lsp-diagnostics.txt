@@ -1,0 +1,17 @@
+Task 10 LSP diagnostics attempt (changed backend files)
+
+Command/tool:
+lsp_diagnostics on:
+- backend/internal/modules/instance/handler.go
+- backend/internal/modules/instance/service.go
+- backend/internal/modules/instance/repository.go
+- backend/internal/modules/instance/dto.go
+- backend/internal/modules/instance/handler_test.go
+- backend/internal/modules/instance/sweeper_test.go
+
+Result (same for each file):
+warning[go list] at 1:8: No active builds contain <file>: consider opening a new workspace folder containing it
+
+Fallback verification used:
+- Focused instance tests (Task 10 scenarios) all PASS
+- Full backend `go test ./...` PASS

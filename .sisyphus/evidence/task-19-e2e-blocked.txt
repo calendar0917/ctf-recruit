@@ -1,0 +1,23 @@
+Task 19 Playwright E2E blocker record (historical, now resolved)
+
+Primary command:
+pnpm -C frontend test:e2e
+
+Current final status:
+- RESOLVED
+- Final verification result: PASS (2/2)
+- Journeys executed: lifecycle + admin runtime-config
+
+Original blocker signature (historical):
+- `page.goto('/login')` failed with `net::ERR_CONNECTION_REFUSED` during Task 19 execution.
+
+Resolution context (Task 20 follow-up fixes):
+1) Replaced flaky Playwright-managed startup path with script-managed e2e harness lifecycle.
+2) Fixed challenge detail StrictMode remount behavior by restoring `mountedRef` on mount.
+3) Re-ran full e2e command after fixes and confirmed both specs passing.
+
+Notes:
+- This file is retained for chronology only (blocked -> resolved).
+- Active evidence status is now PASS in:
+  - `.sisyphus/evidence/task-19-e2e-happy.mp4`
+  - `.sisyphus/evidence/task-19-e2e-cooldown.mp4`

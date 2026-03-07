@@ -1,0 +1,161 @@
+name: ctf-recruit
+services:
+  backend:
+    build:
+      context: /home/calendar/code/ctf-recruit/backend
+      dockerfile: Dockerfile
+      args:
+        ALL_PROXY: ""
+        GOPROXY: https://goproxy.cn,direct
+        HTTP_PROXY: ""
+        HTTPS_PROXY: ""
+        NO_PROXY: localhost,127.0.0.1,postgres,redis,backend,frontend
+      extra_hosts:
+        - host.docker.internal=host-gateway
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+        required: true
+      postgres:
+        condition: service_healthy
+        required: true
+      redis:
+        condition: service_healthy
+        required: true
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/ctf_recruit?sslmode=disable
+      JWT_SECRET: change-me
+      JWT_TTL: 24h
+      PORT: "8080"
+      REDIS_URL: redis://redis:6379
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -qO- http://127.0.0.1:8080/api/v1/health >/dev/null || exit 1
+      timeout: 5s
+      interval: 10s
+      retries: 12
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        target: 8080
+        published: "18080"
+        protocol: tcp
+  frontend:
+    build:
+      context: /home/calendar/code/ctf-recruit/frontend
+      dockerfile: Dockerfile
+    depends_on:
+      backend:
+        condition: service_healthy
+        required: true
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:18080
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://localhost:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))
+      timeout: 5s
+      interval: 15s
+      retries: 20
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        target: 3000
+        published: "13001"
+        protocol: tcp
+  migrate:
+    command:
+      - sh
+      - -lc
+      - for f in /migrations/*.up.sql; do echo "applying $$f"; psql -h postgres -U postgres -d ctf_recruit -v ON_ERROR_STOP=1 -f "$$f"; done
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: true
+    environment:
+      PGPASSWORD: postgres
+    image: postgres:16-alpine
+    networks:
+      default: null
+    restart: "no"
+    volumes:
+      - type: bind
+        source: /home/calendar/code/ctf-recruit/backend/migrations
+        target: /migrations
+        read_only: true
+        bind: {}
+  postgres:
+    environment:
+      POSTGRES_DB: ctf_recruit
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U postgres -d ctf_recruit
+      timeout: 3s
+      interval: 5s
+      retries: 20
+    image: postgres:16-alpine
+    networks:
+      default: null
+    volumes:
+      - type: volume
+        source: postgres_data
+        target: /var/lib/postgresql/data
+        volume: {}
+  redis:
+    healthcheck:
+      test:
+        - CMD
+        - redis-cli
+        - ping
+      timeout: 3s
+      interval: 5s
+      retries: 20
+    image: redis:7-alpine
+    networks:
+      default: null
+  worker:
+    build:
+      context: /home/calendar/code/ctf-recruit/backend
+      dockerfile: Dockerfile
+      args:
+        ALL_PROXY: ""
+        GOPROXY: https://goproxy.cn,direct
+        HTTP_PROXY: ""
+        HTTPS_PROXY: ""
+        NO_PROXY: localhost,127.0.0.1,postgres,redis,backend,frontend,worker
+      extra_hosts:
+        - host.docker.internal=host-gateway
+    command:
+      - /bin/worker
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+        required: true
+      postgres:
+        condition: service_healthy
+        required: true
+      redis:
+        condition: service_healthy
+        required: true
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/ctf_recruit?sslmode=disable
+      JWT_SECRET: change-me
+      JWT_TTL: 24h
+      PORT: "8080"
+      REDIS_URL: redis://redis:6379
+    networks:
+      default: null
+networks:
+  default:
+    name: ctf-recruit_default
+volumes:
+  postgres_data:
+    name: ctf-recruit_postgres_data

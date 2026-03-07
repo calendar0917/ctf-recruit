@@ -1,0 +1,6 @@
+=== RUN   TestSubmissionAPIAndScoreboardDuplicateCorrectIsStable
+2026/02/16 12:32:06 INFO submission_scoring_event userId=942773d2-2ffd-4746-89a8-a76667e69761 challengeId=ec842b7e-8088-4584-a94c-35c41dfac698 status=correct awardedPoints=120 at=2026-02-16T04:32:06Z
+2026/02/16 12:32:06 INFO submission_scoring_event userId=942773d2-2ffd-4746-89a8-a76667e69761 challengeId=ec842b7e-8088-4584-a94c-35c41dfac698 status=correct awardedPoints=0 at=2026-02-16T04:32:06Z
+--- PASS: TestSubmissionAPIAndScoreboardDuplicateCorrectIsStable (0.00s)
+PASS
+ok  	ctf-recruit/backend/internal/modules/submission	(cached)

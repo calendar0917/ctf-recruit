@@ -15,6 +15,7 @@ type User struct {
 	PasswordHash string    `gorm:"size:255;not null"`
 	DisplayName  string    `gorm:"size:100;not null"`
 	Role         Role      `gorm:"type:varchar(20);not null;default:'player'"`
+	IsDisabled   bool      `gorm:"not null;default:false"`
 }
 
 func (User) TableName() string {

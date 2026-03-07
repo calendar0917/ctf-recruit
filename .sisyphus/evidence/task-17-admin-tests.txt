@@ -1,0 +1,82 @@
+Task 17 admin flow + auth-guard tests evidence
+Timestamp: 2026-02-17T13:02:54Z
+
+Changed files (task scope):
+frontend/src/app/admin/challenges/page.tsx
+
+Verification: pnpm -C frontend test
+
+> ctf-recruit-frontend@0.1.0 test /home/calendar/code/ctf-recruit/frontend
+> vitest run --no-cache
+
+
+[7m[1m[36m RUN [39m[22m[27m [36mv2.0.5[39m [90m/home/calendar/code/ctf-recruit/frontend[39m
+
+ [32m✓[39m src/__tests__/admin-challenge-runtime-payload.test.ts [2m ([22m[2m5 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m src/__tests__/recruitments-api.test.ts [2m ([22m[2m2 tests[22m[2m)[22m[90m 13[2mms[22m[39m
+ [32m✓[39m src/__tests__/admin-users-api.test.ts [2m ([22m[2m4 tests[22m[2m)[22m[90m 13[2mms[22m[39m
+ [32m✓[39m src/__tests__/submissions-api.test.ts [2m ([22m[2m3 tests[22m[2m)[22m[90m 14[2mms[22m[39m
+ [32m✓[39m src/__tests__/http-error-normalization.test.ts [2m ([22m[2m6 tests[22m[2m)[22m[90m 16[2mms[22m[39m
+ [32m✓[39m src/__tests__/announcements-api.test.ts [2m ([22m[2m2 tests[22m[2m)[22m[90m 12[2mms[22m[39m
+ [32m✓[39m src/__tests__/instances-api.test.ts [2m ([22m[2m8 tests[22m[2m)[22m[90m 11[2mms[22m[39m
+ [32m✓[39m src/__tests__/admin-challenge-runtime-fields.test.tsx [2m ([22m[2m3 tests[22m[2m)[22m[90m 7[2mms[22m[39m
+ [32m✓[39m src/__tests__/admin-users-access.test.ts [2m ([22m[2m3 tests[22m[2m)[22m[90m 114[2mms[22m[39m
+ [32m✓[39m src/__tests__/home-redirect-auth-state.test.tsx [2m ([22m[2m3 tests[22m[2m)[22m[90m 35[2mms[22m[39m
+ [32m✓[39m src/__tests__/admin-challenges-access.test.ts [2m ([22m[2m3 tests[22m[2m)[22m[90m 137[2mms[22m[39m
+ [32m✓[39m src/__tests__/challenge-detail-page-orchestration.test.tsx [2m ([22m[2m4 tests[22m[2m)[22m[90m 97[2mms[22m[39m
+ [32m✓[39m src/__tests__/challenge-detail-submission-status.test.tsx [2m ([22m[2m5 tests[22m[2m)[22m[90m 18[2mms[22m[39m
+ [32m✓[39m src/__tests__/challenge-detail-lifecycle-diagnostics.test.tsx [2m ([22m[2m10 tests[22m[2m)[22m[90m 18[2mms[22m[39m
+ [32m✓[39m src/__tests__/app-nav-auth-state.test.tsx [2m ([22m[2m4 tests[22m[2m)[22m[90m 122[2mms[22m[39m
+ [32m✓[39m src/__tests__/smoke.test.ts [2m ([22m[2m1 test[22m[2m)[22m[90m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/recruitment-form.test.ts [2m ([22m[2m2 tests[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m src/__tests__/announcements-list.test.ts [2m ([22m[2m1 test[22m[2m)[22m[90m 16[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m18 passed[39m[22m[90m (18)[39m
+[2m      Tests [22m [1m[32m69 passed[39m[22m[90m (69)[39m
+[2m   Start at [22m 21:02:54
+[2m   Duration [22m 735ms[2m (transform 1.07s, setup 0ms, collect 2.00s, tests 654ms, environment 3ms, prepare 1.33s)[22m
+
+
+Verification: pnpm -C frontend build
+
+> ctf-recruit-frontend@0.1.0 build /home/calendar/code/ctf-recruit/frontend
+> next build
+
+  ▲ Next.js 14.2.5
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/14) ...
+   Generating static pages (3/14) 
+   Generating static pages (6/14) 
+   Generating static pages (10/14) 
+ ✓ Generating static pages (14/14)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+┌ ○ /                                    1.07 kB        88.2 kB
+├ ○ /_not-found                          872 B            88 kB
+├ ○ /admin/announcements                 4.68 kB        91.8 kB
+├ ○ /admin/challenges                    5.33 kB        92.4 kB
+├ ○ /admin/recruitments                  3.73 kB        90.9 kB
+├ ○ /admin/users                         4.01 kB        91.1 kB
+├ ○ /announcements                       3.52 kB        97.5 kB
+├ ƒ /announcements/[id]                  3.29 kB        97.3 kB
+├ ○ /challenges                          3.5 kB         97.5 kB
+├ ƒ /challenges/[id]                     6.37 kB        93.5 kB
+├ ○ /login                               2.93 kB        96.9 kB
+├ ○ /recruitment                         3.72 kB        90.8 kB
+├ ○ /register                            2.77 kB        96.8 kB
+└ ○ /scoreboard                          3.57 kB        90.7 kB
++ First Load JS shared by all            87.1 kB
+  ├ chunks/200-8ec60e398dad3fba.js       31.5 kB
+  ├ chunks/9409b4b9-d17e61e727ade611.js  53.6 kB
+  └ other shared chunks (total)          1.95 kB
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

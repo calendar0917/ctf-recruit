@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { ScoreboardTable } from "@/components/scoreboard/ScoreboardTable";
+import { ErrorStateCard, LoadingStateCard } from "@/components/ui/StateFeedback";
 import { listScoreboard } from "@/lib/api/scoreboard";
 import { HttpError } from "@/lib/http";
-import { useRequireAuth } from "@/lib/use-auth";
 import type { ScoreboardItem } from "@/lib/types";
+import { useRequireAuth } from "@/lib/use-auth";
 
 const LIMIT = 20;
 
@@ -63,9 +64,7 @@ export default function ScoreboardPage() {
   if (!ready || !authorized || !session) {
     return (
       <main className="page">
-        <section className="card">
-          <p>Loading session...</p>
-        </section>
+        <LoadingStateCard message="Loading session..." />
       </main>
     );
   }
@@ -78,15 +77,11 @@ export default function ScoreboardPage() {
       </section>
 
       {loading ? (
-        <section className="card">
-          <p>Loading scoreboard...</p>
-        </section>
+        <LoadingStateCard message="Loading scoreboard..." />
       ) : null}
 
       {error ? (
-        <section className="card">
-          <p className="error-text">{error}</p>
-        </section>
+        <ErrorStateCard message={error} />
       ) : null}
 
       {!loading && !error ? (

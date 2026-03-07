@@ -1,0 +1,8 @@
+task-8-scoreboard-ordering
+
+Timestamp (UTC): 20260215T235102Z
+Users created: task8-u1-20260215T235102Z@example.com, task8-u2-20260215T235102Z@example.com
+Rule: totalPoints desc; tie-break earlier lastAcceptedAt first; deterministic final tie-break by userId.
+Scenario: two players solve same static 50-point challenge; first solver should rank higher on tie.
+
+Top entries snapshot (rank, displayName, totalPoints):

@@ -1,0 +1,7 @@
+# Task 6 submission polling evidence (backfill)
+- Verified: challenge detail orchestration enables polling when latest submission is pending and reconciles state after transitions.
+- Command context (prior run): `pnpm -C frontend test "src/__tests__/challenge-detail-page-orchestration.test.tsx"`
+- Result references:
+  - PASS recorded in `.sisyphus/evidence/task-16-orchestration-tests.txt` (`4 passed`).
+  - Coverage notes in same evidence file confirm pending-submission polling timer path (`5000ms`) and transition polling path (`3000ms`).
+- Deterministic note: evidence is backfilled from previously captured orchestration test logs; no new polling run executed now.

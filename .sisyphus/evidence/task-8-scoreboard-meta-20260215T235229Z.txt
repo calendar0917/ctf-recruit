@@ -1,0 +1,6 @@
+ts=20260215T235229Z
+u1_email=task8a-u1-20260215T235229Z@example.com
+u2_email=task8a-u2-20260215T235229Z@example.com
+u1_name=Task8A User 1 20260215T235229Z
+u2_name=Task8A User 2 20260215T235229Z
+raw=/home/calendar/code/ctf-recruit/.sisyphus/evidence/task-8-scoreboard-response-20260215T235229Z.json

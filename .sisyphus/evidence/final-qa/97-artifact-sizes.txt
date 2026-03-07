@@ -1,0 +1,5 @@
+-rw-r--r-- 1 calendar wheel 102861 Feb 18 04:21 .sisyphus/evidence/final-qa/02-player-lifecycle-happy.webm
+-rw-r--r-- 1 calendar wheel 217597 Feb 18 04:21 .sisyphus/evidence/final-qa/03-admin-runtime-config.webm
+-rw-r--r-- 1 calendar wheel  15447 Feb 18 04:33 .sisyphus/evidence/final-qa/05-edge-guard-admin.webm
+-rw-r--r-- 1 calendar wheel  14448 Feb 18 04:33 .sisyphus/evidence/final-qa/05-edge-guard-nonadmin.webm
+-rw-r--r-- 1 calendar wheel  15145 Feb 18 04:33 .sisyphus/evidence/final-qa/05-edge-guard-unauth.webm

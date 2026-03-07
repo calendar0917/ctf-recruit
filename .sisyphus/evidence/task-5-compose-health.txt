@@ -1,0 +1,154 @@
+Tue Feb 17 07:03:10 AM UTC 2026
+
+## compose reset + start
+ Container ctf-recruit-frontend-1 Stopping 
+ Container ctf-recruit-worker-1 Stopping 
+ Container ctf-recruit-worker-1 Stopped 
+ Container ctf-recruit-worker-1 Removing 
+ Container ctf-recruit-frontend-1 Stopped 
+ Container ctf-recruit-frontend-1 Removing 
+ Container ctf-recruit-worker-1 Removed 
+ Container ctf-recruit-frontend-1 Removed 
+ Container ctf-recruit-backend-1 Stopping 
+ Container ctf-recruit-backend-1 Stopped 
+ Container ctf-recruit-backend-1 Removing 
+ Container ctf-recruit-backend-1 Removed 
+ Container ctf-recruit-redis-1 Stopping 
+ Container ctf-recruit-migrate-1 Stopping 
+ Container ctf-recruit-migrate-1 Stopped 
+ Container ctf-recruit-migrate-1 Removing 
+ Container ctf-recruit-migrate-1 Removed 
+ Container ctf-recruit-postgres-1 Stopping 
+ Container ctf-recruit-postgres-1 Stopped 
+ Container ctf-recruit-postgres-1 Removing 
+ Container ctf-recruit-redis-1 Stopped 
+ Container ctf-recruit-redis-1 Removing 
+ Container ctf-recruit-postgres-1 Removed 
+ Container ctf-recruit-redis-1 Removed 
+ Volume ctf-recruit_postgres_data Removing 
+ Network ctf-recruit_default Removing 
+ Network ctf-recruit_default Resource is still in use 
+ Volume ctf-recruit_postgres_data Removed 
+ Volume ctf-recruit_postgres_data Creating 
+ Volume ctf-recruit_postgres_data Created 
+ Container ctf-recruit-redis-1 Creating 
+ Container ctf-recruit-postgres-1 Creating 
+ Container ctf-recruit-postgres-1 Created 
+ Container ctf-recruit-redis-1 Created 
+ Container ctf-recruit-migrate-1 Creating 
+ Container ctf-recruit-migrate-1 Created 
+ Container ctf-recruit-worker-1 Creating 
+ Container ctf-recruit-backend-1 Creating 
+ Container ctf-recruit-worker-1 Created 
+ Container ctf-recruit-backend-1 Created 
+ Container ctf-recruit-frontend-1 Creating 
+ Container ctf-recruit-frontend-1 Created 
+ Container ctf-recruit-redis-1 Starting 
+ Container ctf-recruit-postgres-1 Starting 
+ Container ctf-recruit-redis-1 Started 
+ Container ctf-recruit-postgres-1 Started 
+ Container ctf-recruit-postgres-1 Waiting 
+ Container ctf-recruit-postgres-1 Healthy 
+ Container ctf-recruit-migrate-1 Starting 
+ Container ctf-recruit-migrate-1 Started 
+ Container ctf-recruit-postgres-1 Waiting 
+ Container ctf-recruit-redis-1 Waiting 
+ Container ctf-recruit-migrate-1 Waiting 
+ Container ctf-recruit-redis-1 Waiting 
+ Container ctf-recruit-migrate-1 Waiting 
+ Container ctf-recruit-postgres-1 Waiting 
+ Container ctf-recruit-redis-1 Healthy 
+ Container ctf-recruit-postgres-1 Healthy 
+ Container ctf-recruit-migrate-1 Exited 
+ Container ctf-recruit-postgres-1 Healthy 
+ Container ctf-recruit-migrate-1 Exited 
+ Container ctf-recruit-backend-1 Starting 
+ Container ctf-recruit-redis-1 Healthy 
+ Container ctf-recruit-worker-1 Starting 
+ Container ctf-recruit-worker-1 Started 
+ Container ctf-recruit-backend-1 Started 
+ Container ctf-recruit-backend-1 Waiting 
+ Container ctf-recruit-backend-1 Healthy 
+ Container ctf-recruit-frontend-1 Starting 
+ Container ctf-recruit-frontend-1 Started 
+
+## compose status
+NAME                     IMAGE                  COMMAND                  SERVICE    CREATED          STATUS                                     PORTS
+ctf-recruit-backend-1    ctf-recruit-backend    "/bin/api"               backend    17 seconds ago   Up 10 seconds (healthy)                    0.0.0.0:18080->8080/tcp, [::]:18080->8080/tcp
+ctf-recruit-frontend-1   ctf-recruit-frontend   "docker-entrypoint.s…"   frontend   17 seconds ago   Up Less than a second (health: starting)   0.0.0.0:13001->3000/tcp, [::]:13001->3000/tcp
+ctf-recruit-postgres-1   postgres:16-alpine     "docker-entrypoint.s…"   postgres   17 seconds ago   Up 16 seconds (healthy)                    5432/tcp
+ctf-recruit-redis-1      redis:7-alpine         "docker-entrypoint.s…"   redis      17 seconds ago   Up 16 seconds (healthy)                    6379/tcp
+ctf-recruit-worker-1     ctf-recruit-worker     "/bin/worker"            worker     17 seconds ago   Up 10 seconds                              8080/tcp
+
+## deterministic seed
+ Container ctf-recruit-redis-1 Running 
+ Container ctf-recruit-postgres-1 Running 
+ Container ctf-recruit-postgres-1 Waiting 
+ Container ctf-recruit-postgres-1 Healthy 
+ Container ctf-recruit-migrate-1 Starting 
+ Container ctf-recruit-migrate-1 Started 
+ Container ctf-recruit-migrate-1 Waiting 
+ Container ctf-recruit-postgres-1 Waiting 
+ Container ctf-recruit-redis-1 Waiting 
+ Container ctf-recruit-redis-1 Healthy 
+ Container ctf-recruit-migrate-1 Exited 
+ Container ctf-recruit-postgres-1 Healthy 
+ Container ctf-recruit-backend-run-cc87e8933ade Creating 
+ Container ctf-recruit-backend-run-cc87e8933ade Created 
+
+2026/02/17 07:03:30 [31;1m/app/cmd/seed/main.go:130 [35;1mrecord not found
+[0m[33m[2.593ms] [34;1m[rows:0][0m SELECT * FROM "users" WHERE email = 'admin@ctf.local' ORDER BY "users"."id" LIMIT 1
+2026/02/17 07:03:30 INFO seed user created email=admin@ctf.local role=admin
+
+2026/02/17 07:03:30 [31;1m/app/cmd/seed/main.go:130 [35;1mrecord not found
+[0m[33m[0.216ms] [34;1m[rows:0][0m SELECT * FROM "users" WHERE email = 'player@ctf.local' ORDER BY "users"."id" LIMIT 1
+2026/02/17 07:03:30 INFO seed user created email=player@ctf.local role=player
+
+2026/02/17 07:03:30 [31;1m/app/cmd/seed/main.go:198 [35;1mrecord not found
+[0m[33m[1.100ms] [34;1m[rows:0][0m SELECT * FROM "challenges" WHERE (title = 'Welcome Static' AND category = 'intro') AND "challenges"."deleted_at" IS NULL ORDER BY "challenges"."id" LIMIT 1
+2026/02/17 07:03:30 INFO seed challenge created title="Welcome Static" mode=static
+
+2026/02/17 07:03:30 [31;1m/app/cmd/seed/main.go:198 [35;1mrecord not found
+[0m[33m[0.407ms] [34;1m[rows:0][0m SELECT * FROM "challenges" WHERE (title = 'Log Trail' AND category = 'forensics') AND "challenges"."deleted_at" IS NULL ORDER BY "challenges"."id" LIMIT 1
+2026/02/17 07:03:30 INFO seed challenge created title="Log Trail" mode=dynamic
+2026/02/17 07:03:30 INFO seed completed
+
+## health check
+HTTP/1.1 200 OK
+Content-Length: 35
+Connection: keep-alive
+Content-Type: application/json
+Date: Tue, 17 Feb 2026 07:03:29 GMT
+Keep-Alive: timeout=4
+Proxy-Connection: keep-alive
+Vary: Origin
+X-Request-Id: req_1a630844-4075-4c3f-831f-74fce42a1fa7
+
+{"service":"ctf-api","status":"ok"}
+## player login
+{"accessToken":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiI4OWU5YTBhYS1iNDRmLTRjY2EtODdmNy02MDcwN2M1MjViZDMiLCJyb2xlIjoicGxheWVyIiwic3ViIjoiODllOWEwYWEtYjQ0Zi00Y2NhLTg3ZjctNjA3MDdjNTI1YmQzIiwiZXhwIjoxNzcxMzk4MjEwLCJpYXQiOjE3NzEzMTE4MTB9.6_WOGEaeRG95_axXxk2Vt98y_LETcghCBoDywW73kIE","tokenType":"Bearer","user":{"id":"89e9a0aa-b44f-4cca-87f7-60707c525bd3","email":"player@ctf.local","displayName":"CTF Player","role":"player","isDisabled":false}}
+
+## resolve seeded dynamic challenge id
+{"items":[{"id":"d040c9f7-4071-4517-8700-7b1c1ac749a4","title":"Log Trail","description":"Trace the log trail to locate the issued token in this dynamic exercise.","category":"forensics","difficulty":"medium","mode":"dynamic","runtimeImage":"busybox:1.36","runtimeCommand":"httpd -f -p 8080","runtimeExposedPort":8080,"points":120,"isPublished":true,"createdAt":"2026-02-17T07:03:30Z","updatedAt":"2026-02-17T07:03:30Z"},{"id":"ad6bcad6-db12-4f8c-af24-237b3f9effb4","title":"Welcome Static","description":"Find the static flag hidden in the welcome challenge.","category":"intro","difficulty":"easy","mode":"static","points":50,"isPublished":true,"createdAt":"2026-02-17T07:03:30Z","updatedAt":"2026-02-17T07:03:30Z"}],"limit":20,"offset":0}
+LOG_TRAIL_ID=d040c9f7-4071-4517-8700-7b1c1ac749a4
+
+## start seeded dynamic challenge
+start_status=201
+{"id":"1d676a41-e7d3-43cc-9a7a-a2a1f6239cb5","userId":"89e9a0aa-b44f-4cca-87f7-60707c525bd3","challengeId":"d040c9f7-4071-4517-8700-7b1c1ac749a4","status":"running","containerId":"76b89d6593b78c95eec2d687ce2b5d8540dc0ff75e21317f40e3ef5e179029ae","accessInfo":{"host":"localhost","port":32789,"connectionString":"localhost:32789"},"startedAt":"2026-02-17T07:03:30Z","expiresAt":"2026-02-17T08:03:30Z"}
+
+## /instances/me while running
+{"instance":{"id":"1d676a41-e7d3-43cc-9a7a-a2a1f6239cb5","userId":"89e9a0aa-b44f-4cca-87f7-60707c525bd3","challengeId":"d040c9f7-4071-4517-8700-7b1c1ac749a4","status":"running","containerId":"76b89d6593b78c95eec2d687ce2b5d8540dc0ff75e21317f40e3ef5e179029ae","startedAt":"2026-02-17T07:03:30Z","expiresAt":"2026-02-17T08:03:30Z"}}
+## stop instance
+stop_status=200
+{"id":"1d676a41-e7d3-43cc-9a7a-a2a1f6239cb5","userId":"89e9a0aa-b44f-4cca-87f7-60707c525bd3","challengeId":"d040c9f7-4071-4517-8700-7b1c1ac749a4","status":"stopped","containerId":"76b89d6593b78c95eec2d687ce2b5d8540dc0ff75e21317f40e3ef5e179029ae","startedAt":"2026-02-17T07:03:30Z","expiresAt":"2026-02-17T08:03:30Z","cooldownUntil":"2026-02-17T07:04:30Z"}
+
+## immediate restart (expected cooldown 409)
+cooldown_status=409
+{"error":{"code":"INSTANCE_COOLDOWN_ACTIVE","message":"Instance is in cooldown","details":{"retryAt":"2026-02-17T07:04:30Z"}},"requestId":"req_d157de43-b8f0-4316-bbd3-14ce2eea6c61"}
+
+## deterministic seeded dynamic runtime container verification
+start_status=201
+{"id":"21358009-281b-4e1e-945b-dd57878a4060","userId":"89e9a0aa-b44f-4cca-87f7-60707c525bd3","challengeId":"d040c9f7-4071-4517-8700-7b1c1ac749a4","status":"running","containerId":"b0d20792d3a43e84bd27a3ee50f849a9d604f2424d96741c8cdf9856e0955aa0","accessInfo":{"host":"localhost","port":32791,"connectionString":"localhost:32791"},"startedAt":"2026-02-17T07:07:25Z","expiresAt":"2026-02-17T08:07:25Z"}
+running=true status=running image=busybox:1.36 cmd=["httpd","-f","-p","8080"]
+127.0.0.1:32791
+{"id":"21358009-281b-4e1e-945b-dd57878a4060","userId":"89e9a0aa-b44f-4cca-87f7-60707c525bd3","challengeId":"d040c9f7-4071-4517-8700-7b1c1ac749a4","status":"stopped","containerId":"b0d20792d3a43e84bd27a3ee50f849a9d604f2424d96741c8cdf9856e0955aa0","startedAt":"2026-02-17T07:07:25Z","expiresAt":"2026-02-17T08:07:25Z","cooldownUntil":"2026-02-17T07:08:25Z"}

@@ -1,0 +1,20 @@
+# Task 11 UI Acceptance
+Run at: 2026-02-16T07:07:18Z
+
+$ pnpm -C frontend exec vitest run src/__tests__/challenge-detail-submission-status.test.tsx --no-cache
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v2.0.5 /home/calendar/code/ctf-recruit/frontend
+
+ ✓ src/__tests__/challenge-detail-submission-status.test.tsx  (3 tests) 5ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  15:07:19
+   Duration  276ms (transform 51ms, setup 0ms, collect 59ms, tests 5ms, environment 0ms, prepare 84ms)
+
+
+$ grep proof: challenge detail page does not call scoreboard API
+Searched file: frontend/src/app/challenges/[id]/page.tsx
+Expected: no listScoreboard import/call
+PASS: no listScoreboard usage in challenge detail page

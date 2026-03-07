@@ -1,0 +1,16 @@
+Task 3 build verification note
+
+Command attempted:
+pnpm -C frontend build
+
+Observed failure:
+EACCES: permission denied, open '/home/calendar/code/ctf-recruit/frontend/.next/trace'
+
+Context:
+Known local environment issue from prior tasks: frontend/.next is root-owned.
+This is unrelated to recruitment code changes.
+
+Workaround used for functional verification:
+- Backend build: go build ./... (PASS)
+- Frontend type-check: pnpm -C frontend type-check (PASS)
+- Frontend tests: pnpm -C frontend test (PASS)

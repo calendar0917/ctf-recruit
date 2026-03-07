@@ -1,0 +1,23 @@
+# Task 16 — Challenge detail page orchestration tests evidence
+
+Date: 2026-02-17
+
+Implemented coverage in:
+- `frontend/src/__tests__/challenge-detail-page-orchestration.test.tsx`
+
+Covered orchestration paths:
+1. Initial parallel load executes `getChallenge` + `getMyInstance` + `listMySubmissionsByChallenge` and applies hydrated state.
+2. Start failure (`409 INSTANCE_COOLDOWN_ACTIVE`) applies `retryAt` cooldown and triggers reconcile via `/instances/me`.
+3. Stop failure triggers reconcile attempt and preserves surfaced lifecycle diagnostics.
+4. Polling activation conditions create timers for pending submission (5000ms), transition status (3000ms), cooldown tick (1000ms), and clears timers on unmount.
+
+Verification commands and outcomes:
+- `pnpm -C frontend test "src/__tests__/challenge-detail-page-orchestration.test.tsx"`
+  - Result: PASS (`4 passed`)
+- `pnpm -C frontend test`
+  - Result: PASS (`17 passed`, `62 passed` tests total)
+- `pnpm -C frontend build`
+  - Result: PASS (compiled + static generation complete)
+
+Minimal runtime fix applied for direct page invocation tests:
+- Added explicit React runtime symbol import in `frontend/src/app/challenges/[id]/page.tsx` (`import React ...` + `void React`).

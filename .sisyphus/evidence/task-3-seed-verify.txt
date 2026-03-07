@@ -1,0 +1,15 @@
+task-3-seed-verify.txt
+
+Timestamp (local): 2026-02-15
+
+Seed verification summary:
+- admin login: success
+- player login: success
+- admin access /api/v1/auth/admin-sample: 200
+- player access /api/v1/auth/admin-sample: 403
+- admin /api/v1/challenges: 2 items, modes: dynamic, static
+- player /api/v1/challenges: 2 items, modes: dynamic, static
+
+Notes:
+- Seeded with admin@ctf.local / player@ctf.local and explicit strong passwords via env.
+- Challenges were created published (static + dynamic).

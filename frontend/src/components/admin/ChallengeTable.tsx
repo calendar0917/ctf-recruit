@@ -1,5 +1,6 @@
 "use client";
 
+import { AdminActionGroup, AdminDataTable } from "@/components/admin/AdminPrimitives";
 import type { Challenge } from "@/lib/types";
 
 type ChallengeTableProps = {
@@ -17,12 +18,8 @@ export function ChallengeTable({
   onDelete,
   onTogglePublish,
 }: ChallengeTableProps) {
-  if (items.length === 0) {
-    return <p className="empty-text">No challenges found.</p>;
-  }
-
   return (
-    <div className="table-wrap">
+    <AdminDataTable isEmpty={items.length === 0} emptyText="No challenges found.">
       <table>
         <thead>
           <tr>
@@ -47,13 +44,14 @@ export function ChallengeTable({
                 <td>{item.points}</td>
                 <td>{item.isPublished ? "Yes" : "No"}</td>
                 <td>
-                  <div className="inline-actions">
+                  <AdminActionGroup className="table-actions">
                     <button
                       type="button"
                       className="button secondary"
                       onClick={() => onEdit(item)}
                       disabled={busy}
-                    >                      Edit
+                    >
+                      Edit
                     </button>
                     <button
                       type="button"
@@ -75,13 +73,13 @@ export function ChallengeTable({
                     >
                       Delete
                     </button>
-                  </div>
+                  </AdminActionGroup>
                 </td>
               </tr>
             );
           })}
         </tbody>
       </table>
-    </div>
+    </AdminDataTable>
   );
 }

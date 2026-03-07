@@ -1,0 +1,66 @@
+# DoD Player Closed Loop (API-level)
+Run at: 2026-02-16T07:09:09Z
+run_id=dod-player-20260216T070909Z
+
+1) register
+HTTP/1.1 201 Created
+Content-Length: 185
+Connection: keep-alive
+Content-Type: application/json
+Date: Mon, 16 Feb 2026 07:09:08 GMT
+Keep-Alive: timeout=4
+Proxy-Connection: keep-alive
+Vary: Origin
+X-Request-Id: req_4c0041d2-f914-469e-8ea2-a2c33aff17a4
+
+{"id":"3dc19dc4-f41d-4dc1-a214-7a54632b596b","email":"dod-player-20260216t070909z@example.com","displayName":"DoD Player dod-player-20260216T070909Z","role":"player","isDisabled":false}
+
+2) login
+{"accessToken":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiIzZGMxOWRjNC1mNDFkLTRkYzEtYTIxNC03YTU0NjMyYjU5NmIiLCJyb2xlIjoicGxheWVyIiwic3ViIjoiM2RjMTlkYzQtZjQxZC00ZGMxLWEyMTQtN2E1NDYzMmI1OTZiIiwiZXhwIjoxNzcxMzEyMTQ5LCJpYXQiOjE3NzEyMjU3NDl9.cUSej22gbSLFr7-6a3gYiGR9j0hn56i-JosjwVrLeGc","tokenType":"Bearer","user":{"id":"3dc19dc4-f41d-4dc1-a214-7a54632b596b","email":"dod-player-20260216t070909z@example.com","displayName":"DoD Player dod-player-20260216T070909Z","role":"player","isDisabled":false}}
+extracted_user_id=3dc19dc4-f41d-4dc1-a214-7a54632b596b
+
+3) list announcements (published for player)
+{"items":[{"id":"ecfb14df-acff-4b52-887f-088effe0821a","title":"Task2 Published Notice","content":"This announcement is visible to players.","isPublished":true,"publishedAt":"2026-02-16T03:24:33Z","createdAt":"2026-02-16T03:24:33Z","updatedAt":"2026-02-16T03:24:33Z"}],"limit":20,"offset":0}
+announcements_count=1
+
+4) submit recruitment
+HTTP/1.1 201 Created
+Content-Length: 316
+Connection: keep-alive
+Content-Type: application/json
+Date: Mon, 16 Feb 2026 07:09:08 GMT
+Keep-Alive: timeout=4
+Proxy-Connection: keep-alive
+Vary: Origin
+X-Request-Id: req_ba26a8d6-683f-49ce-934d-3f94a16f1d4b
+
+{"id":"19a90577-907c-48f4-942a-543bc1c5e9b6","userId":"3dc19dc4-f41d-4dc1-a214-7a54632b596b","name":"DoD Player","school":"CTF University","grade":"大二","direction":"web","contact":"dod-player@example.com","bio":"Closed-loop DoD verification","createdAt":"2026-02-16T07:09:09Z","updatedAt":"2026-02-16T07:09:09Z"}
+
+5) list challenges and pick welcome static
+{"items":[{"id":"6c1a9a13-383b-4774-b2c1-0448105bbe9b","title":"Task8 Runtime Dynamic Challenge","description":"task8 runtime evidence","category":"web","difficulty":"easy","mode":"dynamic","runtimeImage":"nginx:alpine","runtimeExposedPort":80,"points":100,"isPublished":true,"createdAt":"2026-02-16T05:43:49Z","updatedAt":"2026-02-16T05:43:49Z"},{"id":"a77a6558-ec3a-43cc-b4c6-905855457b4b","title":"Task8 Runtime Dynamic Challenge","description":"task8 runtime evidence","category":"web","difficulty":"easy","mode":"dynamic","runtimeImage":"nginx:alpine","runtimeExposedPort":80,"points":100,"isPublished":true,"createdAt":"2026-02-16T05:40:40Z","updatedAt":"2026-02-16T05:40:40Z"},{"id":"6ed7878e-6f43-4dd4-a903-904fa4137231","title":"Task8 Runtime Evidence Challenge","description":"runtime controller evidence generation","category":"web","difficulty":"easy","mode":"static","runtimeImage":"nginx:alpine","runtimeExposedPort":80,"points":50,"isPublished":true,"createdAt":"2026-02-16T05:36:51Z","updatedAt":"2026-02-16T05:36:51Z"},{"id":"118381ca-a324-4415-b4f3-405086d7f235","title":"Task8 Runtime Evidence Challenge","description":"runtime controller evidence generation","category":"web","difficulty":"easy","mode":"static","runtimeImage":"nginx:alpine","runtimeExposedPort":80,"points":50,"isPublished":true,"createdAt":"2026-02-16T05:34:53Z","updatedAt":"2026-02-16T05:34:53Z"},{"id":"531e95cd-6bfa-4892-b6f9-da8de7862de3","title":"Task6 Published","description":"published detail visibility test","category":"task6","difficulty":"easy","mode":"static","points":10,"isPublished":true,"createdAt":"2026-02-15T23:23:58Z","updatedAt":"2026-02-15T23:23:58Z"},{"id":"c821d202-adf5-4028-85fa-86af492e05f9","title":"Log Trail","description":"Trace the log trail to locate the issued token in this dynamic exercise.","category":"forensics","difficulty":"medium","mode":"static","points":120,"isPublished":true,"createdAt":"2026-02-15T14:42:44Z","updatedAt":"2026-02-16T01:40:20Z"},{"id":"d78ed41d-7b4b-4a51-935c-264a66d09747","title":"Welcome Static","description":"Find the static flag hidden in the welcome challenge.","category":"intro","difficulty":"easy","mode":"static","points":50,"isPublished":true,"createdAt":"2026-02-15T14:42:44Z","updatedAt":"2026-02-15T14:42:44Z"}],"limit":20,"offset":0}
+selected_challenge_id=d78ed41d-7b4b-4a51-935c-264a66d09747
+selected_challenge_title=Welcome Static
+
+6) submit correct flag
+HTTP/1.1 201 Created
+Content-Length: 171
+Connection: keep-alive
+Content-Type: application/json
+Date: Mon, 16 Feb 2026 07:09:09 GMT
+Keep-Alive: timeout=4
+Proxy-Connection: keep-alive
+Vary: Origin
+X-Request-Id: req_ba08c25f-63a3-48d9-b847-ed4dabc29c33
+
+{"id":"74c74c39-5207-47bb-92ef-0a92d7d46d6f","challengeId":"d78ed41d-7b4b-4a51-935c-264a66d09747","status":"correct","awardedPoints":50,"createdAt":"2026-02-16T07:09:09Z"}
+
+7) query scoreboard and locate player entry
+{"items":[{"rank":1,"userId":"e2847dea-52ac-4488-a73a-20f0ac8e2733","displayName":"Task7 Player","totalPoints":120,"solvedCount":1},{"rank":2,"userId":"2b1eef58-efc2-4b9c-8ea5-ca0f258f5586","displayName":"Demo Player","totalPoints":120,"solvedCount":1},{"rank":3,"userId":"4de7be8e-da8a-4058-b936-67abcbd0ffbc","displayName":"Demo Admin","totalPoints":120,"solvedCount":1},{"rank":4,"userId":"7418d71c-5cc0-4061-ba77-360b581bd2b4","displayName":"Task8 User 1","totalPoints":50,"solvedCount":1},{"rank":5,"userId":"0ee855cc-2fd2-4a38-b55f-245283fe772a","displayName":"Task8 User 2","totalPoints":50,"solvedCount":1},{"rank":6,"userId":"07868f5a-05cd-424b-abb0-1c6cb4cabb75","displayName":"Task8 User 1","totalPoints":50,"solvedCount":1},{"rank":7,"userId":"b2fe156f-a3f8-4077-84ed-4354a3dc21d8","displayName":"Task8 User 2","totalPoints":50,"solvedCount":1},{"rank":8,"userId":"ca7c6e24-d16a-4a8f-9fc2-0614e79acbdb","displayName":"Task8 User 1","totalPoints":50,"solvedCount":1},{"rank":9,"userId":"526c192f-7ed2-441e-acda-5ea120cda2a2","displayName":"Task8 User 2","totalPoints":50,"solvedCount":1},{"rank":10,"userId":"76e8486d-1d5b-43a6-b588-66b3ba1193e1","displayName":"Task8 User 1","totalPoints":50,"solvedCount":1},{"rank":11,"userId":"aa085db6-47bb-4987-8b49-8a170e5ec717","displayName":"Task8 User 2","totalPoints":50,"solvedCount":1},{"rank":12,"userId":"1801f01f-f469-45bf-8aa8-1d438fea65f2","displayName":"Task8A User 1 20260215T235229Z","totalPoints":50,"solvedCount":1},{"rank":13,"userId":"0fb1e00e-f688-4a05-8976-39034ece71f8","displayName":"Task8A User 2 20260215T235229Z","totalPoints":50,"solvedCount":1},{"rank":14,"userId":"7e095983-9418-4c9d-8954-ec1d37390c74","displayName":"Task Final 20260216T010244Z","totalPoints":50,"solvedCount":1},{"rank":15,"userId":"3dc19dc4-f41d-4dc1-a214-7a54632b596b","displayName":"DoD Player dod-player-20260216T070909Z","totalPoints":50,"solvedCount":1}],"limit":100,"offset":0}
+scoreboard_user_entry={'rank': 15, 'userId': '3dc19dc4-f41d-4dc1-a214-7a54632b596b', 'displayName': 'DoD Player dod-player-20260216T070909Z', 'totalPoints': 50, 'solvedCount': 1}
+
+SUMMARY
+register_login=PASS
+announcements_view=PASS
+recruitment_submit=PASS
+challenge_submit=PASS
+scoreboard_visible=PASS

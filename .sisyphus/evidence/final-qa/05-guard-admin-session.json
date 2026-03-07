@@ -1,0 +1,11 @@
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiJlMWI0MWM0MC05MDUzLTRiNDctYWU1Ni1mZTkxMzVhYzRjNjgiLCJyb2xlIjoiYWRtaW4iLCJzdWIiOiJlMWI0MWM0MC05MDUzLTRiNDctYWU1Ni1mZTkxMzVhYzRjNjgiLCJleHAiOjE3NzE0NDY3NzIsImlhdCI6MTc3MTM2MDM3Mn0.Dp-I39sDCSAVH4AEn5Dhxy4hSpysAiDK9saUM-WqmZg",
+  "tokenType": "Bearer",
+  "user": {
+    "id": "e1b41c40-9053-4b47-ae56-fe9135ac4c68",
+    "email": "admin@ctf.local",
+    "displayName": "CTF Admin",
+    "role": "admin",
+    "isDisabled": false
+  }
+}

@@ -1,0 +1,50 @@
+# Page snapshot
+
+```yaml
+- alert
+- dialog "Server Error":
+  - navigation:
+    - button "previous" [disabled]:
+      - img "previous"
+    - button "next" [disabled]:
+      - img "next"
+    - text: 1 of 1 error Next.js (14.2.5) is outdated
+    - link "(learn more)":
+      - /url: https://nextjs.org/docs/messages/version-staleness
+  - heading "Server Error" [level=1]
+  - paragraph: "Error: Cannot find module './447.js' Require stack: - /home/calendar/code/ctf-recruit/frontend/.next/server/webpack-runtime.js - /home/calendar/code/ctf-recruit/frontend/.next/server/app/_not-found/page.js - /home/calendar/code/ctf-recruit/node_modules/.pnpm/next@14.2.5_@playwright+test@1.54.2_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/server/require.js - /home/calendar/code/ctf-recruit/node_modules/.pnpm/next@14.2.5_@playwright+test@1.54.2_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/server/load-components.js - /home/calendar/code/ctf-recruit/node_modules/.pnpm/next@14.2.5_@playwright+test@1.54.2_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/build/utils.js - /home/calendar/code/ctf-recruit/node_modules/.pnpm/next@14.2.5_@playwright+test@1.54.2_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/server/dev/hot-middleware.js - /home/calendar/code/ctf-recruit/node_modules/.pnpm/next@14.2.5_@playwright+test@1.54.2_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/server/dev/hot-reloader-webpack.js - /home/calendar/code/ctf-recruit/node_modules/.pnpm/next@14.2.5_@playwright+test@1.54.2_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js - /home/calendar/code/ctf-recruit/node_modules/.pnpm/next@14.2.5_@playwright+test@1.54.2_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/server/lib/router-server.js - /home/calendar/code/ctf-recruit/node_modules/.pnpm/next@14.2.5_@playwright+test@1.54.2_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/server/lib/start-server.js"
+  - text: This error happened while generating the page. Any console logs will be displayed in the terminal window.
+  - heading "Call Stack" [level=2]
+  - group:
+    - img
+    - img
+    - text: Next.js
+  - heading "TracingChannel.traceSync" [level=3]
+  - text: node:diagnostics_channel (328:14)
+  - group:
+    - img
+    - img
+    - text: Next.js
+  - heading "Array.reduce" [level=3]
+  - text: <anonymous>
+  - group:
+    - img
+    - img
+    - text: Next.js
+  - heading "Array.map" [level=3]
+  - text: <anonymous>
+  - group:
+    - img
+    - img
+    - text: Next.js
+  - heading "<unknown>" [level=3]
+  - text: file:///home/calendar/code/ctf-recruit/frontend/.next/server/app/login/page.js (1:3040)
+  - heading "Object.<anonymous>" [level=3]
+  - text: file:///home/calendar/code/ctf-recruit/frontend/.next/server/app/login/page.js (1:3085)
+  - heading "TracingChannel.traceSync" [level=3]
+  - text: node:diagnostics_channel (328:14)
+  - group:
+    - img
+    - img
+    - text: Next.js
+```

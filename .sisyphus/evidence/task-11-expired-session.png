@@ -1,0 +1,7 @@
+TASK11_EVIDENCE_PLACEHOLDER: expired-session
+Screenshot binary unavailable in this environment; deterministic text placeholder created per bookkeeping requirement.
+Scenario reference: expired session handling and redirect/auth reset behavior.
+Task 11 test evidence refs: app-nav-auth-state; home-redirect-auth-state.
+Latest passing frontend test run: .sisyphus/evidence/task-11-ui-acceptance.txt (Run at 2026-02-16T07:07:18Z; Test Files 1 passed; Tests 3 passed).
+Latest passing frontend build run: .sisyphus/evidence/task-6-docker-compose-up-final.txt + task-6-docker-compose-ps-final.txt (frontend service Up/healthy after compose build run).
+Deterministic marker: TASK11_EXPIRED_SESSION_PLACEHOLDER_V1.

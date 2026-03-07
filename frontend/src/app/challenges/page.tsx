@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { ChallengeList } from "@/components/challenge/ChallengeList";
+import { ErrorStateCard, LoadingStateCard } from "@/components/ui/StateFeedback";
 import { listChallenges } from "@/lib/api/challenges";
 import { HttpError } from "@/lib/http";
-import { useRequireAuth } from "@/lib/use-auth";
 import type { Challenge } from "@/lib/types";
+import { useRequireAuth } from "@/lib/use-auth";
 
 const PAGE_LIMIT = 20;
 
@@ -62,9 +63,7 @@ export default function ChallengesPage() {
   if (!ready || !authorized || !session) {
     return (
       <main className="page">
-        <section className="card">
-          <p>Loading session...</p>
-        </section>
+        <LoadingStateCard message="Loading session..." />
       </main>
     );
   }
@@ -77,15 +76,11 @@ export default function ChallengesPage() {
       </section>
 
       {loading ? (
-        <section className="card">
-          <p>Loading challenges...</p>
-        </section>
+        <LoadingStateCard message="Loading challenges..." />
       ) : null}
 
       {error ? (
-        <section className="card">
-          <p className="error-text">{error}</p>
-        </section>
+        <ErrorStateCard message={error} />
       ) : null}
 
       {!loading && !error ? <ChallengeList items={items} /> : null}

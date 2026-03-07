@@ -1,0 +1,7 @@
+# Task 4 retry parsing evidence (backfill)
+- Verified: HTTP error normalization parses cooldown retry metadata into structured retry fields.
+- Command context (prior run): `pnpm -C frontend test "src/__tests__/http-error-normalization.test.ts"`
+- Result references:
+  - Test file included in passing suite evidence: `.sisyphus/evidence/task-17-admin-tests.txt` shows `http-error-normalization.test.ts` passing.
+  - Assertion source: `frontend/src/__tests__/http-error-normalization.test.ts` checks `details.retryAt` -> normalized `retry.retryAt/retryAfterSeconds/source`.
+- Deterministic note: backfilled from existing test assertions + prior PASS logs; no new suite run in this documentation-only step.

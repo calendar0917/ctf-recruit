@@ -1,0 +1,18 @@
+Deterministic placeholder for required Task 19 artifact: task-19-e2e-happy.mp4
+
+Binary video capture is not available in this execution channel.
+
+Final reconciled status (post-Task 20 regressions):
+- Primary command: `pnpm -C frontend test:e2e`
+- Result: PASS (2/2)
+
+Executed final e2e journeys:
+- `frontend/e2e/lifecycle.e2e.spec.ts` (lifecycle flow, including cooldown behavior)
+- `frontend/e2e/admin-runtime-config.e2e.spec.ts` (admin runtime-config + player runtime journey)
+
+Chronology:
+- Task 19 was originally blocked by `/login` reachability (`ERR_CONNECTION_REFUSED`).
+- Task 20 fixes (script-managed e2e harness + challenge page `mountedRef` StrictMode lifecycle reset) resolved the blocker.
+
+Historical blocker record:
+- `.sisyphus/evidence/task-19-e2e-blocked.txt`

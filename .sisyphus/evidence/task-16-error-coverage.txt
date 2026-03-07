@@ -1,0 +1,38 @@
+# Task 16 — Error and reconciliation coverage evidence
+
+Date: 2026-02-17
+
+File:
+- `frontend/src/__tests__/challenge-detail-page-orchestration.test.tsx`
+
+Error-path assertions captured:
+
+## Start conflict / cooldown
+- Simulated `HttpError`:
+  - status: `409`
+  - code: `INSTANCE_COOLDOWN_ACTIVE`
+  - message: `Instance is cooling down`
+  - details.retryAt: `2026-02-17T00:02:00.000Z`
+- Assertions:
+  - `cooldownUntil` updated to retry timestamp.
+  - reconcile (`getMyInstance`) invoked after failure.
+  - surfaced `instanceError` includes code and retry guidance text.
+
+## Stop failure + reconcile failure
+- Simulated stop error:
+  - status: `500`
+  - code: `INSTANCE_RUNTIME_STOP_FAILED`
+- Simulated reconcile error:
+  - status: `503`
+  - code: `STATE_PROBE_FAILED`
+- Assertions:
+  - reconcile invoked after stop failure.
+  - final surfaced `instanceError` keeps stop-failure diagnostics and appends reconciliation failure diagnostics.
+
+## Polling cleanup semantics
+- Confirmed active timers are registered for expected orchestration conditions.
+- Confirmed cleanup (`clearInterval`) is called on unmount.
+
+Validation:
+- Included in full suite pass: `pnpm -C frontend test`
+- Build pass confirms no runtime/type regression: `pnpm -C frontend build`

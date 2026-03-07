@@ -1,0 +1,12 @@
+LSP diagnostics check note for F3 verification-only scope
+
+Changed files in this task are evidence artifacts and notepad markdown files only.
+No LSP server is configured for .md in this environment.
+Tool output (for both changed markdown files):
+"Error: No LSP server configured for extension: .md"
+
+Implication:
+- Code diagnostics are not applicable to evidence/notepad markdown changes.
+- Build/test verification still executed and captured:
+  - 91-frontend-build.txt
+  - 92-frontend-test.txt

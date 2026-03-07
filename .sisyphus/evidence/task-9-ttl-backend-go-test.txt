@@ -1,0 +1,13 @@
+Task 9 - backend regression run
+Date: 2026-02-16
+
+Command:
+go test ./...
+
+Result: PASS
+
+Output summary:
+- internal/modules/instance: ok
+- internal/modules/judge: ok
+- internal/modules/auth/challenge/submission/scoreboard/recruitment/announcement: ok
+- cmd/* and config/platform/router packages: no test files (or ok)

@@ -1,0 +1,17 @@
+F3 Scenario Matrix
+
+Integration scenarios:
+1) Stack bootstrap + health + seed replay -> PASS (00-compose-ps.txt, 00-health.txt, 00-seed.txt)
+2) Player lifecycle e2e (login -> challenge detail -> start/stop/cooldown) -> PASS (01-playwright-integration.log, 02-player-lifecycle-happy.webm)
+3) Admin runtime-config e2e (admin edit runtime fields + player detail check) -> PASS (01-playwright-integration.log, 03-admin-runtime-config.webm)
+
+Edge scenarios:
+4) Cooldown immediate restart rejection (HTTP 409 + retryAt) -> PASS (04-cooldown-reject.headers/.json, 04-cooldown-summary.txt)
+5) Auth/admin guard: unauth /admin/users -> /login -> PASS (05-guard-replay.log, 05-edge-guard-unauth.webm)
+6) Auth/admin guard: non-admin /admin/users -> /challenges -> PASS (05-guard-replay.log, 05-edge-guard-nonadmin.webm)
+7) Auth/admin guard: admin /admin/users allowed -> PASS (05-guard-replay.log, 05-edge-guard-admin.webm)
+
+Rerun blocker capture:
+- Later rerun command hit unstable dev artifact state with Next server error (Cannot find module './447.js') and failed.
+- Evidence: 93-e2e-rerun.txt, 93-e2e-rerun-last-run.json, 93-e2e-admin-error-context.md, 93-e2e-lifecycle-error-context.md
+- Residual risk: repeated replay in same workspace may need `.next` cleanup before rerun.

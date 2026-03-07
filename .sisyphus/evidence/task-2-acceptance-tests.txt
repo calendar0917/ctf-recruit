@@ -1,0 +1,16 @@
+# Task 2 Acceptance Tests
+Run at: 2026-02-16T07:03:59Z
+
+$ pnpm -C frontend exec vitest run src/__tests__/announcements-list.test.ts src/__tests__/announcements-api.test.ts --no-cache
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v2.0.5 /home/calendar/code/ctf-recruit/frontend
+
+ ✓ src/__tests__/announcements-api.test.ts  (2 tests) 5ms
+ ✓ src/__tests__/announcements-list.test.ts  (1 test) 14ms
+
+ Test Files  2 passed (2)
+      Tests  3 passed (3)
+   Start at  15:03:59
+   Duration  298ms (transform 41ms, setup 0ms, collect 75ms, tests 19ms, environment 0ms, prepare 105ms)
+

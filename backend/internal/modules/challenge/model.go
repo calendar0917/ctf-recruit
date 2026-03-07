@@ -23,18 +23,21 @@ const (
 )
 
 type Challenge struct {
-	ID          uuid.UUID      `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
-	Title       string         `gorm:"size:255;not null"`
-	Description string         `gorm:"type:text;not null"`
-	Category    string         `gorm:"size:100;not null"`
-	Difficulty  Difficulty     `gorm:"type:varchar(20);not null"`
-	Mode        Mode           `gorm:"type:varchar(20);not null;default:static"`
-	Points      int            `gorm:"not null"`
-	FlagHash    string         `gorm:"size:255;not null"`
-	IsPublished bool           `gorm:"not null;default:false"`
-	CreatedAt   time.Time      `gorm:"not null;default:now()"`
-	UpdatedAt   time.Time      `gorm:"not null;default:now()"`
-	DeletedAt   gorm.DeletedAt `gorm:"index"`
+	ID                 uuid.UUID      `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
+	Title              string         `gorm:"size:255;not null"`
+	Description        string         `gorm:"type:text;not null"`
+	Category           string         `gorm:"size:100;not null"`
+	Difficulty         Difficulty     `gorm:"type:varchar(20);not null"`
+	Mode               Mode           `gorm:"type:varchar(20);not null;default:static"`
+	RuntimeImage       *string        `gorm:"size:255"`
+	RuntimeCommand     *string        `gorm:"type:text"`
+	RuntimeExposedPort *int           `gorm:"type:integer"`
+	Points             int            `gorm:"not null"`
+	FlagHash           string         `gorm:"size:255;not null"`
+	IsPublished        bool           `gorm:"not null;default:false"`
+	CreatedAt          time.Time      `gorm:"not null;default:now()"`
+	UpdatedAt          time.Time      `gorm:"not null;default:now()"`
+	DeletedAt          gorm.DeletedAt `gorm:"index"`
 }
 
 func (Challenge) TableName() string {

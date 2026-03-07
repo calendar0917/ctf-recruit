@@ -1,0 +1,32 @@
+
+> ctf-recruit-frontend@0.1.0 test /home/calendar/code/ctf-recruit/frontend
+> vitest run --no-cache
+
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+[7m[1m[36m RUN [39m[22m[27m [36mv2.0.5[39m [90m/home/calendar/code/ctf-recruit/frontend[39m
+
+ [32m✓[39m src/__tests__/admin-challenge-runtime-payload.test.ts [2m ([22m[2m5 tests[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m src/__tests__/admin-users-api.test.ts [2m ([22m[2m4 tests[22m[2m)[22m[90m 11[2mms[22m[39m
+ [32m✓[39m src/__tests__/submissions-api.test.ts [2m ([22m[2m3 tests[22m[2m)[22m[90m 11[2mms[22m[39m
+ [32m✓[39m src/__tests__/recruitments-api.test.ts [2m ([22m[2m2 tests[22m[2m)[22m[90m 10[2mms[22m[39m
+ [32m✓[39m src/__tests__/http-error-normalization.test.ts [2m ([22m[2m6 tests[22m[2m)[22m[90m 21[2mms[22m[39m
+ [32m✓[39m src/__tests__/announcements-api.test.ts [2m ([22m[2m2 tests[22m[2m)[22m[90m 15[2mms[22m[39m
+ [32m✓[39m src/__tests__/instances-api.test.ts [2m ([22m[2m8 tests[22m[2m)[22m[90m 9[2mms[22m[39m
+ [32m✓[39m src/__tests__/home-redirect-auth-state.test.tsx [2m ([22m[2m3 tests[22m[2m)[22m[90m 36[2mms[22m[39m
+ [32m✓[39m src/__tests__/admin-challenge-runtime-fields.test.tsx [2m ([22m[2m3 tests[22m[2m)[22m[90m 11[2mms[22m[39m
+ [32m✓[39m src/__tests__/admin-challenges-access.test.ts [2m ([22m[2m3 tests[22m[2m)[22m[90m 118[2mms[22m[39m
+ [32m✓[39m src/__tests__/admin-users-access.test.ts [2m ([22m[2m3 tests[22m[2m)[22m[90m 117[2mms[22m[39m
+ [32m✓[39m src/__tests__/challenge-detail-submission-status.test.tsx [2m ([22m[2m5 tests[22m[2m)[22m[90m 15[2mms[22m[39m
+ [32m✓[39m src/__tests__/challenge-detail-page-orchestration.test.tsx [2m ([22m[2m4 tests[22m[2m)[22m[90m 117[2mms[22m[39m
+ [32m✓[39m src/__tests__/challenge-detail-lifecycle-diagnostics.test.tsx [2m ([22m[2m10 tests[22m[2m)[22m[90m 13[2mms[22m[39m
+ [32m✓[39m src/__tests__/app-nav-auth-state.test.tsx [2m ([22m[2m4 tests[22m[2m)[22m[90m 94[2mms[22m[39m
+ [32m✓[39m src/__tests__/smoke.test.ts [2m ([22m[2m1 test[22m[2m)[22m[90m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/recruitment-form.test.ts [2m ([22m[2m2 tests[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m src/__tests__/announcements-list.test.ts [2m ([22m[2m1 test[22m[2m)[22m[90m 19[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m18 passed[39m[22m[90m (18)[39m
+[2m      Tests [22m [1m[32m69 passed[39m[22m[90m (69)[39m
+[2m   Start at [22m 04:36:58
+[2m   Duration [22m 704ms[2m (transform 858ms, setup 0ms, collect 1.73s, tests 627ms, environment 3ms, prepare 1.42s)[22m
+

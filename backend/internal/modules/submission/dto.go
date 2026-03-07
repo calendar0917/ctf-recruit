@@ -14,3 +14,9 @@ type SubmissionResponse struct {
 	JudgeJobID    *string `json:"judgeJobId,omitempty"`
 	CreatedAt     string  `json:"createdAt"`
 }
+
+type SubmissionListResponse struct {
+	Items  []SubmissionResponse `json:"items"`
+	Limit  int                  `json:"limit"`
+	Offset int                  `json:"offset"`
+}

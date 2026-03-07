@@ -1,0 +1,9 @@
+# Task 1 cooldown contract evidence (backfill)
+- Verified: cooldown contract exposes deterministic retry metadata (`INSTANCE_COOLDOWN_ACTIVE` + `details.retryAt`) for frontend handling.
+- Command context (prior runs):
+  - `go test -v ./internal/modules/instance -run TestInstancesStartBlockedByCooldownReturnsRetryAt`
+  - lifecycle API flow with immediate restart after stop.
+- Result references:
+  - PASS in `.sisyphus/evidence/task-7-instance-tests.txt` (`TestInstancesStartBlockedByCooldownReturnsRetryAt`).
+  - 409 body with retry timestamp in `.sisyphus/evidence/task-12-instance-lifecycle-start-running-stop-cooldown.txt` line showing `"code":"INSTANCE_COOLDOWN_ACTIVE"` and `"retryAt"`.
+- Deterministic note: derived from existing recorded outputs; contract behavior is additive and already documented in the runbook evidence set.

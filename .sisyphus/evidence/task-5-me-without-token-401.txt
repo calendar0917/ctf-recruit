@@ -1,0 +1,15 @@
+task-5-me-without-token-401.txt
+
+Timestamp (local): 2026-02-16T07:11:51+08:00
+
+## GET /api/v1/auth/me without Authorization (expect 401)
+HTTP/1.1 401 Unauthorized
+Content-Length: 134
+Connection: keep-alive
+Content-Type: application/json
+Date: Sun, 15 Feb 2026 23:11:50 GMT
+Keep-Alive: timeout=4
+Proxy-Connection: keep-alive
+X-Request-Id: req_8b446dc1-fd98-452d-890b-abea90e98b4d
+
+{"error":{"code":"AUTH_MISSING_TOKEN","message":"Missing authorization token"},"requestId":"req_8b446dc1-fd98-452d-890b-abea90e98b4d"}

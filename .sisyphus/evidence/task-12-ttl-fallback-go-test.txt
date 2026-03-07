@@ -1,0 +1,21 @@
+Task 12 - TTL fallback verification via focused Go tests
+Date: 2026-02-16
+
+Command:
+go test -v ./internal/modules/instance -run 'TestSweeperExpiresRunningInstanceAndSetsCooldown|TestSweeperStopFailureLogsContextAndIsRetriable'
+
+Result: PASS
+
+Output:
+=== RUN   TestSweeperExpiresRunningInstanceAndSetsCooldown
+2026/02/16 14:41:00 INFO instance expired by sweeper instanceId=49dd9d28-c6ef-4da3-b5ff-a8a9cd647ad3 userId=27271ea4-421e-4958-9902-285f15e62ac6 challengeId=a72bb907-ca24-41bd-84c6-f47125ffe7ac containerId=container-expire-1
+--- PASS: TestSweeperExpiresRunningInstanceAndSetsCooldown (0.00s)
+=== RUN   TestSweeperStopFailureLogsContextAndIsRetriable
+--- PASS: TestSweeperStopFailureLogsContextAndIsRetriable (0.00s)
+PASS
+ok  	ctf-recruit/backend/internal/modules/instance	(cached)
+
+Coverage from fallback tests:
+- Running instance expiring at `expiresAt <= now` is transitioned to `expired`
+- Expiry path sets cooldown window
+- Stop failure path is logged and treated as retriable

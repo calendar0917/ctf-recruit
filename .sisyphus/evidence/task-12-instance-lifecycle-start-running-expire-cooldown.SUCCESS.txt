@@ -1,0 +1,40 @@
+scenario: start -> running -> force expire -> cooldown (live runtime success path)
+date: 2026-02-16
+
+runtime fix applied:
+- worker service now mounts Docker socket (`/var/run/docker.sock:/var/run/docker.sock`) in `docker-compose.yml`.
+
+verification commands (executed):
+1) docker compose up -d --build worker backend
+2) register/login/challenges/start/me API flow against http://localhost:18080/api/v1
+3) forced expiry update in DB:
+   UPDATE challenge_instances
+   SET expires_at = NOW() - interval '5 minutes'
+   WHERE id = '45f4cc71-b893-4aef-9931-94664d41fde4';
+4) wait 8s (sweeper poll interval 5s)
+5) query `/instances/me` and retry `/instances/start`
+
+evidence snapshots:
+- user_email: task12-success-1771224644@ctf.local
+- register status: 201
+- login status: 200
+- list challenges status: 200
+- start status: 201
+- start body:
+  {"id":"45f4cc71-b893-4aef-9931-94664d41fde4","userId":"2dddf949-e6a3-4489-b6c8-542f0347839c","challengeId":"6c1a9a13-383b-4774-b2c1-0448105bbe9b","status":"running","containerId":"91e92bb18bb1f9c0da993b189b2d57c65806d832f6a071f65bbf58ca043827f1","accessInfo":{"host":"localhost","port":32779,"connectionString":"localhost:32779"},"startedAt":"2026-02-16T06:50:44Z","expiresAt":"2026-02-16T07:50:44Z"}
+- me-after-start status/body:
+  200
+  {"instance":{"id":"45f4cc71-b893-4aef-9931-94664d41fde4","userId":"2dddf949-e6a3-4489-b6c8-542f0347839c","challengeId":"6c1a9a13-383b-4774-b2c1-0448105bbe9b","status":"running","containerId":"91e92bb18bb1f9c0da993b189b2d57c65806d832f6a071f65bbf58ca043827f1","startedAt":"2026-02-16T06:50:44Z","expiresAt":"2026-02-16T07:50:44Z"}}
+- forced-expiry DB output: UPDATE 1
+- me-after-sweeper status/body:
+  200
+  {"instance":null}
+- DB row after sweeper:
+  45f4cc71-b893-4aef-9931-94664d41fde4|expired|2026-02-16T06:51:46Z
+- restart-during-cooldown status/body:
+  409
+  {"error":{"code":"INSTANCE_COOLDOWN_ACTIVE","message":"Instance is in cooldown","details":{"retryAt":"2026-02-16T06:51:46Z"}},"requestId":"req_247e62b9-a98e-4448-ae07-19720b60f3b9"}
+
+result:
+- PASS: live runtime shows full lifecycle evidence `start -> running -> expire -> cooldown`.
+- PASS: expiry path used worker sweeper success route (no daemon connectivity failure).

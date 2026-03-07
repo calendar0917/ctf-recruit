@@ -1,0 +1,14 @@
+Task 21 keyboard flow deterministic evidence context
+
+Commands observed as already verified pass context (carry-forward, not rerun in bookkeeping step):
+- `pnpm -C frontend test` -> PASS
+- `pnpm -C frontend build` -> PASS
+- focused e2e journeys -> PASS (2/2)
+
+Keyboard-flow QA result summary (from existing Task 21 evidence log):
+- Attempted keyboard login flow for player on `http://127.0.0.1:3001/login`.
+- Result: login did not advance route; session stayed on `/login` for that run.
+
+Task 21 artifact path references:
+- `.sisyphus/evidence/task-21-keyboard-flow.mp4` (available artifact path)
+- `.sisyphus/evidence/task-21-mobile-viewport.png` (available artifact path)

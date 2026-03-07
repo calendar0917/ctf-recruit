@@ -1,0 +1,20 @@
+Task 14 compatibility evidence (deterministic)
+
+Contract goal:
+- Keep `INSTANCE_ACTIVE_EXISTS` non-breaking for legacy clients.
+- Preserve HTTP 409 + `error.code` + `error.message`.
+- Add optional `error.details` only when active instance metadata is available.
+
+Focused verification command:
+go test ./internal/modules/instance -run "TestInstancesStartWithExistingActiveInstanceReturnsConflictDetails|TestInstancesStartWithExistingActiveInstanceLegacyDecodeCompatibility" -v
+
+Observed output:
+=== RUN   TestInstancesStartWithExistingActiveInstanceReturnsConflictDetails
+--- PASS: TestInstancesStartWithExistingActiveInstanceReturnsConflictDetails (0.00s)
+=== RUN   TestInstancesStartWithExistingActiveInstanceLegacyDecodeCompatibility
+--- PASS: TestInstancesStartWithExistingActiveInstanceLegacyDecodeCompatibility (0.00s)
+PASS
+ok  	ctf-recruit/backend/internal/modules/instance	0.005s
+
+Compatibility assertion:
+- `TestInstancesStartWithExistingActiveInstanceLegacyDecodeCompatibility` confirms legacy decode paths still read unchanged `error.code=INSTANCE_ACTIVE_EXISTS` and unchanged message while ignoring additive details.

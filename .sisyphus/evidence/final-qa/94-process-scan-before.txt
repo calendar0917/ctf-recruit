@@ -1,0 +1,3 @@
+804475 /usr/bin/docker-proxy -proto tcp -host-ip 0.0.0.0 -host-port 13001 -container-ip 172.19.0.7 -container-port 3000 -use-listen-fd
+804481 /usr/bin/docker-proxy -proto tcp -host-ip :: -host-port 13001 -container-ip 172.19.0.7 -container-port 3000 -use-listen-fd
+890672 /usr/bin/bash -c pgrep -af "3001|run-e2e|next dev" > ".sisyphus/evidence/final-qa/94-process-scan-before.txt" && cat ".sisyphus/evidence/final-qa/94-process-scan-before.txt"

@@ -1,0 +1,62 @@
+Task 4 Playwright register happy-path failure evidence
+Date: 2026-02-16
+
+Target endpoint check:
+- Command: curl -s -o /tmp/task4-register-check.html -w '%{http_code}' http://127.0.0.1:3001/register
+- Output: 200
+
+Playwright MCP attempts:
+- Command: skill_mcp playwright browser_run_code (register flow + screenshot)
+- Output:
+  Error: browserType.launchPersistentContext: Chromium distribution 'chrome' is not found at /opt/google/chrome/chrome
+  Run "npx playwright install chrome"
+
+- Command: skill_mcp playwright browser_install
+- Output:
+  McpError: MCP error -32001: Request timed out
+
+Container fallback attempts:
+- Command: docker run --rm -v "/home/calendar/code/ctf-recruit:/work" -w /work mcr.microsoft.com/playwright:v1.50.1-jammy ...
+- Output:
+  Unable to find image 'mcr.microsoft.com/playwright:v1.50.1-jammy' locally
+  ...
+  <bash_metadata>
+  bash tool terminated command after exceeding timeout 300000 ms
+  </bash_metadata>
+
+- Command: docker run --rm -v "/home/calendar/code/ctf-recruit:/work" -w /work mcr.microsoft.com/playwright:v1.50.1-jammy ...
+- Output:
+  Unable to find image 'mcr.microsoft.com/playwright:v1.50.1-jammy' locally
+  ...
+  <bash_metadata>
+  bash tool terminated command after exceeding timeout 900000 ms
+  </bash_metadata>
+
+- Command: docker pull mcr.microsoft.com/playwright:v1.50.1-jammy
+- Output:
+  v1.50.1-jammy: Pulling from playwright
+  1f450c35f53b: Pulling fs layer
+  <bash_metadata>
+  bash tool terminated command after exceeding timeout 1800000 ms
+  </bash_metadata>
+
+Result:
+- Screenshot .sisyphus/evidence/task-4-register-success.png was not generated in this environment due to repeated Playwright browser/image installation timeouts.
+
+[2026-02-16T00:47:55.703Z] page.waitForURL: Timeout 25000ms exceeded.
+=========================== logs ===========================
+waiting for navigation to "**/login" until "load"
+============================================================
+    at /home/calendar/code/ctf-recruit/[stdin]:69:16
+
+[2026-02-16T00:49:31.969Z] page.waitForURL: Timeout 25000ms exceeded.
+=========================== logs ===========================
+waiting for navigation to "**/login" until "load"
+============================================================
+    at /home/calendar/code/ctf-recruit/[stdin]:69:16
+
+[2026-02-16T00:52:13.542Z] page.waitForURL: Timeout 25000ms exceeded.
+=========================== logs ===========================
+waiting for navigation to "**/login" until "load"
+============================================================
+    at /home/calendar/code/ctf-recruit/[stdin]:74:16

@@ -1,0 +1,15 @@
+# Task 4 Frontend Pending->Resolved Acceptance
+Run at: 2026-02-16T07:06:10Z
+
+$ pnpm -C frontend exec vitest run src/__tests__/challenge-detail-submission-status.test.tsx --no-cache
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v2.0.5 /home/calendar/code/ctf-recruit/frontend
+
+ ✓ src/__tests__/challenge-detail-submission-status.test.tsx  (3 tests) 5ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  15:06:11
+   Duration  373ms (transform 45ms, setup 0ms, collect 65ms, tests 5ms, environment 0ms, prepare 73ms)
+

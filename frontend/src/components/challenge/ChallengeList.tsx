@@ -15,8 +15,8 @@ export function ChallengeList({ items }: ChallengeListProps) {
   return (
     <div className="list-grid">
       {items.map((challenge) => (
-        <article key={challenge.id} className="card challenge-card">
-          <div className="challenge-meta">
+        <article key={challenge.id} className="card surface-card">
+          <div className="surface-meta">
             <span>{challenge.category}</span>
             <span>{challenge.difficulty}</span>
             <span>{challenge.mode}</span>

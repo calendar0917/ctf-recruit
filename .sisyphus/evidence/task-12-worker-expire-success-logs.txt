@@ -1,0 +1,26 @@
+Task 12 - Worker expiry success logs (live runtime)
+Date: 2026-02-16
+
+Command:
+docker compose logs worker --since 15m
+
+Observed output:
+worker-1  | 2026/02/16 06:47:31 INFO worker started judgePollInterval=2s instanceSweeperPollInterval=5s maxConcurrency=2
+worker-1  | 2026/02/16 06:47:36 INFO instance expired by sweeper instanceId=d0c6d466-ca95-4e6b-9108-3c30b604c2be userId=6c76ebf9-9ea2-41f0-b9ce-433735e8ce49 challengeId=6c1a9a13-383b-4774-b2c1-0448105bbe9b containerId=95bdcb71b947c26b4730b27c3ab6b046d2c4cef9099d9589ed56a5b329b5af49
+worker-1  | 2026/02/16 06:47:36 INFO instance sweeper expired instances count=1
+worker-1  | 2026/02/16 06:50:46 INFO instance expired by sweeper instanceId=45f4cc71-b893-4aef-9931-94664d41fde4 userId=2dddf949-e6a3-4489-b6c8-542f0347839c challengeId=6c1a9a13-383b-4774-b2c1-0448105bbe9b containerId=91e92bb18bb1f9c0da993b189b2d57c65806d832f6a071f65bbf58ca043827f1
+worker-1  | 2026/02/16 06:50:46 INFO instance sweeper expired instances count=1
+
+Daemon access check from inside worker:
+Command:
+docker compose exec -T worker docker ps --format '{{.ID}} {{.Image}}'
+
+Observed output (truncated):
+a5043c566a4d ctf-recruit-worker
+4dddfea2efe7 ctf-recruit-backend
+eca3387b092b postgres:16-alpine
+1e9e361a51f0 redis:7-alpine
+
+Conclusion:
+- Worker can access Docker daemon at runtime.
+- Expiry path succeeds and logs `instance expired by sweeper` (no daemon connection error).

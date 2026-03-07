@@ -22,6 +22,12 @@ func Conflict(code, message string) *AppError {
 	return New(fiber.StatusConflict, code, message, nil)
 }
 
+func TooManyRequests(code, message string, details interface{}) *AppError {
+	err := New(fiber.StatusTooManyRequests, code, message, nil)
+	err.Details = details
+	return err
+}
+
 func Internal(code, message string, cause error) *AppError {
 	return New(fiber.StatusInternalServerError, code, message, cause)
 }

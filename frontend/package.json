@@ -6,9 +6,13 @@
     "dev": "next dev --hostname 0.0.0.0 --port 3000",
     "build": "next build",
     "start": "next start --hostname 0.0.0.0 --port 3000",
-    "lint": "next lint",
+    "lint": "next lint --no-cache",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "type-check": "pnpm typecheck",
+    "test": "vitest run --no-cache",
+    "test:coverage": "vitest run --coverage --no-cache --coverage.reportsDirectory=${TMPDIR:-/tmp}/ctf-recruit-frontend-coverage",
+    "test:e2e": "node ./scripts/run-e2e.mjs",
+    "test:e2e:headed": "node ./scripts/run-e2e.mjs --headed"
   },
   "dependencies": {
     "next": "14.2.5",
@@ -16,12 +20,14 @@
     "react-dom": "18.3.1"
   },
   "devDependencies": {
+    "@playwright/test": "1.54.2",
     "@types/node": "20.14.12",
     "@types/react": "18.3.3",
     "@types/react-dom": "18.3.0",
     "eslint": "8.57.0",
     "eslint-config-next": "14.2.5",
     "typescript": "5.5.4",
-    "vitest": "2.0.5"
+    "vitest": "2.0.5",
+    "@vitest/coverage-v8": "2.0.5"
   }
 }

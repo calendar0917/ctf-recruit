@@ -1,0 +1,14 @@
+=== RUN   TestInstancesMeOmitsCooldownAfterCooldownElapsed
+--- PASS: TestInstancesMeOmitsCooldownAfterCooldownElapsed (0.00s)
+PASS
+ok  	ctf-recruit/backend/internal/modules/instance	(cached)
+
+ RUN  v2.0.5 /home/calendar/code/ctf-recruit/frontend
+
+ ✓ src/__tests__/instances-api.test.ts  (5 tests | 4 skipped) 1ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 4 skipped (5)
+   Start at  16:47:50
+   Duration  452ms (transform 37ms, setup 0ms, collect 36ms, tests 1ms, environment 0ms, prepare 83ms)
+

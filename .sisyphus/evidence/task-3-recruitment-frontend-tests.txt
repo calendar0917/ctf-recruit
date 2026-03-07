@@ -1,0 +1,17 @@
+Task 3 frontend verification (recruitment form + api client)
+
+Commands:
+1) pnpm -C frontend test
+2) pnpm -C frontend test src/__tests__/recruitment-form.test.ts src/__tests__/recruitments-api.test.ts
+3) pnpm -C frontend type-check
+
+Results:
+- Full frontend vitest suite: PASS (6 files, 9 tests)
+- Recruitment-focused tests: PASS (2 files, 4 tests)
+- Type-check: PASS
+
+Recruitment-specific coverage:
+- Required-field validation logic for name/school/grade/direction/contact/bio
+- Successful submit-flow payload normalization behavior
+- API client POST /recruitments with auth token
+- API client GET /recruitments and GET /recruitments/:id with auth token

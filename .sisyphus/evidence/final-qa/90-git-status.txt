@@ -1,0 +1,107 @@
+ M .gitignore
+ M backend/.env.example
+ M backend/Dockerfile
+ M backend/cmd/worker/main.go
+ M backend/internal/config/config.go
+ M backend/internal/errors/helpers.go
+ M backend/internal/middleware/error_handler.go
+ M backend/internal/modules/auth/admin_handler.go
+ M backend/internal/modules/auth/dto.go
+ M backend/internal/modules/auth/model.go
+ M backend/internal/modules/auth/repository.go
+ M backend/internal/modules/auth/service.go
+ M backend/internal/modules/auth/service_test.go
+ M backend/internal/modules/challenge/dto.go
+ M backend/internal/modules/challenge/model.go
+ M backend/internal/modules/challenge/service.go
+ M backend/internal/modules/submission/dto.go
+ M backend/internal/modules/submission/handler.go
+ M backend/internal/modules/submission/repository.go
+ M backend/internal/modules/submission/service.go
+ M backend/internal/modules/submission/service_test.go
+ M backend/internal/platform/app.go
+ M backend/internal/router/router.go
+ M docker-compose.yml
+ M frontend/package-lock.json
+ M frontend/package.json
+ M frontend/src/app/admin/challenges/page.tsx
+ M frontend/src/app/challenges/[id]/page.tsx
+ M frontend/src/app/challenges/page.tsx
+ M frontend/src/app/globals.css
+ M frontend/src/app/page.tsx
+ M frontend/src/app/scoreboard/page.tsx
+ M frontend/src/components/admin/ChallengeEditor.tsx
+ M frontend/src/components/admin/ChallengeTable.tsx
+ M frontend/src/components/challenge/ChallengeDetail.tsx
+ M frontend/src/components/challenge/ChallengeList.tsx
+ M frontend/src/components/layout/AppNav.tsx
+ M frontend/src/components/submission/SubmissionForm.tsx
+ M frontend/src/lib/api/submissions.ts
+ M frontend/src/lib/http.ts
+ M frontend/src/lib/types.ts
+ M frontend/tsconfig.json
+ M frontend/tsconfig.tsbuildinfo
+ M frontend/vitest.config.ts
+ M package.json
+?? .github/
+?? .sisyphus/
+?? README.md
+?? backend/README.seed.md
+?? backend/cmd/seed/
+?? backend/internal/middleware/error_handler_test.go
+?? backend/internal/middleware/rate_limit.go
+?? backend/internal/middleware/rate_limit_test.go
+?? backend/internal/modules/auth/handler_test.go
+?? backend/internal/modules/challenge/handler_test.go
+?? backend/internal/modules/instance/
+?? backend/internal/modules/recruitment/
+?? backend/internal/modules/submission/handler_test.go
+?? backend/migrations/20260216100000_create_recruitment_submissions_table.down.sql
+?? backend/migrations/20260216100000_create_recruitment_submissions_table.up.sql
+?? backend/migrations/20260216113000_add_is_disabled_to_users_table.down.sql
+?? backend/migrations/20260216113000_add_is_disabled_to_users_table.up.sql
+?? backend/migrations/20260216120000_create_challenge_instances_table.down.sql
+?? backend/migrations/20260216120000_create_challenge_instances_table.up.sql
+?? backend/migrations/20260216153000_add_runtime_fields_to_challenges_table.down.sql
+?? backend/migrations/20260216153000_add_runtime_fields_to_challenges_table.up.sql
+?? docs/
+?? frontend/.next.root-owned.bak/
+?? frontend/.sisyphus/
+?? frontend/e2e/
+?? frontend/node_modules.root-owned.bak/
+?? frontend/playwright.config.ts
+?? frontend/scripts/
+?? frontend/src/__tests__/admin-challenge-runtime-fields.test.tsx
+?? frontend/src/__tests__/admin-challenge-runtime-payload.test.ts
+?? frontend/src/__tests__/admin-challenges-access.test.ts
+?? frontend/src/__tests__/admin-users-access.test.ts
+?? frontend/src/__tests__/admin-users-api.test.ts
+?? frontend/src/__tests__/announcements-api.test.ts
+?? frontend/src/__tests__/announcements-list.test.ts
+?? frontend/src/__tests__/app-nav-auth-state.test.tsx
+?? frontend/src/__tests__/challenge-detail-lifecycle-diagnostics.test.tsx
+?? frontend/src/__tests__/challenge-detail-page-orchestration.test.tsx
+?? frontend/src/__tests__/challenge-detail-submission-status.test.tsx
+?? frontend/src/__tests__/home-redirect-auth-state.test.tsx
+?? frontend/src/__tests__/http-error-normalization.test.ts
+?? frontend/src/__tests__/instances-api.test.ts
+?? frontend/src/__tests__/recruitment-form.test.ts
+?? frontend/src/__tests__/recruitments-api.test.ts
+?? frontend/src/__tests__/submissions-api.test.ts
+?? frontend/src/app/admin/announcements/
+?? frontend/src/app/admin/recruitments/
+?? frontend/src/app/admin/users/
+?? frontend/src/app/announcements/
+?? frontend/src/app/recruitment/
+?? frontend/src/components/admin/AdminPrimitives.tsx
+?? frontend/src/components/admin/AnnouncementEditor.tsx
+?? frontend/src/components/admin/AnnouncementTable.tsx
+?? frontend/src/components/announcement/
+?? frontend/src/components/ui/
+?? frontend/src/lib/api/admin-users.ts
+?? frontend/src/lib/api/announcements.ts
+?? frontend/src/lib/api/instances.ts
+?? frontend/src/lib/api/recruitments.ts
+?? frontend/src/lib/recruitment-form.ts
+?? node_modules/
+?? pnpm-lock.yaml

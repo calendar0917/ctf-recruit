@@ -5,6 +5,7 @@
   "scripts": {
     "lint": "pnpm -C frontend lint && (cd backend && go vet ./...)",
     "type-check": "pnpm -C frontend type-check && (cd backend && go build ./...)",
-    "test": "pnpm -C frontend test && (cd backend && go test ./...)"
+    "test": "pnpm -C frontend test && (cd backend && go test ./...)",
+    "test:coverage": "pnpm -C frontend test:coverage && (cd backend && go test -cover ./...)"
   }
 }

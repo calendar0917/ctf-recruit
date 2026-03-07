@@ -1,0 +1,10 @@
+HTTP/1.1 201 Created
+Content-Length: 275
+Connection: keep-alive
+Content-Type: application/json
+Date: Sun, 15 Feb 2026 23:23:07 GMT
+Keep-Alive: timeout=4
+Proxy-Connection: keep-alive
+X-Request-Id: req_26f56c62-871b-41c1-af4c-24eef7bdc655
+
+{"id":"17184585-59a3-44ee-9701-4ec7eea22936","title":"Task6 Draft","description":"unpublished detail visibility test","category":"task6","difficulty":"easy","mode":"static","points":10,"isPublished":false,"createdAt":"2026-02-15T23:23:08Z","updatedAt":"2026-02-15T23:23:08Z"}

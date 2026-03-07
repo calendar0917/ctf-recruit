@@ -1,0 +1,19 @@
+ Container ctf-recruit-postgres-1 Running 
+ Container ctf-recruit-redis-1 Running 
+ Container ctf-recruit-postgres-1 Waiting 
+ Container ctf-recruit-postgres-1 Healthy 
+ Container ctf-recruit-migrate-1 Starting 
+ Container ctf-recruit-migrate-1 Started 
+ Container ctf-recruit-redis-1 Waiting 
+ Container ctf-recruit-migrate-1 Waiting 
+ Container ctf-recruit-postgres-1 Waiting 
+ Container ctf-recruit-migrate-1 Exited 
+ Container ctf-recruit-postgres-1 Healthy 
+ Container ctf-recruit-redis-1 Healthy 
+ Container ctf-recruit-backend-run-058ca4944e91 Creating 
+ Container ctf-recruit-backend-run-058ca4944e91 Created 
+2026/02/16 04:56:33 INFO seed user exists email=admin@ctf.local role=admin
+2026/02/16 04:56:33 INFO seed user exists email=player@ctf.local role=player
+2026/02/16 04:56:33 INFO seed challenge exists title="Welcome Static" mode=static
+2026/02/16 04:56:33 INFO seed challenge exists title="Log Trail" mode=static
+2026/02/16 04:56:33 INFO seed completed

@@ -1,0 +1,20 @@
+task-8-scoreboard-ordering-check
+
+Timestamp (UTC): 20260215T235229Z
+Source response: .sisyphus/evidence/task-8-scoreboard-response-20260215T235229Z.json
+
+Scenario:
+- Created two new players with unique display names:
+  - Task8A User 1 20260215T235229Z
+  - Task8A User 2 20260215T235229Z
+- Both solved the same static 50-point challenge (`Welcome Static`).
+- Submission order: User 1 first, then User 2 after ~2s.
+
+Observed scoreboard entries:
+- Task8A User 1 20260215T235229Z => rank=10, totalPoints=50
+- Task8A User 2 20260215T235229Z => rank=11, totalPoints=50
+
+Result:
+- PASS: With equal total points, earlier accepted submission ranks higher.
+- Deterministic tie-break contract is also covered by backend unit test
+  `TestServiceListRanksByPointsThenTieBreakers` (final tie-break: userId asc).

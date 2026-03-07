@@ -1,0 +1,14 @@
+{
+  "id": "0a0214f6-a2ae-42bd-9a1b-a609ff943443",
+  "userId": "e4f82de3-5b63-48e7-b6da-764136824ac8",
+  "challengeId": "6c1a9a13-383b-4774-b2c1-0448105bbe9b",
+  "status": "running",
+  "containerId": "b28f48830a34b7ec9c146856b389cbe8947df6c9610d53710927675251e59cfe",
+  "accessInfo": {
+    "host": "localhost",
+    "port": 32769,
+    "connectionString": "localhost:32769"
+  },
+  "startedAt": "2026-02-16T05:43:49Z",
+  "expiresAt": "2026-02-16T06:43:49Z"
+}

@@ -1,0 +1,21 @@
+Task 3 backend verification (recruitment module)
+
+Command:
+go test ./internal/modules/recruitment -run "TestRecruitment" -v
+
+Result:
+=== RUN   TestRecruitmentPlayerCanSubmitAndAdminCanListAndGetDetail
+--- PASS: TestRecruitmentPlayerCanSubmitAndAdminCanListAndGetDetail (0.00s)
+=== RUN   TestRecruitmentAdminOnlyListAndDetailForbiddenForPlayer
+=== RUN   TestRecruitmentAdminOnlyListAndDetailForbiddenForPlayer/list
+=== RUN   TestRecruitmentAdminOnlyListAndDetailForbiddenForPlayer/detail
+--- PASS: TestRecruitmentAdminOnlyListAndDetailForbiddenForPlayer (0.00s)
+    --- PASS: TestRecruitmentAdminOnlyListAndDetailForbiddenForPlayer/list (0.00s)
+    --- PASS: TestRecruitmentAdminOnlyListAndDetailForbiddenForPlayer/detail (0.00s)
+PASS
+ok   	ctf-recruit/backend/internal/modules/recruitment	0.004s
+
+Coverage of expected behavior:
+- Player can POST /recruitments (201)
+- Admin can GET /recruitments and GET /recruitments/:id (200)
+- Player is denied admin list/detail (403 AUTH_FORBIDDEN)

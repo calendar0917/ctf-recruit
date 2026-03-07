@@ -1,0 +1,10 @@
+HTTP/1.1 200 OK
+Content-Length: 35
+Connection: keep-alive
+Content-Type: application/json
+Date: Sun, 15 Feb 2026 14:27:41 GMT
+Keep-Alive: timeout=4
+Proxy-Connection: keep-alive
+X-Request-Id: req_9b6a8b45-927a-4ad1-809d-30255b418c3f
+
+{"service":"ctf-api","status":"ok"}

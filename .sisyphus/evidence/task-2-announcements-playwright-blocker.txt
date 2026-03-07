@@ -1,0 +1,16 @@
+Task 2 Playwright blocker evidence (2026-02-16)
+
+Target screenshots that could not be produced due to environment blocker:
+- .sisyphus/evidence/task-2-announcements-player.png
+- .sisyphus/evidence/task-2-announcements-admin.png
+
+Exact Playwright MCP error when navigating:
+Error: browserType.launchPersistentContext: Chromium distribution 'chrome' is not found at /opt/google/chrome/chrome
+Run "npx playwright install chrome"
+
+Install attempts and result:
+- skill_mcp tool: browser_install -> MCP error -32001: Request timed out
+- shell: npx playwright install chrome -> command exceeded timeout in this environment
+
+Consequence:
+- Player list/detail and admin create screenshot capture could not be completed in current runner.

@@ -1,0 +1,19 @@
+{
+  "challengeId": "9130ae63-7254-41b4-934d-6c1cfbdc84ae",
+  "httpStatuses": {
+    "adminCreate": 201,
+    "adminTogglePublish": 200,
+    "adminUpdate": 200,
+    "adminDelete": 204,
+    "playerPostForbidden": 403,
+    "playerPutForbidden": 403,
+    "playerDeleteForbidden": 403
+  },
+  "publishVisibility": {
+    "adminListBeforeContainsChallenge": true,
+    "playerListBeforeContainsChallenge": false,
+    "playerListAfterToggleContainsChallenge": true,
+    "adminListAfterDeleteContainsChallenge": false,
+    "playerListAfterDeleteContainsChallenge": false
+  }
+}

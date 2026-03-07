@@ -1,0 +1,47 @@
+
+> ctf-recruit-frontend@0.1.0 build /home/calendar/code/ctf-recruit/frontend
+> next build
+
+Attention: Next.js now collects completely anonymous telemetry regarding usage.
+This information is used to shape Next.js' roadmap and prioritize features.
+You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+https://nextjs.org/telemetry
+
+  ▲ Next.js 14.2.5
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/14) ...
+   Generating static pages (3/14) 
+   Generating static pages (6/14) 
+   Generating static pages (10/14) 
+ ✓ Generating static pages (14/14)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+┌ ○ /                                    1.06 kB        88.2 kB
+├ ○ /_not-found                          873 B            88 kB
+├ ○ /admin/announcements                 4.68 kB        91.8 kB
+├ ○ /admin/challenges                    5.33 kB        92.5 kB
+├ ○ /admin/recruitments                  3.73 kB        90.9 kB
+├ ○ /admin/users                         4.01 kB        91.1 kB
+├ ○ /announcements                       3.53 kB        97.5 kB
+├ ƒ /announcements/[id]                  3.29 kB        97.3 kB
+├ ○ /challenges                          3.5 kB         97.5 kB
+├ ƒ /challenges/[id]                     6.43 kB        93.6 kB
+├ ○ /login                               2.93 kB        96.9 kB
+├ ○ /recruitment                         3.72 kB        90.8 kB
+├ ○ /register                            2.77 kB        96.8 kB
+└ ○ /scoreboard                          3.56 kB        90.7 kB
++ First Load JS shared by all            87.1 kB
+  ├ chunks/737-6dc069753b5a7399.js       31.5 kB
+  ├ chunks/de587f27-4858b74f2b48a1cc.js  53.6 kB
+  └ other shared chunks (total)          1.95 kB
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

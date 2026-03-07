@@ -1,0 +1,7 @@
+# Task 4 non-JSON fallback evidence (backfill)
+- Verified: non-JSON error payloads are handled safely without malformed retry metadata.
+- Command context (prior run): `pnpm -C frontend test "src/__tests__/http-error-normalization.test.ts"`
+- Result references:
+  - PASS captured in `.sisyphus/evidence/task-17-admin-tests.txt` for `http-error-normalization.test.ts`.
+  - Assertion source: `frontend/src/__tests__/http-error-normalization.test.ts` case `handles invalid Retry-After and non-JSON body safely` validates fallback (`message=HTTP 504`, no `code/details/retry`).
+- Deterministic note: this is a deterministic backfill from already-observed test output and committed assertions.

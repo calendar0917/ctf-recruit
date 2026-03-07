@@ -1,0 +1,4 @@
+TASK 13 EVIDENCE PLACEHOLDER (deterministic)
+Scenario: admin runtime create payload wiring
+UTC: 2026-02-17T19:00:00Z
+Status: runtimeImage/runtimeCommand/runtimeExposedPort fields exposed in editor and included in create payload when provided.

@@ -1,0 +1,55 @@
+# task-final-main-flow-e2e
+
+timestamp_utc=20260216T010244Z
+
+## 1) register new user
+HTTP/1.1 201 Created
+Content-Length: 165
+Connection: keep-alive
+Content-Type: application/json
+Date: Mon, 16 Feb 2026 01:02:43 GMT
+Keep-Alive: timeout=4
+Proxy-Connection: keep-alive
+X-Request-Id: req_aa3cfb74-9220-4bcb-b0aa-38529c23be3a
+
+{"id":"7e095983-9418-4c9d-8954-ec1d37390c74","email":"task-final-main-flow-20260216t010244z@example.com","displayName":"Task Final 20260216T010244Z","role":"player"}
+
+## 2) login and extract token
+{"accessToken":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiI3ZTA5NTk4My05NDE4LTRjOWQtODk1NC1lYzFkMzczOTBjNzQiLCJyb2xlIjoicGxheWVyIiwic3ViIjoiN2UwOTU5ODMtOTQxOC00YzlkLTg5NTQtZWMxZDM3MzkwYzc0IiwiZXhwIjoxNzcxMjkwMTY0LCJpYXQiOjE3NzEyMDM3NjR9.xTerBwGpkM3tp0zNA3-6w97wCoQ_kVIqwEf5U2sKfgQ","tokenType":"Bearer","user":{"id":"7e095983-9418-4c9d-8954-ec1d37390c74","email":"task-final-main-flow-20260216t010244z@example.com","displayName":"Task Final 20260216T010244Z","role":"player"}}
+extracted_user_id=7e095983-9418-4c9d-8954-ec1d37390c74
+extracted_access_token_prefix=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9
+
+## 3) list published challenges
+{"items":[{"id":"531e95cd-6bfa-4892-b6f9-da8de7862de3","title":"Task6 Published","description":"published detail visibility test","category":"task6","difficulty":"easy","mode":"static","points":10,"isPublished":true,"createdAt":"2026-02-15T23:23:58Z","updatedAt":"2026-02-15T23:23:58Z"},{"id":"c821d202-adf5-4028-85fa-86af492e05f9","title":"Log Trail","description":"Trace the log trail to locate the issued token in this dynamic exercise.","category":"forensics","difficulty":"medium","mode":"dynamic","points":120,"isPublished":true,"createdAt":"2026-02-15T14:42:44Z","updatedAt":"2026-02-15T14:42:44Z"},{"id":"d78ed41d-7b4b-4a51-935c-264a66d09747","title":"Welcome Static","description":"Find the static flag hidden in the welcome challenge.","category":"intro","difficulty":"easy","mode":"static","points":50,"isPublished":true,"createdAt":"2026-02-15T14:42:44Z","updatedAt":"2026-02-15T14:42:44Z"}],"limit":20,"offset":0}
+selected_detail_challenge_id=531e95cd-6bfa-4892-b6f9-da8de7862de3
+selected_detail_challenge_title=Task6 Published
+
+## 4) fetch one challenge detail
+HTTP/1.1 200 OK
+Content-Length: 276
+Connection: keep-alive
+Content-Type: application/json
+Date: Mon, 16 Feb 2026 01:02:43 GMT
+Keep-Alive: timeout=4
+Proxy-Connection: keep-alive
+X-Request-Id: req_cf98165b-8290-4d81-87a9-fcd27dabf086
+
+{"id":"531e95cd-6bfa-4892-b6f9-da8de7862de3","title":"Task6 Published","description":"published detail visibility test","category":"task6","difficulty":"easy","mode":"static","points":10,"isPublished":true,"createdAt":"2026-02-15T23:23:58Z","updatedAt":"2026-02-15T23:23:58Z"}
+
+## 5) submit flag (prefer static challenge)
+chosen_submit_challenge_id=d78ed41d-7b4b-4a51-935c-264a66d09747
+chosen_submit_challenge_title=Welcome Static
+HTTP/1.1 201 Created
+Content-Length: 171
+Connection: keep-alive
+Content-Type: application/json
+Date: Mon, 16 Feb 2026 01:02:43 GMT
+Keep-Alive: timeout=4
+Proxy-Connection: keep-alive
+X-Request-Id: req_64358570-fe30-4c2d-b35c-fc3949b37386
+
+{"id":"3cc49a8a-200f-41ee-94f1-220539422cb4","challengeId":"d78ed41d-7b4b-4a51-935c-264a66d09747","status":"correct","awardedPoints":50,"createdAt":"2026-02-16T01:02:44Z"}
+
+## 6) query scoreboard and show user/rank/points
+{"items":[{"rank":1,"userId":"e2847dea-52ac-4488-a73a-20f0ac8e2733","displayName":"Task7 Player","totalPoints":120,"solvedCount":1},{"rank":2,"userId":"7418d71c-5cc0-4061-ba77-360b581bd2b4","displayName":"Task8 User 1","totalPoints":50,"solvedCount":1},{"rank":3,"userId":"0ee855cc-2fd2-4a38-b55f-245283fe772a","displayName":"Task8 User 2","totalPoints":50,"solvedCount":1},{"rank":4,"userId":"07868f5a-05cd-424b-abb0-1c6cb4cabb75","displayName":"Task8 User 1","totalPoints":50,"solvedCount":1},{"rank":5,"userId":"b2fe156f-a3f8-4077-84ed-4354a3dc21d8","displayName":"Task8 User 2","totalPoints":50,"solvedCount":1},{"rank":6,"userId":"ca7c6e24-d16a-4a8f-9fc2-0614e79acbdb","displayName":"Task8 User 1","totalPoints":50,"solvedCount":1},{"rank":7,"userId":"526c192f-7ed2-441e-acda-5ea120cda2a2","displayName":"Task8 User 2","totalPoints":50,"solvedCount":1},{"rank":8,"userId":"76e8486d-1d5b-43a6-b588-66b3ba1193e1","displayName":"Task8 User 1","totalPoints":50,"solvedCount":1},{"rank":9,"userId":"aa085db6-47bb-4987-8b49-8a170e5ec717","displayName":"Task8 User 2","totalPoints":50,"solvedCount":1},{"rank":10,"userId":"1801f01f-f469-45bf-8aa8-1d438fea65f2","displayName":"Task8A User 1 20260215T235229Z","totalPoints":50,"solvedCount":1},{"rank":11,"userId":"0fb1e00e-f688-4a05-8976-39034ece71f8","displayName":"Task8A User 2 20260215T235229Z","totalPoints":50,"solvedCount":1},{"rank":12,"userId":"7e095983-9418-4c9d-8954-ec1d37390c74","displayName":"Task Final 20260216T010244Z","totalPoints":50,"solvedCount":1}],"limit":20,"offset":0}
+scoreboard_user_entry={"rank": 12, "userId": "7e095983-9418-4c9d-8954-ec1d37390c74", "displayName": "Task Final 20260216T010244Z", "totalPoints": 50, "solvedCount": 1}

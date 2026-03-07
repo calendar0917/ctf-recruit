@@ -1,0 +1,27 @@
+scenario: start -> running -> force expire (short TTL simulation)
+user_email: task12-expire-1771224027@ctf.local
+
+[register] status= 201
+[login] status= 200
+[list challenges] status= 200
+[start] status= 201
+[start] instance_id= d0c6d466-ca95-4e6b-9108-3c30b604c2be
+
+[force ttl expire] command= docker compose exec -T postgres psql -U postgres -d ctf_recruit -c 'UPDATE challenge_instances SET expires_at = NOW() - interval '"'"'5 minutes'"'"' WHERE id = '"'"'d0c6d466-ca95-4e6b-9108-3c30b604c2be'"'"';'
+[force ttl expire] exit_code= 0
+[force ttl expire] stdout= UPDATE 1
+
+[wait sweeper] sleeping 8 seconds to pass poll interval
+[me after sweeper] status= 200
+[me after sweeper] body= {"instance":{"id":"d0c6d466-ca95-4e6b-9108-3c30b604c2be","status":"running","expiresAt":"2026-02-16T06:35:27Z"}}
+
+observed blocker:
+- Auto-expire did NOT transition to expired/cooldown in this runtime.
+- Worker log repeatedly reports docker daemon connectivity failure on stop:
+  "Cannot connect to the Docker daemon at unix:///var/run/docker.sock"
+
+fallback evidence used for acceptance:
+- `.sisyphus/evidence/task-12-worker-expire-path-logs.txt` (real worker error path)
+- `.sisyphus/evidence/task-12-ttl-fallback-go-test.txt` (sweeper expiry + cooldown tests PASS)
+
+result: BLOCKED (runtime expiry), FALLBACK VERIFIED (test/log path)
