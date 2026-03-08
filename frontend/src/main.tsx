@@ -1273,11 +1273,11 @@ function App(): React.JSX.Element {
               </p>
               <div className="hero-ribbon-list" aria-label="Hero notes">
                 <div className="hero-ribbon">
-                  <span>Visual</span>
-                  <strong>蓝底分层展示</strong>
+                  <span>Studio</span>
+                  <strong>标识独立悬浮</strong>
                 </div>
                 <div className="hero-ribbon">
-                  <span>Interface</span>
+                  <span>Access</span>
                   <strong>入口与排行直达</strong>
                 </div>
                 <div className="hero-ribbon">

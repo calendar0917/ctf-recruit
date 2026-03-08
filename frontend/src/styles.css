@@ -273,14 +273,7 @@ pre {
 }
 
 .briefing-stat-card::after {
-  content: "";
-  position: absolute;
-  inset: auto -20% -42% auto;
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(229, 88, 9, 0.16), transparent 72%);
-  pointer-events: none;
+  content: none;
 }
 
 .briefing-account-stack,
@@ -301,8 +294,9 @@ pre {
   gap: 6px;
   padding: 14px 16px;
   border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.46);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(224, 236, 245, 0.74));
+  border: 1px solid rgba(18, 68, 123, 0.12);
+  background: linear-gradient(180deg, rgba(252, 254, 255, 0.94), rgba(232, 241, 247, 0.88));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.76);
 }
 
 .briefing-focus-item span {
@@ -345,9 +339,9 @@ pre {
 .hero-ribbon {
   padding: 12px 14px;
   border-radius: 18px;
-  border: 1px solid rgba(179, 201, 216, 0.28);
-  background: linear-gradient(180deg, rgba(45, 78, 118, 0.62), rgba(18, 41, 71, 0.74));
-  box-shadow: inset 0 1px 0 rgba(227, 239, 248, 0.12);
+  border: 1px solid rgba(179, 201, 216, 0.2);
+  background: linear-gradient(180deg, rgba(24, 53, 88, 0.4), rgba(11, 31, 56, 0.54));
+  box-shadow: inset 0 1px 0 rgba(227, 239, 248, 0.08);
 }
 
 .hero-ribbon span {
@@ -363,7 +357,7 @@ pre {
   margin-top: 6px;
   color: #f4f8fb;
   font-family: "Noto Serif SC", "Cormorant Garamond", serif;
-  font-size: 1rem;
+  font-size: 0.96rem;
   font-weight: 600;
   line-height: 1.45;
 }
@@ -486,16 +480,11 @@ pre {
   height: 64px;
   display: grid;
   place-items: center;
-  padding: 10px 12px;
+  padding: 0;
   flex: 0 0 auto;
-  border-radius: 20px;
-  border: 1px solid rgba(152, 179, 201, 0.24);
-  background:
-    radial-gradient(circle at 50% 36%, rgba(229, 88, 9, 0.18), transparent 34%),
-    linear-gradient(180deg, rgba(24, 60, 102, 0.94), rgba(11, 31, 56, 0.98));
-  box-shadow:
-    inset 0 1px 0 rgba(226, 239, 248, 0.12),
-    0 14px 26px rgba(11, 31, 56, 0.16);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 
 .brand-mark img {
@@ -503,8 +492,7 @@ pre {
   height: auto;
   display: block;
   filter:
-    drop-shadow(0 7px 16px rgba(229, 88, 9, 0.14))
-    drop-shadow(0 0 14px rgba(179, 201, 216, 0.1));
+    drop-shadow(0 6px 12px rgba(18, 68, 123, 0.08));
 }
 
 .eyebrow,
@@ -948,14 +936,14 @@ a.link-button[aria-disabled="true"] {
 .runtime-metric,
 .leader-mini-row {
   border-radius: var(--radius-md);
-  border: 1px solid rgba(255, 255, 255, 0.45);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(231, 240, 247, 0.72));
+  border: 1px solid rgba(18, 68, 123, 0.12);
+  background: linear-gradient(180deg, rgba(252, 254, 255, 0.96), rgba(232, 241, 247, 0.9));
   box-shadow: var(--shadow-sm);
 }
 
 .focus-chip {
   border-color: rgba(179, 201, 216, 0.18);
-  background: linear-gradient(180deg, rgba(231, 241, 248, 0.1), rgba(14, 42, 73, 0.42));
+  background: linear-gradient(180deg, rgba(251, 253, 255, 0.2), rgba(16, 44, 77, 0.3));
   box-shadow: inset 0 1px 0 rgba(224, 237, 247, 0.08);
 }
 
@@ -966,6 +954,39 @@ a.link-button[aria-disabled="true"] {
 
 .focus-chip strong {
   color: #f4f8fb;
+}
+
+.briefing-history-strip .summary-card,
+.briefing-feed-grid .row-card,
+.briefing-feed-grid .subpanel,
+.briefing-primary-panel .detail-list,
+.briefing-primary-panel .empty-state,
+.briefing-secondary-panel .empty-state {
+  background: linear-gradient(180deg, rgba(252, 254, 255, 0.96), rgba(236, 244, 249, 0.92));
+}
+
+.briefing-history-strip .summary-card,
+.briefing-feed-grid .row-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.briefing-history-strip .summary-card::before,
+.briefing-feed-grid .row-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 14px;
+  bottom: 14px;
+  width: 3px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(229, 88, 9, 0.82), rgba(18, 68, 123, 0.48));
+  opacity: 0.8;
+}
+
+.briefing-history-strip .summary-card,
+.briefing-feed-grid .row-card {
+  padding-left: 20px;
 }
 
 .stat-chip,
