@@ -71,11 +71,11 @@ type AppError = Error & {
 const TOKEN_STORAGE_KEY = 'ctf.frontend.token'
 
 const views: Array<{ id: View; label: string; note: string }> = [
-  { id: 'briefing', label: '总览', note: 'Contest Brief' },
-  { id: 'board', label: '题目', note: 'Challenge Board' },
-  { id: 'runtime', label: '实例', note: 'Runtime Center' },
-  { id: 'scoreboard', label: '排行', note: 'Scoreboard' },
-  { id: 'admin', label: '管理', note: 'Admin Console' },
+  { id: 'briefing', label: '总览', note: 'Overview' },
+  { id: 'board', label: '题目', note: 'Challenges' },
+  { id: 'runtime', label: '实例', note: 'Runtime' },
+  { id: 'scoreboard', label: '排行榜', note: 'Scoreboard' },
+  { id: 'admin', label: '管理', note: 'Admin' },
 ]
 
 const categoryOptions = ['web', 'pwn', 'misc', 'crypto', 'reverse']
@@ -158,6 +158,17 @@ function formatEnvText(env?: Record<string, string>): string {
 
 function formatCommandText(command?: string[]): string {
   return (command ?? []).join('\n')
+}
+
+function summarizeText(value?: string | null, maxLength = 180): string {
+  if (!value) {
+    return ''
+  }
+  const normalized = value.replace(/\s+/g, ' ').trim()
+  if (normalized.length <= maxLength) {
+    return normalized
+  }
+  return `${normalized.slice(0, maxLength).trim()}...`
 }
 
 function parseEnvText(input: string): Record<string, string> {
@@ -313,7 +324,7 @@ function NoticeBanner({ notice }: { notice: Notice | null }): React.JSX.Element 
 }
 
 function App(): React.JSX.Element {
-  const [view, setView] = useState<View>('briefing')
+  const [view, setView] = useState<View>('board')
   const [authMode, setAuthMode] = useState<AuthMode>('login')
   const [token, setToken] = useState<string>(() => window.localStorage.getItem(TOKEN_STORAGE_KEY) ?? '')
   const [sessionLoading, setSessionLoading] = useState(Boolean(token))
@@ -931,7 +942,7 @@ function App(): React.JSX.Element {
       setAuthUser(response.user)
       setAuthMode('login')
       setAuthNotice({ tone: 'success', text: `已登录为 ${response.user.display_name || response.user.username}` })
-      setView(response.user.role === 'admin' || response.user.role === 'ops' ? 'admin' : 'board')
+      setView('board')
     } catch (error) {
       setAuthNotice({ tone: 'danger', text: describeError(error, '登录失败。') })
     } finally {
@@ -963,7 +974,13 @@ function App(): React.JSX.Element {
 
   function handleLogout() {
     clearSession('已退出当前账号。')
-    setView('briefing')
+    setView('board')
+  }
+
+  function focusFlagInput() {
+    const field = document.getElementById('flag-input') as HTMLInputElement | null
+    field?.focus()
+    field?.select()
   }
 
   async function handleSubmitFlag(event: React.FormEvent<HTMLFormElement>) {
@@ -1422,151 +1439,207 @@ function App(): React.JSX.Element {
 
   function renderBoard(): React.JSX.Element {
     return (
-      <div className="workspace-grid">
-        <Panel eyebrow="Challenge Rail" title="题目列表" subtitle="按分类折叠，支持标题 / slug / 分类检索。" className="rail-panel">
-          <label className="field compact-field">
-            <span>检索</span>
-            <input
-              onChange={(event) => setChallengeSearch(event.target.value)}
-              placeholder="welcome / web / crypto"
-              value={challengeSearch}
-            />
-          </label>
-          <div className="accordion-stack">
-            {filteredChallengeGroups.map((group) => (
-              <section className="accordion-block" key={group.category}>
-                <button
-                  className="accordion-head"
-                  onClick={() =>
-                    setCollapsedCategories((current) => ({
-                      ...current,
-                      [group.category]: !current[group.category],
-                    }))
-                  }
-                  type="button"
-                >
-                  <div>
-                    <strong>{group.category}</strong>
-                    <span>{group.items.length} 题</span>
-                  </div>
-                  <small>{collapsedCategories[group.category] ? '展开' : '收起'}</small>
-                </button>
-                {!collapsedCategories[group.category] ? (
-                  <div className="challenge-card-list">
-                    {group.items.map((item) => (
-                      <button
-                        className={selectedChallengeId === item.id ? 'challenge-card active' : 'challenge-card'}
-                        key={item.id}
-                        onClick={() => setSelectedChallengeId(item.id)}
-                        type="button"
-                      >
-                        <div className="challenge-card-head">
-                          <strong>{item.title}</strong>
-                          <span>{item.points} pts</span>
-                        </div>
-                        <div className="badge-row">
-                          <span className="badge">{item.category}</span>
-                          {item.dynamic ? <span className="badge badge-accent">Dynamic</span> : null}
-                          {solvedChallengeIds.has(item.id) ? <span className="badge badge-solid">Solved</span> : null}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </section>
-            ))}
-            {filteredChallengeGroups.length === 0 ? <div className="empty-state">没有匹配的题目。</div> : null}
-          </div>
-        </Panel>
+      <div className="challenge-desk board-view">
+          <Panel eyebrow="题目列表" title="题目" subtitle="按分类折叠，支持标题和分类检索。" className="rail-panel challenge-rail-panel">
+            <label className="field compact-field">
+              <span>检索</span>
+              <input
+                onChange={(event) => setChallengeSearch(event.target.value)}
+                placeholder="welcome / web / crypto"
+                value={challengeSearch}
+              />
+            </label>
 
-        <div className="content-stack">
-          <Panel
-            eyebrow="Challenge Detail"
-            title={challengeDetail?.title ?? selectedChallengeSummary?.title ?? '选择题目'}
-            subtitle={challengeDetail?.slug ?? selectedChallengeSummary?.slug ?? '从左侧题目列表选择一题查看详情。'}
-            actions={
-              <div className="badge-row spread-row">
-                {selectedChallengeMeta.map((item) => (
-                  <span className="badge" key={item.label}>
-                    {item.label}: {item.value}
-                  </span>
-                ))}
-              </div>
-            }
-          >
-            <NoticeBanner notice={challengeDetailNotice} />
-            {challengeDetailLoading ? <div className="empty-state">正在读取题面…</div> : null}
-            {!challengeDetailLoading && challengeDetail ? (
-              <div className="detail-stack">
-                <article className="statement-card">
-                  <h3>题面</h3>
-                  <p className="statement-text">{challengeDetail.description}</p>
-                </article>
-                <div className="two-column-layout compact-columns">
-                  <div className="subpanel">
-                    <h3>附件</h3>
-                    <div className="attachment-list">
-                      {challengeDetail.attachments.length === 0 ? <div className="empty-state small">当前没有附件。</div> : null}
-                      {challengeDetail.attachments.map((attachment) => (
-                        <a
-                          className="attachment-row"
-                          href={`/api/v1/challenges/${challengeDetail.id}/attachments/${attachment.id}`}
-                          key={attachment.id}
-                          rel="noreferrer"
-                          target="_blank"
+            <div className="accordion-stack">
+              {filteredChallengeGroups.map((group) => (
+                <section className="accordion-block" key={group.category}>
+                  <button
+                    className="accordion-head"
+                    onClick={() =>
+                      setCollapsedCategories((current) => ({
+                        ...current,
+                        [group.category]: !current[group.category],
+                      }))
+                    }
+                    type="button"
+                  >
+                    <div>
+                      <strong>{group.category}</strong>
+                      <span>{group.items.length} 题</span>
+                    </div>
+                    <small>{collapsedCategories[group.category] ? '展开' : '收起'}</small>
+                  </button>
+                  {!collapsedCategories[group.category] ? (
+                    <div className="challenge-card-list">
+                      {group.items.map((item) => (
+                        <button
+                          className={selectedChallengeId === item.id ? 'challenge-card active' : 'challenge-card'}
+                          key={item.id}
+                          onClick={() => setSelectedChallengeId(item.id)}
+                          type="button"
                         >
-                          <strong>{attachment.filename}</strong>
-                          <span>
-                            {attachment.content_type} · {formatBytes(attachment.size_bytes)}
-                          </span>
-                        </a>
+                          <div className="challenge-card-head">
+                            <strong>{item.title}</strong>
+                            <span>{item.points} pts</span>
+                          </div>
+                          <div className="badge-row">
+                            {item.dynamic ? <span className="badge badge-accent">Dynamic</span> : null}
+                            {solvedChallengeIds.has(item.id) ? <span className="badge badge-solid">Solved</span> : null}
+                          </div>
+                        </button>
                       ))}
                     </div>
-                  </div>
-                  <div className="subpanel">
-                    <h3>解题状态</h3>
-                    <div className="detail-list compact-list">
-                      <div className="detail-row">
-                        <span>是否解出</span>
-                        <strong>{selectedChallengeSolve ? '已解出' : '未解出'}</strong>
-                      </div>
-                      <div className="detail-row">
-                        <span>解题时间</span>
-                        <strong>{formatDateTime(selectedChallengeSolve?.solved_at)}</strong>
-                      </div>
-                      <div className="detail-row">
-                        <span>最近实例</span>
-                        <strong>{runtimeInstance ? formatRemaining(runtimeInstance.expires_at) : '未启动'}</strong>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : null}
+                  ) : null}
+                </section>
+              ))}
+              {filteredChallengeGroups.length === 0 ? <div className="empty-state">没有匹配的题目。</div> : null}
+            </div>
           </Panel>
 
-          <div className="two-column-layout compact-columns">
-            <Panel eyebrow="Judge" title="Flag 与判题" subtitle="提交记录来自后端 `submissions` 与 `solves`。">
-              <NoticeBanner notice={submitNotice} />
-              {!authUser ? <div className="empty-state">登录后可提交 Flag。</div> : null}
-              {authUser ? (
-                <form className="form-grid single-column" onSubmit={handleSubmitFlag}>
-                  <label className="field">
-                    <span>Flag</span>
-                    <input
-                      onChange={(event) => setFlagInput(event.target.value)}
-                      placeholder="flag{...}"
-                      value={flagInput}
-                    />
-                  </label>
-                  <button className="primary-button" disabled={submitBusy || !selectedChallengeSummary} type="submit">
-                    {submitBusy ? '判题中…' : '提交 Flag'}
-                  </button>
-                </form>
+          <div className="content-stack">
+            <Panel
+              eyebrow="当前题面"
+              title={challengeDetail?.title ?? selectedChallengeSummary?.title ?? '选择题目'}
+              subtitle={
+                challengeDetail
+                  ? `${challengeDetail.category} · ${challengeDetail.points} pts${challengeDetail.difficulty ? ` · ${challengeDetail.difficulty}` : ''}`
+                  : selectedChallengeSummary ? `${selectedChallengeSummary.category} · ${selectedChallengeSummary.points} pts` : '从左侧题目列表选择一题查看详情。'
+              }
+            >
+              <NoticeBanner notice={challengeDetailNotice} />
+              {challengeDetailLoading ? <div className="empty-state">正在读取题面…</div> : null}
+              {!challengeDetailLoading && !challengeDetail ? <div className="empty-state">从左侧选择一题进入主工作区。</div> : null}
+              {!challengeDetailLoading && challengeDetail ? (
+                <div className="detail-stack board-main-stack">
+                  <article className="statement-card statement-card-feature">
+                    <div className="statement-topline">
+                      <div>
+                        <span className="section-tag">题面</span>
+                        <h3>题目说明</h3>
+                      </div>
+                      {selectedChallengeSolve ? <span className="badge badge-solid">Solved</span> : null}
+                    </div>
+                    <p className="statement-text">{challengeDetail.description}</p>
+                  </article>
+
+                  {challengeDetail.attachments.length > 0 ? (
+                    <div className="subpanel mission-panel compact-subpanel">
+                      <h3>附件</h3>
+                      <div className="attachment-list">
+                        {challengeDetail.attachments.map((attachment) => (
+                          <a
+                            className="attachment-row"
+                            href={`/api/v1/challenges/${challengeDetail.id}/attachments/${attachment.id}`}
+                            key={attachment.id}
+                            rel="noreferrer"
+                            target="_blank"
+                          >
+                            <strong>{attachment.filename}</strong>
+                            <span>
+                              {attachment.content_type} · {formatBytes(attachment.size_bytes)}
+                            </span>
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
               ) : null}
             </Panel>
 
-            <Panel eyebrow="Recent Attempts" title="当前题最近提交" subtitle="只展示当前登录用户在该题上的近几次提交。">
+            <div className="solve-actions-grid">
+              <Panel eyebrow="Flag 提交" title="提交" subtitle="提交后会刷新个人历史和排行榜。">
+                <NoticeBanner notice={submitNotice} />
+                {!authUser ? <div className="empty-state">登录后可提交 Flag。</div> : null}
+                {authUser ? (
+                  <form className="form-grid single-column" onSubmit={handleSubmitFlag}>
+                    <label className="field">
+                      <span>Flag</span>
+                      <input
+                        id="flag-input"
+                        onChange={(event) => setFlagInput(event.target.value)}
+                        placeholder="flag{...}"
+                        value={flagInput}
+                      />
+                    </label>
+                    <button className="primary-button" disabled={submitBusy || !selectedChallengeSummary} type="submit">
+                      {submitBusy ? '判题中…' : '提交 Flag'}
+                    </button>
+                  </form>
+                ) : null}
+              </Panel>
+
+              <Panel
+                eyebrow="实例控制"
+                title={selectedChallengeSummary?.dynamic ? '动态实例' : '实例状态'}
+                subtitle={
+                  selectedChallengeSummary?.dynamic
+                    ? '当前题支持动态实例，可直接启动、续期和回收。'
+                    : '当前题不需要独立实例，专注读题和提交即可。'
+                }
+              >
+                <NoticeBanner notice={runtimeNotice} />
+                {!selectedChallengeSummary ? <div className="empty-state">先选择题目，再决定是否需要启动实例。</div> : null}
+                {selectedChallengeSummary && !selectedChallengeSummary.dynamic ? (
+                  <div className="empty-state">当前题为静态题，无需独立实例。</div>
+                ) : null}
+                {selectedChallengeSummary?.dynamic ? (
+                  <div className="runtime-quick-card">
+                    <div className="runtime-metrics-grid">
+                      <div className="runtime-metric">
+                        <span>状态</span>
+                        <strong>{runtimeInstance?.status ?? 'idle'}</strong>
+                      </div>
+                      <div className="runtime-metric">
+                        <span>访问地址</span>
+                        <strong>{runtimeInstance?.access_url ?? '尚未分配'}</strong>
+                      </div>
+                      <div className="runtime-metric">
+                        <span>剩余时间</span>
+                        <strong>{runtimeInstance ? formatRemaining(runtimeInstance.expires_at) : '未启动'}</strong>
+                      </div>
+                      <div className="runtime-metric">
+                        <span>续期次数</span>
+                        <strong>{runtimeInstance?.renew_count ?? 0}</strong>
+                      </div>
+                    </div>
+                    <div className="inline-actions wrap-actions">
+                      <button
+                        className="primary-button"
+                        disabled={runtimeLoading || !selectedChallengeSummary}
+                        onClick={() => void handleRuntimeAction('start')}
+                        type="button"
+                      >
+                        {runtimeLoading ? '处理中…' : runtimeInstance ? '重取实例' : '启动实例'}
+                      </button>
+                      <button
+                        className="ghost-button"
+                        disabled={runtimeLoading || !runtimeInstance}
+                        onClick={() => void handleRuntimeAction('renew')}
+                        type="button"
+                      >
+                        续期实例
+                      </button>
+                      <button
+                        className="ghost-button danger-button"
+                        disabled={runtimeLoading || !runtimeInstance}
+                        onClick={() => void handleRuntimeAction('delete')}
+                        type="button"
+                      >
+                        回收实例
+                      </button>
+                      {runtimeInstance?.access_url ? (
+                        <a className="link-button" href={runtimeInstance.access_url} rel="noreferrer" target="_blank">
+                          打开实例
+                        </a>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+              </Panel>
+            </div>
+
+            <Panel eyebrow="记录" title="最近提交" subtitle="只显示当前题的个人提交记录。">
               {authUser && selectedChallengeAttempts.length === 0 ? <div className="empty-state">当前题还没有提交记录。</div> : null}
               {!authUser ? <div className="empty-state">登录后展示该题的个人提交历史。</div> : null}
               {authUser && selectedChallengeAttempts.length > 0 ? (
@@ -1574,7 +1647,6 @@ function App(): React.JSX.Element {
                   {selectedChallengeAttempts.map((item) => (
                     <div className="row-card" key={item.id}>
                       <strong>{item.correct ? 'Accepted' : 'Wrong Answer'}</strong>
-                      <span>{item.source_ip}</span>
                       <span>{formatDateTime(item.submitted_at)}</span>
                     </div>
                   ))}
@@ -1582,7 +1654,6 @@ function App(): React.JSX.Element {
               ) : null}
             </Panel>
           </div>
-        </div>
       </div>
     )
   }
@@ -1590,7 +1661,7 @@ function App(): React.JSX.Element {
   function renderRuntime(): React.JSX.Element {
     return (
       <div className="workspace-grid">
-        <Panel eyebrow="Dynamic Catalog" title="动态题目录" subtitle="只显示 `dynamic = true` 的公开题目。" className="rail-panel">
+        <Panel eyebrow="动态题目" title="动态题" subtitle="只显示公开的动态题。" className="rail-panel">
           <div className="challenge-card-list">
             {dynamicChallenges.map((item) => (
               <button
@@ -1615,9 +1686,9 @@ function App(): React.JSX.Element {
 
         <div className="content-stack">
           <Panel
-            eyebrow="Runtime Stage"
+            eyebrow="实例控制"
             title={selectedChallengeSummary?.title ?? '选择动态题'}
-            subtitle={selectedChallengeSummary ? `${selectedChallengeSummary.slug} · 通过真实实例 API 管理生命周期。` : '从左侧选择动态题。'}
+            subtitle={selectedChallengeSummary ? `${selectedChallengeSummary.category} · ${selectedChallengeSummary.points} pts · 通过真实实例接口管理生命周期。` : '从左侧选择动态题。'}
           >
             <NoticeBanner notice={runtimeNotice} />
             <div className="runtime-hero">
@@ -1676,7 +1747,7 @@ function App(): React.JSX.Element {
           </Panel>
 
           <div className="two-column-layout compact-columns">
-            <Panel eyebrow="Rules" title="实例策略" subtitle="由后端 runtime service 控制实例存在性与续期次数。">
+            <Panel eyebrow="接口说明" title="实例接口" subtitle="由后端实例服务控制实例状态与续期次数。">
               <div className="detail-list compact-list">
                 <div className="detail-row">
                   <span>启动接口</span>
@@ -1693,7 +1764,7 @@ function App(): React.JSX.Element {
               </div>
             </Panel>
 
-            <Panel eyebrow="Related Activity" title="相关历史" subtitle="结合题目详情和个人行为，便于快速排查。">
+            <Panel eyebrow="相关提交" title="相关历史" subtitle="结合题目详情和个人行为，便于快速排查。">
               {!authUser ? <div className="empty-state">登录后显示该题相关提交记录。</div> : null}
               {authUser && selectedChallengeAttempts.length === 0 ? <div className="empty-state">当前题还没有提交记录。</div> : null}
               {authUser && selectedChallengeAttempts.length > 0 ? (
@@ -1717,7 +1788,7 @@ function App(): React.JSX.Element {
   function renderScoreboard(): React.JSX.Element {
     return (
       <div className="two-column-layout scoreboard-layout">
-        <Panel eyebrow="Ranked Board" title="排行榜" subtitle="展开后可直接查看每位选手已完成的题目、难度和分类。">
+        <Panel eyebrow="排行榜" title="公开排行榜" subtitle="展开后可直接查看每位选手已完成的题目、难度和分类。">
           <NoticeBanner notice={publicNotice} />
           <div className="card-list scoreboard-card-list">
             {scoreboard.map((item) => {
@@ -1784,7 +1855,7 @@ function App(): React.JSX.Element {
           </div>
         </Panel>
 
-        <Panel eyebrow="My Position" title="个人摘要" subtitle="登录后可以直接比对自己的解题节奏与榜单差距。">
+        <Panel eyebrow="我的状态" title="个人摘要" subtitle="登录后可以直接比对自己的解题节奏与榜单差距。">
           {!authUser ? <div className="empty-state">登录后展示你的积分、解题数和最近解题记录。</div> : null}
           {authUser ? (
             <>
@@ -2387,7 +2458,7 @@ function App(): React.JSX.Element {
     return (
       <div className="view-stack">
         <Panel
-          eyebrow="Admin Console"
+          eyebrow="管理后台"
           title="后台工作区"
           subtitle="按后端实际权限拆分。管理员可写题目、公告和用户；ops 仅展示允许的运维与只读模块。"
         >
@@ -2437,7 +2508,6 @@ function App(): React.JSX.Element {
                 type="button"
               >
                 <span>{item.label}</span>
-                <small>{item.note}</small>
               </button>
             ))}
         </nav>
