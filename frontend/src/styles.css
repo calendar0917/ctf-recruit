@@ -47,12 +47,18 @@ body::before {
 }
 
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
 }
 
 button {
   color: inherit;
+}
+
+code {
+  font-family: 'SFMono-Regular', 'Consolas', monospace;
 }
 
 #root {
@@ -243,7 +249,8 @@ button {
   color: rgba(246, 239, 227, 0.72);
 }
 
-.sidebar-note {
+.sidebar-note,
+.admin-side-note {
   margin-top: auto;
   padding: 16px;
   border-radius: var(--radius-md);
@@ -251,7 +258,9 @@ button {
   border: 1px solid var(--line);
 }
 
-.sidebar-note p:last-child {
+.sidebar-note p:last-child,
+.admin-side-note p:last-child,
+.admin-lead {
   margin: 10px 0 0;
   color: var(--muted);
   line-height: 1.7;
@@ -308,7 +317,8 @@ button {
 .view-stack,
 .admin-layout,
 .scoreboard-layout,
-.runtime-layout {
+.runtime-layout,
+.admin-section-stack {
   display: grid;
   gap: 18px;
 }
@@ -317,7 +327,15 @@ button {
 .two-column-layout,
 .focus-list,
 .metric-grid,
-.challenge-workspace {
+.challenge-workspace,
+.admin-grid,
+.admin-summary-strip,
+.admin-filter-grid,
+.admin-form-grid,
+.admin-detail-grid,
+.runtime-config-grid,
+.admin-dual-pane,
+.admin-split-list {
   display: grid;
   gap: 18px;
 }
@@ -331,16 +349,37 @@ button {
 }
 
 .two-column-layout,
-.runtime-layout {
+.runtime-layout,
+.admin-dual-pane,
+.admin-split-list {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.metric-grid {
+.metric-grid,
+.admin-summary-strip {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .challenge-workspace {
   grid-template-columns: 340px minmax(0, 1fr);
+}
+
+.admin-grid {
+  grid-template-columns: 260px minmax(0, 1fr);
+  align-items: start;
+}
+
+.admin-form-grid,
+.admin-detail-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.runtime-config-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.admin-filter-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .panel {
@@ -373,7 +412,11 @@ button {
 .table-row,
 .timeline-item,
 .foldable-block,
-.scoreboard-row {
+.scoreboard-row,
+.admin-table-row,
+.admin-module-item,
+.admin-detail-card,
+.admin-detail-panel {
   border-radius: var(--radius-md);
   border: 1px solid var(--line);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(247, 241, 232, 0.76));
@@ -384,7 +427,10 @@ button {
 .entry-card,
 .timeline-item,
 .focus-row,
-.announcement-card {
+.announcement-card,
+.admin-topbar,
+.admin-detail-card,
+.admin-detail-panel {
   padding: 16px;
 }
 
@@ -395,7 +441,12 @@ button {
 .challenge-menu-item span,
 .challenge-menu-item small,
 .category-toggle small,
-.rail-progress span {
+.rail-progress span,
+.admin-table-row p,
+.admin-row-actions span,
+.admin-module-item span,
+.form-field span,
+.detail-list-row span {
   color: var(--muted);
 }
 
@@ -412,7 +463,12 @@ button {
 .timeline-list,
 .table-body,
 .category-stack,
-.solved-category-list {
+.solved-category-list,
+.admin-table-list,
+.admin-module-list,
+.detail-list,
+.detail-stack-list,
+.compact-table-list {
   display: grid;
   gap: 12px;
 }
@@ -451,7 +507,9 @@ button {
   padding-right: 16px;
 }
 
-.rail-head {
+.rail-head,
+.admin-side-head,
+.admin-detail-head {
   align-items: center;
 }
 
@@ -484,7 +542,10 @@ button {
 }
 
 .category-toggle-main,
-.category-toggle-side {
+.category-toggle-side,
+.admin-row-meta,
+.admin-row-actions,
+.admin-detail-head {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -494,12 +555,15 @@ button {
   flex-wrap: wrap;
 }
 
-.category-toggle span {
+.category-toggle span,
+.admin-module-item strong,
+.form-field span {
   font-weight: 700;
   letter-spacing: 0.03em;
 }
 
-.category-toggle-side {
+.category-toggle-side,
+.admin-row-actions {
   justify-content: flex-end;
 }
 
@@ -542,7 +606,9 @@ button {
 .focus-row strong,
 .admin-card strong,
 .detail-status-bar strong,
-.table-row strong {
+.table-row strong,
+.admin-table-row strong,
+.admin-detail-card strong {
   display: block;
 }
 
@@ -557,7 +623,9 @@ button {
   gap: 8px;
 }
 
-.challenge-menu-heading {
+.challenge-menu-heading,
+.solved-entry,
+.detail-list-row {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -574,7 +642,8 @@ button {
   white-space: nowrap;
 }
 
-.challenge-menu-item.active {
+.challenge-menu-item.active,
+.admin-module-item.active {
   background: linear-gradient(180deg, rgba(39, 54, 45, 0.94), rgba(54, 68, 59, 0.9));
   color: #f8f1e5;
   border-color: rgba(39, 54, 45, 0.76);
@@ -582,11 +651,13 @@ button {
 }
 
 .challenge-menu-item.active span,
-.challenge-menu-item.active small {
+.challenge-menu-item.active small,
+.admin-module-item.active span {
   color: rgba(248, 241, 229, 0.76);
 }
 
-.menu-status {
+.menu-status,
+.solved-groups {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -623,7 +694,10 @@ button {
 .dynamic-badge,
 .difficulty-chip,
 .difficulty-badge,
-.solved-item {
+.solved-item,
+.admin-muted-chip,
+.admin-warn-chip,
+.instance-chip {
   padding: 4px 9px;
   border-radius: 999px;
   font-size: 0.72rem;
@@ -649,6 +723,31 @@ button {
   color: var(--bronze) !important;
   border: 1px solid rgba(141, 90, 58, 0.22);
   background: rgba(253, 242, 233, 0.92);
+}
+
+.admin-muted-chip {
+  color: var(--muted);
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.admin-warn-chip,
+.instance-creating {
+  color: #876028;
+  border: 1px solid rgba(210, 168, 91, 0.26);
+  background: rgba(252, 246, 225, 0.92);
+}
+
+.instance-running {
+  color: var(--forest-soft);
+  border: 1px solid rgba(94, 107, 99, 0.24);
+  background: rgba(236, 243, 236, 0.92);
+}
+
+.instance-terminated {
+  color: var(--danger-soft);
+  border: 1px solid rgba(181, 95, 75, 0.24);
+  background: rgba(252, 236, 230, 0.92);
 }
 
 .difficulty-easy {
@@ -684,7 +783,7 @@ button {
 .detail-badges,
 .hero-actions,
 .action-stack,
-.solved-groups {
+.admin-form-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
@@ -804,11 +903,138 @@ button {
   gap: 12px;
 }
 
-.flag-row input {
+.flag-row input,
+.form-field input,
+.form-field select,
+.form-field textarea {
   border-radius: 14px;
   border: 1px solid var(--line-strong);
-  padding: 15px 16px;
+  padding: 14px 16px;
   background: rgba(255, 255, 255, 0.84);
+  width: 100%;
+}
+
+.form-field textarea {
+  resize: vertical;
+}
+
+.form-field {
+  display: grid;
+  gap: 8px;
+}
+
+.full-span {
+  grid-column: 1 / -1;
+}
+
+.toggle-field {
+  align-content: start;
+}
+
+.full-span-card {
+  grid-column: 1 / -1;
+}
+
+.admin-detail-card,
+.admin-detail-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.detail-list-row {
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.stacked {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.admin-split-column > .subhead {
+  margin-bottom: 10px;
+}
+
+.compact-admin-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.compact-detail-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.submissions-workspace {
+  gap: 18px;
+}
+
+.admin-topbar {
+  padding: 22px;
+}
+
+.admin-summary-strip {
+  margin-top: 18px;
+}
+
+.admin-metric strong {
+  font-size: 1.35rem;
+}
+
+.admin-sidebar-panel,
+.admin-main-panel {
+  min-height: 100%;
+}
+
+.admin-module-item {
+  width: 100%;
+  text-align: left;
+  padding: 14px 16px;
+  cursor: pointer;
+}
+
+.admin-module-item span {
+  display: block;
+  margin-top: 6px;
+}
+
+.admin-form-panel,
+.admin-filter-panel {
+  padding: 22px;
+}
+
+.admin-form-actions {
+  margin-top: 20px;
+  justify-content: flex-end;
+}
+
+.admin-table-row {
+  padding: 16px;
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.2fr) minmax(160px, 0.8fr);
+  gap: 14px;
+  align-items: center;
+}
+
+.admin-table-row p {
+  margin: 6px 0 0;
+}
+
+.admin-row-meta {
+  flex-wrap: wrap;
+}
+
+.admin-row-actions {
+  justify-content: space-between;
+}
+
+.align-end {
+  align-self: end;
+}
+
+.compact-actions {
+  grid-template-columns: repeat(3, minmax(0, max-content));
+  justify-content: start;
 }
 
 .primary-button,
@@ -918,15 +1144,8 @@ button {
   text-transform: uppercase;
 }
 
-.solved-category-list {
-  gap: 8px;
-}
-
 .solved-entry {
-  display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
 }
 
 .solved-category-web {
@@ -968,7 +1187,8 @@ button {
 .attachment-item:hover,
 .fold-toggle:hover,
 .sidebar-toggle:hover,
-.solved-category:hover {
+.solved-category:hover,
+.admin-module-item:hover {
   transform: translateY(-1px);
 }
 
@@ -1059,7 +1279,15 @@ button {
   .overview-grid,
   .two-column-layout,
   .runtime-layout,
-  .metric-grid {
+  .metric-grid,
+  .admin-summary-strip,
+  .admin-grid,
+  .admin-filter-grid,
+  .admin-form-grid,
+  .admin-detail-grid,
+  .runtime-config-grid,
+  .admin-dual-pane,
+  .admin-split-list {
     grid-template-columns: 1fr;
   }
 
@@ -1099,8 +1327,10 @@ button {
   }
 
   .scoreboard-head,
-  .scoreboard-row {
-    grid-template-columns: 70px minmax(0, 1fr) 90px 90px;
+  .scoreboard-row,
+  .admin-table-row,
+  .compact-admin-row {
+    grid-template-columns: 1fr;
   }
 
   .scoreboard-head span:last-child {
@@ -1110,6 +1340,10 @@ button {
   .scoreboard-row .solved-groups {
     grid-column: 1 / -1;
     margin-top: -4px;
+  }
+
+  .admin-row-actions {
+    justify-content: flex-start;
   }
 }
 
@@ -1121,7 +1355,10 @@ button {
 
   .sidebar,
   .workspace-header,
-  .panel {
+  .panel,
+  .admin-form-panel,
+  .admin-filter-panel,
+  .admin-topbar {
     padding: 16px;
   }
 
@@ -1137,7 +1374,10 @@ button {
   .runtime-line,
   .announcement-head,
   .challenge-menu-heading,
-  .solved-entry {
+  .solved-entry,
+  .admin-row-actions,
+  .detail-list-row,
+  .admin-detail-head {
     flex-direction: column;
     align-items: flex-start;
   }
@@ -1145,7 +1385,10 @@ button {
   .category-toggle-side,
   .rail-progress,
   .menu-status,
-  .solved-groups {
+  .solved-groups,
+  .admin-row-meta,
+  .admin-row-actions,
+  .admin-form-actions {
     justify-content: flex-start;
     text-align: left;
   }
@@ -1154,7 +1397,8 @@ button {
   .table-head,
   .table-row,
   .scoreboard-row,
-  .scoreboard-head {
+  .scoreboard-head,
+  .compact-actions {
     grid-template-columns: 1fr;
   }
 
