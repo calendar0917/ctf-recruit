@@ -158,11 +158,10 @@ func (m *DockerManager) Stop(ctx context.Context, containerID string) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotModified && resp.StatusCode != http.StatusNotFound {
-		return expectStatus(resp, http.StatusNoContent, http.StatusNotModified, http.StatusNotFound)
-	}
-
-	return m.removeContainer(ctx, containerID)
+	// Runtime containers are created with AutoRemove=true, so the daemon removes
+	// them after a successful stop. Treat not found as already gone and avoid a
+	// second explicit delete that can race with Docker's own removal.
+	return expectStatus(resp, http.StatusNoContent, http.StatusNotModified, http.StatusNotFound)
 }
 
 func (m *DockerManager) inspectContainer(ctx context.Context, containerID, portKey string) (inspectContainerResponse, error) {

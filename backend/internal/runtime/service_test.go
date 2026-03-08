@@ -233,3 +233,38 @@ func TestSweepExpiredStopsContainers(t *testing.T) {
 		t.Fatalf("expected instance to be removed after sweep, got %v", err)
 	}
 }
+
+func TestDeleteInstanceStopsContainerAndRemovesRecord(t *testing.T) {
+	manager := &fakeManager{}
+	repo := newFakeRepository()
+	service := NewService("http://localhost:8080", manager, repo)
+	service.now = func() time.Time { return time.Date(2025, time.March, 8, 9, 0, 0, 0, time.UTC) }
+
+	instance, created, err := service.StartInstance(context.Background(), 7, "1")
+	if err != nil {
+		t.Fatalf("start instance: %v", err)
+	}
+	if !created {
+		t.Fatalf("expected instance to be created")
+	}
+
+	deleted, err := service.DeleteInstance(context.Background(), 7, "web-welcome")
+	if err != nil {
+		t.Fatalf("delete instance: %v", err)
+	}
+	if deleted.Status != "terminated" {
+		t.Fatalf("expected terminated status, got %s", deleted.Status)
+	}
+	if deleted.TerminatedAt == nil {
+		t.Fatalf("expected terminated timestamp to be set")
+	}
+	if deleted.ContainerID != instance.ContainerID {
+		t.Fatalf("expected deleted instance to reference original container")
+	}
+	if manager.stopCalls != 1 {
+		t.Fatalf("expected one runtime stop call, got %d", manager.stopCalls)
+	}
+	if _, err := service.GetInstance(context.Background(), 7, "1"); err != ErrInstanceNotFound {
+		t.Fatalf("expected instance to be removed after delete, got %v", err)
+	}
+}
