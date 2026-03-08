@@ -1,0 +1,16 @@
+meta:
+  slug: web-welcome
+  title: Welcome Panel
+  category: web
+  points: 100
+  dynamic: true
+
+runtime:
+  image: ctf/web-welcome:dev
+  mode: per-user
+  expose: http
+  container_port: 80
+  ttl: 30m
+  memory_limit_mb: 256
+  cpu_limit_millicores: 500
+  renew_allowed: true
