@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -47,13 +48,25 @@ type createContainerResponse struct {
 }
 
 type inspectContainerResponse struct {
-	Name            string `json:"Name"`
+	ID    string `json:"Id"`
+	Name  string `json:"Name"`
+	State struct {
+		Status string `json:"Status"`
+	} `json:"State"`
+	Config struct {
+		Labels map[string]string `json:"Labels"`
+	} `json:"Config"`
 	NetworkSettings struct {
 		Ports map[string][]struct {
 			HostIP   string `json:"HostIp"`
 			HostPort string `json:"HostPort"`
 		} `json:"Ports"`
 	} `json:"NetworkSettings"`
+}
+
+type listContainerSummary struct {
+	ID     string            `json:"Id"`
+	Labels map[string]string `json:"Labels"`
 }
 
 func NewDockerManager(socketPath string) *DockerManager {
@@ -65,7 +78,6 @@ func NewDockerManager(socketPath string) *DockerManager {
 	}
 
 	return &DockerManager{
-		// Prefer the daemon's default negotiated API unless an override is provided.
 		apiVersion: strings.TrimSpace(os.Getenv("DOCKER_API_VERSION")),
 		client: &http.Client{
 			Transport: transport,
@@ -137,16 +149,21 @@ func (m *DockerManager) Start(ctx context.Context, req StartRequest) (StartedCon
 	}
 	started = true
 
-	inspected, err := m.inspectContainer(ctx, created.ID, portKey)
+	inspected, err := m.inspectContainer(ctx, created.ID)
 	if err != nil {
 		return StartedContainer{}, err
+	}
+
+	bindings := inspected.NetworkSettings.Ports[portKey]
+	if len(bindings) == 0 {
+		return StartedContainer{}, fmt.Errorf("container %s has no published port for %s", created.ID, portKey)
 	}
 
 	return StartedContainer{
 		ContainerID:   created.ID,
 		ContainerName: strings.TrimPrefix(inspected.Name, "/"),
-		HostIP:        inspected.NetworkSettings.Ports[portKey][0].HostIP,
-		HostPort:      mustAtoi(inspected.NetworkSettings.Ports[portKey][0].HostPort),
+		HostIP:        bindings[0].HostIP,
+		HostPort:      mustAtoi(bindings[0].HostPort),
 	}, nil
 }
 
@@ -158,13 +175,58 @@ func (m *DockerManager) Stop(ctx context.Context, containerID string) error {
 	}
 	defer resp.Body.Close()
 
-	// Runtime containers are created with AutoRemove=true, so the daemon removes
-	// them after a successful stop. Treat not found as already gone and avoid a
-	// second explicit delete that can race with Docker's own removal.
 	return expectStatus(resp, http.StatusNoContent, http.StatusNotModified, http.StatusNotFound)
 }
 
-func (m *DockerManager) inspectContainer(ctx context.Context, containerID, portKey string) (inspectContainerResponse, error) {
+func (m *DockerManager) Exists(ctx context.Context, containerID string) (bool, error) {
+	inspect, err := m.inspectContainer(ctx, containerID)
+	if err != nil {
+		if isDockerStatus(err, http.StatusNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+	return inspect.State.Status != "removing", nil
+}
+
+func (m *DockerManager) ListManagedContainers(ctx context.Context) ([]ManagedContainer, error) {
+	filters := url.QueryEscape(`{"label":["ctf.platform=recruit"]}`)
+	path := m.apiPath("/containers/json?all=true&filters=" + filters)
+	resp, err := m.request(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if err := expectStatus(resp, http.StatusOK); err != nil {
+		return nil, err
+	}
+
+	var items []listContainerSummary
+	if err := json.NewDecoder(resp.Body).Decode(&items); err != nil {
+		return nil, fmt.Errorf("decode list containers response: %w", err)
+	}
+
+	result := make([]ManagedContainer, 0, len(items))
+	for _, item := range items {
+		userID, err := strconv.ParseInt(strings.TrimSpace(item.Labels["ctf.user_id"]), 10, 64)
+		if err != nil {
+			continue
+		}
+		challengeID := strings.TrimSpace(item.Labels["ctf.challenge_id"])
+		if challengeID == "" {
+			continue
+		}
+		result = append(result, ManagedContainer{
+			ContainerID: item.ID,
+			ChallengeID: challengeID,
+			UserID:      userID,
+		})
+	}
+	return result, nil
+}
+
+func (m *DockerManager) inspectContainer(ctx context.Context, containerID string) (inspectContainerResponse, error) {
 	inspectPath := m.apiPath(fmt.Sprintf("/containers/%s/json", containerID))
 	resp, err := m.request(ctx, http.MethodGet, inspectPath, nil)
 	if err != nil {
@@ -172,20 +234,17 @@ func (m *DockerManager) inspectContainer(ctx context.Context, containerID, portK
 	}
 	defer resp.Body.Close()
 
-	if err := expectStatus(resp, http.StatusOK); err != nil {
+	if err := expectStatus(resp, http.StatusOK, http.StatusNotFound); err != nil {
 		return inspectContainerResponse{}, err
+	}
+	if resp.StatusCode == http.StatusNotFound {
+		return inspectContainerResponse{}, dockerStatusError{statusCode: http.StatusNotFound, message: "not found"}
 	}
 
 	var inspected inspectContainerResponse
 	if err := json.NewDecoder(resp.Body).Decode(&inspected); err != nil {
 		return inspectContainerResponse{}, fmt.Errorf("decode inspect container response: %w", err)
 	}
-
-	bindings := inspected.NetworkSettings.Ports[portKey]
-	if len(bindings) == 0 {
-		return inspectContainerResponse{}, fmt.Errorf("container %s has no published port for %s", containerID, portKey)
-	}
-
 	return inspected, nil
 }
 
@@ -235,6 +294,23 @@ func (m *DockerManager) request(ctx context.Context, method, path string, payloa
 	return resp, nil
 }
 
+type dockerStatusError struct {
+	statusCode int
+	message    string
+}
+
+func (e dockerStatusError) Error() string {
+	return fmt.Sprintf("docker api returned %d: %s", e.statusCode, e.message)
+}
+
+func isDockerStatus(err error, statusCode int) bool {
+	var target dockerStatusError
+	if !errors.As(err, &target) {
+		return false
+	}
+	return target.statusCode == statusCode
+}
+
 func expectStatus(resp *http.Response, expected ...int) error {
 	for _, code := range expected {
 		if resp.StatusCode == code {
@@ -243,7 +319,7 @@ func expectStatus(resp *http.Response, expected ...int) error {
 	}
 
 	body, _ := io.ReadAll(resp.Body)
-	return fmt.Errorf("docker api returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	return dockerStatusError{statusCode: resp.StatusCode, message: strings.TrimSpace(string(body))}
 }
 
 func flattenEnv(values map[string]string) []string {

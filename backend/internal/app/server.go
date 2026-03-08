@@ -130,6 +130,12 @@ func (s *Server) StartBackground(ctx context.Context) {
 	defer ticker.Stop()
 
 	log.Printf("instance sweeper started, interval=%s", interval)
+	if report, err := s.runtime.Reconcile(ctx); err != nil {
+		log.Printf("instance reconcile error: %v", err)
+	} else if report.TerminatedRecords > 0 || report.RemovedContainers > 0 {
+		log.Printf("instance reconcile corrected records=%d containers=%d", report.TerminatedRecords, report.RemovedContainers)
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -143,6 +149,15 @@ func (s *Server) StartBackground(ctx context.Context) {
 			}
 			if terminated > 0 {
 				log.Printf("instance sweeper terminated %d expired instances", terminated)
+			}
+
+			report, err := s.runtime.Reconcile(ctx)
+			if err != nil {
+				log.Printf("instance reconcile error: %v", err)
+				continue
+			}
+			if report.TerminatedRecords > 0 || report.RemovedContainers > 0 {
+				log.Printf("instance reconcile corrected records=%d containers=%d", report.TerminatedRecords, report.RemovedContainers)
 			}
 		}
 	}

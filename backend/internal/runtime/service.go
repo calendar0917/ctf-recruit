@@ -232,6 +232,53 @@ func (s *Service) SweepExpired(ctx context.Context) (int, error) {
 	return terminated, nil
 }
 
+func (s *Service) Reconcile(ctx context.Context) (ReconcileReport, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	report := ReconcileReport{}
+	active, err := s.repo.ListActiveInstances(ctx)
+	if err != nil {
+		return report, err
+	}
+
+	now := s.now().UTC()
+	managedByKey := make(map[string]ManagedContainer)
+	containers, err := s.manager.ListManagedContainers(ctx)
+	if err != nil {
+		return report, err
+	}
+	for _, container := range containers {
+		managedByKey[managedContainerKey(container.ChallengeID, container.UserID)] = container
+	}
+
+	for _, item := range active {
+		key := managedContainerKey(item.Instance.ChallengeID, item.Instance.UserID)
+		exists, err := s.manager.Exists(ctx, item.Instance.ContainerID)
+		if err != nil {
+			return report, err
+		}
+		if !exists {
+			delete(managedByKey, key)
+			if err := s.repo.TerminateInstance(ctx, item.ID, now); err != nil {
+				return report, err
+			}
+			report.TerminatedRecords++
+			continue
+		}
+		delete(managedByKey, key)
+	}
+
+	for _, container := range managedByKey {
+		if err := s.manager.Stop(ctx, container.ContainerID); err != nil {
+			return report, err
+		}
+		report.RemovedContainers++
+	}
+
+	return report, nil
+}
+
 func buildAccessURL(protocol, publicBaseURL string, hostPort int) string {
 	scheme := protocol
 	if scheme == "" {
@@ -246,4 +293,8 @@ func buildAccessURL(protocol, publicBaseURL string, hostPort int) string {
 	}
 
 	return fmt.Sprintf("%s://%s:%d", scheme, hostname, hostPort)
+}
+
+func managedContainerKey(challengeID string, userID int64) string {
+	return fmt.Sprintf("%s:%d", challengeID, userID)
 }

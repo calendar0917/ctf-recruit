@@ -69,6 +69,17 @@ type InstanceRecord struct {
 	Instance        Instance
 }
 
+type ManagedContainer struct {
+	ContainerID string
+	ChallengeID string
+	UserID      int64
+}
+
+type ReconcileReport struct {
+	TerminatedRecords int
+	RemovedContainers int
+}
+
 type Repository interface {
 	ListChallenges(context.Context) ([]ChallengeSummary, error)
 	GetChallengeConfig(context.Context, string) (RuntimeConfigRecord, error)
@@ -77,6 +88,7 @@ type Repository interface {
 	RenewInstance(context.Context, int64, time.Time) (InstanceRecord, error)
 	TerminateInstance(context.Context, int64, time.Time) error
 	ListExpiredInstances(context.Context, time.Time) ([]InstanceRecord, error)
+	ListActiveInstances(context.Context) ([]InstanceRecord, error)
 }
 
 type StartRequest struct {
@@ -95,4 +107,6 @@ type StartedContainer struct {
 type Manager interface {
 	Start(context.Context, StartRequest) (StartedContainer, error)
 	Stop(context.Context, string) error
+	Exists(context.Context, string) (bool, error)
+	ListManagedContainers(context.Context) ([]ManagedContainer, error)
 }

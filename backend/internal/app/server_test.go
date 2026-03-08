@@ -20,10 +20,15 @@ import (
 )
 
 type testManager struct {
-	stopped []string
+	stopped    []string
+	containers map[string]runtime.ManagedContainer
 }
 
-func (m *testManager) Start(_ context.Context, _ runtime.StartRequest) (runtime.StartedContainer, error) {
+func (m *testManager) Start(_ context.Context, req runtime.StartRequest) (runtime.StartedContainer, error) {
+	if m.containers == nil {
+		m.containers = make(map[string]runtime.ManagedContainer)
+	}
+	m.containers["test-container"] = runtime.ManagedContainer{ContainerID: "test-container", ChallengeID: req.ChallengeID, UserID: req.UserID}
 	return runtime.StartedContainer{
 		ContainerID:   "test-container",
 		ContainerName: "test-name",
@@ -34,7 +39,23 @@ func (m *testManager) Start(_ context.Context, _ runtime.StartRequest) (runtime.
 
 func (m *testManager) Stop(_ context.Context, containerID string) error {
 	m.stopped = append(m.stopped, containerID)
+	if m.containers != nil {
+		delete(m.containers, containerID)
+	}
 	return nil
+}
+
+func (m *testManager) Exists(_ context.Context, containerID string) (bool, error) {
+	_, ok := m.containers[containerID]
+	return ok, nil
+}
+
+func (m *testManager) ListManagedContainers(_ context.Context) ([]runtime.ManagedContainer, error) {
+	items := make([]runtime.ManagedContainer, 0, len(m.containers))
+	for _, item := range m.containers {
+		items = append(items, item)
+	}
+	return items, nil
 }
 
 type testRuntimeRepo struct {
@@ -49,17 +70,17 @@ type testUserRepo struct {
 }
 
 type testGameRepo struct {
-	announcements       []game.Announcement
-	challenge           game.Challenge
-	hiddenChallengeRef  string
-	flag                string
-	submissions         []game.UserSubmission
-	solves              []game.UserSolve
-	scoreboard          []game.ScoreboardEntry
-	solved              map[int64]bool
-	nextSubmissionID    int64
-	attachment          game.Attachment
-	attachmentPath      string
+	announcements      []game.Announcement
+	challenge          game.Challenge
+	hiddenChallengeRef string
+	flag               string
+	submissions        []game.UserSubmission
+	solves             []game.UserSolve
+	scoreboard         []game.ScoreboardEntry
+	solved             map[int64]bool
+	nextSubmissionID   int64
+	attachment         game.Attachment
+	attachmentPath     string
 }
 
 type testAdminRepo struct {
@@ -148,7 +169,7 @@ func newTestServer(t *testing.T) *Server {
 			AwardedPoints:  100,
 			SolvedAt:       now.Add(5 * time.Minute),
 		}},
-		scoreboard: []game.ScoreboardEntry{{UserID: 1, Username: "alice", DisplayName: "Alice", Score: 100, Solves: []game.ScoreboardSolve{{ChallengeID: 1, ChallengeSlug: "web-welcome", ChallengeTitle: "Welcome Panel", Category: "web", Difficulty: "easy", AwardedPoints: 100, SolvedAt: now}}}},
+		scoreboard:       []game.ScoreboardEntry{{UserID: 1, Username: "alice", DisplayName: "Alice", Score: 100, Solves: []game.ScoreboardSolve{{ChallengeID: 1, ChallengeSlug: "web-welcome", ChallengeTitle: "Welcome Panel", Category: "web", Difficulty: "easy", AwardedPoints: 100, SolvedAt: now}}}},
 		solved:           make(map[int64]bool),
 		nextSubmissionID: 1,
 		attachment:       game.Attachment{ID: 1, Filename: "statement.pdf", ContentType: "application/pdf", SizeBytes: 14},
@@ -253,6 +274,13 @@ func (r *testRuntimeRepo) TerminateInstance(_ context.Context, instanceID int64,
 
 func (r *testRuntimeRepo) ListExpiredInstances(_ context.Context, now time.Time) ([]runtime.InstanceRecord, error) {
 	if r.instance == nil || r.instance.Instance.ExpiresAt.After(now) {
+		return nil, nil
+	}
+	return []runtime.InstanceRecord{*r.instance}, nil
+}
+
+func (r *testRuntimeRepo) ListActiveInstances(context.Context) ([]runtime.InstanceRecord, error) {
+	if r.instance == nil {
 		return nil, nil
 	}
 	return []runtime.InstanceRecord{*r.instance}, nil

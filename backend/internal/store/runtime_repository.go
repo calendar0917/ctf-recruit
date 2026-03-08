@@ -322,6 +322,68 @@ WHERE id = $1
 	return nil
 }
 
+func (r *RuntimeRepository) ListActiveInstances(ctx context.Context) ([]runtime.InstanceRecord, error) {
+	const query = `
+SELECT
+    ci.id,
+    ci.runtime_config_id,
+    ci.challenge_id::text,
+    ci.user_id,
+    ci.status,
+    ci.host_port,
+    ci.renew_count,
+    ci.started_at,
+    ci.expires_at,
+    ci.terminated_at,
+    ci.docker_container_id,
+    ci.docker_container_name,
+    ci.host_ip
+FROM challenge_instances ci
+WHERE ci.status IN ('creating', 'running')
+ORDER BY ci.id ASC
+`
+
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("list active instances: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]runtime.InstanceRecord, 0)
+	for rows.Next() {
+		var (
+			record     runtime.InstanceRecord
+			terminated sql.NullTime
+		)
+		if err := rows.Scan(
+			&record.ID,
+			&record.RuntimeConfigID,
+			&record.Instance.ChallengeID,
+			&record.Instance.UserID,
+			&record.Instance.Status,
+			&record.Instance.HostPort,
+			&record.Instance.RenewCount,
+			&record.Instance.StartedAt,
+			&record.Instance.ExpiresAt,
+			&terminated,
+			&record.Instance.ContainerID,
+			&record.Instance.ContainerName,
+			&record.Instance.HostIP,
+		); err != nil {
+			return nil, fmt.Errorf("scan active instance: %w", err)
+		}
+		if terminated.Valid {
+			t := terminated.Time
+			record.Instance.TerminatedAt = &t
+		}
+		items = append(items, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate active instances: %w", err)
+	}
+	return items, nil
+}
+
 func (r *RuntimeRepository) ListExpiredInstances(ctx context.Context, now time.Time) ([]runtime.InstanceRecord, error) {
 	const query = `
 SELECT

@@ -8,23 +8,59 @@ import (
 )
 
 type fakeManager struct {
-	startCalls int
-	stopCalls  int
+	startCalls       int
+	stopCalls        int
+	containers       map[string]ManagedContainer
+	missingIDs       map[string]bool
+	stoppedIDs       []string
+	listManagedError error
+	existsError      error
 }
 
 func (m *fakeManager) Start(_ context.Context, req StartRequest) (StartedContainer, error) {
 	m.startCalls++
+	containerID := fmt.Sprintf("container-%d", m.startCalls)
+	if m.containers == nil {
+		m.containers = make(map[string]ManagedContainer)
+	}
+	m.containers[containerID] = ManagedContainer{ContainerID: containerID, ChallengeID: req.ChallengeID, UserID: req.UserID}
 	return StartedContainer{
-		ContainerID:   fmt.Sprintf("container-%d", m.startCalls),
+		ContainerID:   containerID,
 		ContainerName: fmt.Sprintf("demo-%d", m.startCalls),
 		HostIP:        "127.0.0.1",
 		HostPort:      18080 + m.startCalls,
 	}, nil
 }
 
-func (m *fakeManager) Stop(_ context.Context, _ string) error {
+func (m *fakeManager) Stop(_ context.Context, containerID string) error {
 	m.stopCalls++
+	m.stoppedIDs = append(m.stoppedIDs, containerID)
+	if m.containers != nil {
+		delete(m.containers, containerID)
+	}
 	return nil
+}
+
+func (m *fakeManager) Exists(_ context.Context, containerID string) (bool, error) {
+	if m.existsError != nil {
+		return false, m.existsError
+	}
+	if m.missingIDs != nil && m.missingIDs[containerID] {
+		return false, nil
+	}
+	_, ok := m.containers[containerID]
+	return ok, nil
+}
+
+func (m *fakeManager) ListManagedContainers(_ context.Context) ([]ManagedContainer, error) {
+	if m.listManagedError != nil {
+		return nil, m.listManagedError
+	}
+	items := make([]ManagedContainer, 0, len(m.containers))
+	for _, item := range m.containers {
+		items = append(items, item)
+	}
+	return items, nil
 }
 
 type fakeRepository struct {
@@ -128,6 +164,14 @@ func (r *fakeRepository) ListExpiredInstances(_ context.Context, now time.Time) 
 		if !item.Instance.ExpiresAt.After(now) {
 			items = append(items, item)
 		}
+	}
+	return items, nil
+}
+
+func (r *fakeRepository) ListActiveInstances(context.Context) ([]InstanceRecord, error) {
+	items := make([]InstanceRecord, 0, len(r.active))
+	for _, item := range r.active {
+		items = append(items, item)
 	}
 	return items, nil
 }
@@ -258,13 +302,62 @@ func TestDeleteInstanceStopsContainerAndRemovesRecord(t *testing.T) {
 	if deleted.TerminatedAt == nil {
 		t.Fatalf("expected terminated timestamp to be set")
 	}
-	if deleted.ContainerID != instance.ContainerID {
-		t.Fatalf("expected deleted instance to reference original container")
-	}
 	if manager.stopCalls != 1 {
-		t.Fatalf("expected one runtime stop call, got %d", manager.stopCalls)
+		t.Fatalf("expected one stop call, got %d", manager.stopCalls)
+	}
+	if deleted.ContainerID != instance.ContainerID {
+		t.Fatalf("expected same container id, got %s", deleted.ContainerID)
+	}
+}
+
+func TestReconcileTerminatesMissingDatabaseRecords(t *testing.T) {
+	manager := &fakeManager{missingIDs: map[string]bool{"container-1": true}}
+	repo := newFakeRepository()
+	service := NewService("http://localhost:8080", manager, repo)
+	service.now = func() time.Time { return time.Date(2025, time.March, 8, 9, 0, 0, 0, time.UTC) }
+
+	if _, _, err := service.StartInstance(context.Background(), 7, "1"); err != nil {
+		t.Fatalf("start instance: %v", err)
+	}
+
+	report, err := service.Reconcile(context.Background())
+	if err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	if report.TerminatedRecords != 1 {
+		t.Fatalf("expected one terminated record, got %d", report.TerminatedRecords)
+	}
+	if report.RemovedContainers != 0 {
+		t.Fatalf("expected zero removed containers, got %d", report.RemovedContainers)
 	}
 	if _, err := service.GetInstance(context.Background(), 7, "1"); err != ErrInstanceNotFound {
-		t.Fatalf("expected instance to be removed after delete, got %v", err)
+		t.Fatalf("expected missing instance after reconcile, got %v", err)
+	}
+}
+
+func TestReconcileStopsOrphanManagedContainers(t *testing.T) {
+	manager := &fakeManager{
+		containers: map[string]ManagedContainer{
+			"orphan-1": {ContainerID: "orphan-1", ChallengeID: "1", UserID: 77},
+		},
+	}
+	repo := newFakeRepository()
+	service := NewService("http://localhost:8080", manager, repo)
+
+	report, err := service.Reconcile(context.Background())
+	if err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	if report.TerminatedRecords != 0 {
+		t.Fatalf("expected zero terminated records, got %d", report.TerminatedRecords)
+	}
+	if report.RemovedContainers != 1 {
+		t.Fatalf("expected one removed container, got %d", report.RemovedContainers)
+	}
+	if manager.stopCalls != 1 {
+		t.Fatalf("expected one stop call, got %d", manager.stopCalls)
+	}
+	if len(manager.stoppedIDs) != 1 || manager.stoppedIDs[0] != "orphan-1" {
+		t.Fatalf("expected orphan container to be stopped, got %#v", manager.stoppedIDs)
 	}
 }
