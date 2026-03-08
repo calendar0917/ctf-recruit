@@ -38,6 +38,10 @@ type Server struct {
 }
 
 func NewServer(cfg config.Config) (*Server, error) {
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+
 	db, err := store.Open(cfg.DatabaseURL)
 	if err != nil {
 		return nil, err

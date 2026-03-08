@@ -15,6 +15,13 @@
 - 当前 Compose 仍然是开发态：源码挂载、`go run`、Vite dev server
 - 这适合本地开发和联调，不适合作为正式比赛的最终部署形态
 
+## 开发环境约束
+
+- `APP_ENV` 固定为 `development`
+- `JWT_SECRET` 使用开发占位值 `dev-only-insecure-jwt-secret`
+- 这个占位值只允许在开发环境使用；一旦切到非 `development` 环境，API 启动会直接失败
+- 默认迁移不再自动创建管理员；如需本地默认账号，需要额外执行 `scripts/dev-seed.sh`
+
 ## 目标生产形态
 
 比赛前的目标部署应至少包含：

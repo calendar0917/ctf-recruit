@@ -3,7 +3,8 @@
 当前核心数据结构定义以实际迁移文件为准：
 
 - [0001_initial_schema.sql](/home/calendar/code/ctf/backend/migrations/0001_initial_schema.sql)
-- 后续种子与演进迁移位于 [backend/migrations](/home/calendar/code/ctf/backend/migrations)
+- 后续结构与公开示例迁移位于 [backend/migrations](/home/calendar/code/ctf/backend/migrations)
+- 开发态默认管理员种子已迁移到 [scripts/dev-seed.sh](/home/calendar/code/ctf/scripts/dev-seed.sh)，不再属于默认初始化必经路径
 
 ## 核心实体
 

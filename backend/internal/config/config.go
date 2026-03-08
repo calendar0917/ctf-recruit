@@ -1,9 +1,17 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
+)
+
+const (
+	developmentEnv         = "development"
+	defaultDevJWTSecret    = "dev-only-insecure-jwt-secret"
+	legacyDefaultJWTSecret = "change-me"
 )
 
 type Config struct {
@@ -23,9 +31,9 @@ type Config struct {
 func Load() Config {
 	return Config{
 		HTTPAddr:                    getEnv("HTTP_ADDR", ":8080"),
-		AppEnv:                      getEnv("APP_ENV", "development"),
+		AppEnv:                      getEnv("APP_ENV", developmentEnv),
 		DatabaseURL:                 getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/ctf?sslmode=disable"),
-		JWTSecret:                   getEnv("JWT_SECRET", "change-me"),
+		JWTSecret:                   getEnv("JWT_SECRET", defaultDevJWTSecret),
 		JWTTTL:                      getDurationEnv("JWT_TTL", 24*time.Hour),
 		InstanceSweeperPollInterval: getEnv("INSTANCE_SWEEPER_POLL_INTERVAL", "30s"),
 		DockerSocketPath:            getEnv("DOCKER_SOCKET_PATH", "/var/run/docker.sock"),
@@ -34,6 +42,33 @@ func Load() Config {
 		SubmissionRateLimitWindow:   getDurationEnv("SUBMISSION_RATE_LIMIT_WINDOW", time.Minute),
 		SubmissionRateLimitMax:      getIntEnv("SUBMISSION_RATE_LIMIT_MAX", 10),
 	}
+}
+
+func (c Config) Validate() error {
+	if c.IsDevelopment() {
+		return nil
+	}
+
+	secret := strings.TrimSpace(c.JWTSecret)
+	if secret == "" {
+		return fmt.Errorf("JWT_SECRET must be set when APP_ENV=%s", normalizeAppEnv(c.AppEnv))
+	}
+	if secret == defaultDevJWTSecret || secret == legacyDefaultJWTSecret {
+		return fmt.Errorf("JWT_SECRET must not use a development default when APP_ENV=%s", normalizeAppEnv(c.AppEnv))
+	}
+	return nil
+}
+
+func (c Config) IsDevelopment() bool {
+	return normalizeAppEnv(c.AppEnv) == developmentEnv
+}
+
+func normalizeAppEnv(value string) string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	if normalized == "" {
+		return developmentEnv
+	}
+	return normalized
 }
 
 func getEnv(key, fallback string) string {

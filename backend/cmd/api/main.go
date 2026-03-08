@@ -15,6 +15,10 @@ import (
 
 func main() {
 	cfg := config.Load()
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("invalid config: %v", err)
+	}
+
 	server, err := app.NewServer(cfg)
 	if err != nil {
 		log.Fatalf("create server: %v", err)

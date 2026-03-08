@@ -80,17 +80,24 @@ cd frontend && pnpm install && pnpm dev
 docker compose -f deploy/docker-compose.yml up postgres redis api
 ```
 
-初始化数据库：
+初始化数据库结构与公开示例数据：
 
 ```bash
 export DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/ctf?sslmode=disable'
-for f in backend/migrations/*.sql; do
-  psql "$DATABASE_URL" -f "$f"
-done
+scripts/apply-migrations.sh
+```
+
+如需本地开发默认管理员账号，再显式执行开发 seed：
+
+```bash
+export DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/ctf?sslmode=disable'
+scripts/dev-seed.sh
 ```
 
 说明：
 
-- 默认管理员种子账号依赖完整执行全部迁移
+- `scripts/apply-migrations.sh` 不再创建默认管理员账号，避免生产式初始化路径自动带出已知口令
+- `scripts/dev-seed.sh` 仅用于本地开发，会创建 `admin@ctf.local / Admin123!`
+- API 在非 `development` 环境下会拒绝空值、`change-me` 和开发态默认 `JWT_SECRET`
 - `deploy/docker-compose.yml` 当前是开发环境，不是最终生产部署形态
 - 接下来的开发优先级以 [开发基线与升级路线](docs/development-baseline.md) 为准

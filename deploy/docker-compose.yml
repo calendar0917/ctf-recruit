@@ -23,7 +23,8 @@ services:
       HTTP_ADDR: ":8080"
       APP_ENV: development
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/ctf?sslmode=disable
-      JWT_SECRET: change-me
+      # Development-only placeholder. Non-development APP_ENV values now reject this.
+      JWT_SECRET: dev-only-insecure-jwt-secret
       INSTANCE_SWEEPER_POLL_INTERVAL: 30s
       DOCKER_SOCKET_PATH: /var/run/docker.sock
       PUBLIC_BASE_URL: http://localhost:8080

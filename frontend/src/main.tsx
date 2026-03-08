@@ -366,7 +366,7 @@ function App(): React.JSX.Element {
   const [authBusy, setAuthBusy] = useState(false)
   const [authNotice, setAuthNotice] = useState<Notice | null>(null)
   const [authUser, setAuthUser] = useState<AuthUser | null>(null)
-  const [loginForm, setLoginForm] = useState({ identifier: 'admin@ctf.local', password: 'Admin123!' })
+  const [loginForm, setLoginForm] = useState({ identifier: '', password: '' })
   const [registerForm, setRegisterForm] = useState({
     username: '',
     email: '',
@@ -1356,7 +1356,7 @@ function App(): React.JSX.Element {
                       <span>邮箱或用户名</span>
                       <input
                         onChange={(event) => setLoginForm((current) => ({ ...current, identifier: event.target.value }))}
-                        placeholder="admin@ctf.local"
+                        placeholder="输入邮箱或用户名"
                         value={loginForm.identifier}
                       />
                     </label>
@@ -1364,7 +1364,7 @@ function App(): React.JSX.Element {
                       <span>密码</span>
                       <input
                         onChange={(event) => setLoginForm((current) => ({ ...current, password: event.target.value }))}
-                        placeholder="Admin123!"
+                        placeholder="输入登录密码"
                         type="password"
                         value={loginForm.password}
                       />
