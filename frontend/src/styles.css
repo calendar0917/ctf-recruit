@@ -548,7 +548,7 @@ pre {
 .live-pill {
   border-radius: 999px;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.48);
+  background: rgba(255, 255, 255, 0.54);
   cursor: pointer;
   transition:
     transform 180ms ease,
@@ -561,8 +561,15 @@ pre {
 
 .nav-pill,
 .tab-pill {
-  padding: 11px 14px;
+  padding: 10px 14px;
   text-align: left;
+}
+
+.nav-pill,
+.tab-pill,
+.badge,
+.toggle-field {
+  backdrop-filter: blur(12px);
 }
 
 .nav-pill span,
@@ -616,6 +623,13 @@ pre {
   border-color: rgba(18, 68, 123, 0.88);
   background: linear-gradient(180deg, rgba(18, 68, 123, 0.98), rgba(14, 48, 90, 0.96));
   box-shadow: 0 14px 32px rgba(16, 41, 71, 0.18);
+}
+
+.nav-pill:not(.active),
+.tab-pill:not(.active) {
+  color: var(--ink-soft);
+  border-color: rgba(18, 68, 123, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(232, 241, 247, 0.78));
 }
 
 .ghost-button {
@@ -1182,7 +1196,7 @@ a.link-button[aria-disabled="true"] {
 .challenge-card,
 .accordion-head {
   width: 100%;
-  padding: 12px 14px;
+  padding: 13px 14px;
   text-align: left;
   cursor: pointer;
 }
@@ -1223,7 +1237,7 @@ a.link-button[aria-disabled="true"] {
 
 .challenge-card {
   display: grid;
-  gap: 8px;
+  gap: 10px;
   position: relative;
   overflow: hidden;
 }
@@ -1257,6 +1271,35 @@ a.link-button[aria-disabled="true"] {
     radial-gradient(circle at 0% 100%, rgba(152, 179, 201, 0.18), transparent 42%),
     linear-gradient(180deg, rgba(18, 68, 123, 0.98), rgba(14, 48, 90, 0.95));
   color: #f8f1e5;
+}
+
+.challenge-card:not(.active),
+.category-summary-card:not(.active),
+.scoreboard-entry,
+.scoreboard-solve-row,
+.entry-card,
+.table-row,
+.runtime-metric,
+.compact-subpanel,
+.statement-card-feature,
+.leader-mini-row {
+  position: relative;
+}
+
+.challenge-card:not(.active)::after,
+.category-summary-card:not(.active)::after,
+.scoreboard-entry::after,
+.runtime-metric::after,
+.compact-subpanel::after,
+.entry-card::after,
+.table-row::after,
+.leader-mini-row::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  border: 1px solid rgba(255, 255, 255, 0.32);
 }
 
 
@@ -1393,6 +1436,7 @@ a.link-button[aria-disabled="true"] {
 .runtime-metric {
   display: grid;
   gap: 8px;
+  min-height: 100%;
 }
 
 .field,
@@ -1429,8 +1473,8 @@ a.link-button[aria-disabled="true"] {
   align-items: center;
   padding: 12px 14px;
   border-radius: var(--radius-md);
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(18, 68, 123, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.74), rgba(232, 241, 247, 0.78));
 }
 
 .wide-field {
@@ -1495,15 +1539,80 @@ a.link-button[aria-disabled="true"] {
 
 .scoreboard-entry {
   padding: 18px;
+  background:
+    linear-gradient(180deg, rgba(252, 254, 255, 0.98), rgba(231, 240, 247, 0.92));
 }
 
 .scoreboard-topline {
   justify-content: space-between;
   align-items: flex-start;
+  gap: 18px;
 }
 
 .scoreboard-identity {
   align-items: flex-start;
+}
+
+.scoreboard-identity strong:first-child {
+  color: var(--forest);
+  font-size: 1.26rem;
+  line-height: 1;
+}
+
+.scoreboard-solve-row {
+  padding: 14px 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.76), rgba(236, 244, 249, 0.84));
+}
+
+.scoreboard-solve-row .badge-row {
+  justify-content: flex-end;
+}
+
+.challenge-rail-panel,
+.rail-panel {
+  background:
+    linear-gradient(180deg, rgba(250, 253, 255, 0.96), rgba(229, 239, 246, 0.88));
+}
+
+.rail-panel .panel-head,
+.challenge-detail-panel .panel-head,
+.runtime-control-panel .panel-head,
+.scoreboard-layout .panel-head,
+.admin-column-layout .panel-head {
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(18, 68, 123, 0.08);
+}
+
+.challenge-desk > .rail-panel,
+.workspace-grid > .rail-panel,
+.admin-grid > .rail-panel {
+  box-shadow: 0 18px 42px rgba(16, 41, 71, 0.08);
+}
+
+.card-list.scoreboard-card-list,
+.table-stack,
+.audit-list,
+.archive-notice-list {
+  gap: 14px;
+}
+
+.entry-card,
+.row-card,
+.table-row,
+.runtime-quick-card,
+.runtime-metric,
+.scoreboard-entry,
+.scoreboard-solve-row {
+  overflow: hidden;
+}
+
+.entry-card p,
+.row-card,
+.table-row,
+.runtime-metric,
+.scoreboard-solve-row,
+.leader-mini-row {
+  color: var(--ink-soft);
 }
 
 .scoreboard-identity > div {
