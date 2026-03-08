@@ -48,6 +48,7 @@ func newFakeRepository() *fakeRepository {
 				ExposedProtocol: "http",
 				ContainerPort:   80,
 				TTL:             30 * time.Minute,
+				MaxRenewCount:   2,
 				MemoryLimitMB:   256,
 				CPUMilli:        500,
 			},
@@ -97,6 +98,18 @@ func (r *fakeRepository) CreateInstance(_ context.Context, runtimeConfigID int64
 	return record, nil
 }
 
+func (r *fakeRepository) RenewInstance(_ context.Context, instanceID int64, expiresAt time.Time) (InstanceRecord, error) {
+	for key, item := range r.active {
+		if item.ID == instanceID {
+			item.Instance.RenewCount++
+			item.Instance.ExpiresAt = expiresAt
+			r.active[key] = item
+			return item, nil
+		}
+	}
+	return InstanceRecord{}, ErrRepositoryNotFound
+}
+
 func (r *fakeRepository) TerminateInstance(_ context.Context, instanceID int64, terminatedAt time.Time) error {
 	for key, item := range r.active {
 		if item.ID == instanceID {
@@ -144,6 +157,49 @@ func TestStartInstanceIsIdempotentPerUserAndChallenge(t *testing.T) {
 	}
 	if first.ContainerID != second.ContainerID {
 		t.Fatalf("expected same instance to be returned")
+	}
+}
+
+func TestRenewInstanceExtendsExpiryAndCountsRenewals(t *testing.T) {
+	manager := &fakeManager{}
+	repo := newFakeRepository()
+	service := NewService("http://localhost:8080", manager, repo)
+	baseTime := time.Date(2025, time.March, 8, 9, 0, 0, 0, time.UTC)
+	service.now = func() time.Time { return baseTime }
+
+	instance, created, err := service.StartInstance(context.Background(), 7, "1")
+	if err != nil {
+		t.Fatalf("start instance: %v", err)
+	}
+	if !created {
+		t.Fatalf("expected instance to be created")
+	}
+
+	renewed, err := service.RenewInstance(context.Background(), 7, "web-welcome")
+	if err != nil {
+		t.Fatalf("renew instance: %v", err)
+	}
+	if renewed.RenewCount != 1 {
+		t.Fatalf("expected renew count 1, got %d", renewed.RenewCount)
+	}
+	wantExpiry := instance.ExpiresAt.Add(repo.challenge.Challenge.TTL)
+	if !renewed.ExpiresAt.Equal(wantExpiry) {
+		t.Fatalf("expected expiry %s, got %s", wantExpiry, renewed.ExpiresAt)
+	}
+}
+
+func TestRenewInstanceFailsWhenRenewLimitReached(t *testing.T) {
+	manager := &fakeManager{}
+	repo := newFakeRepository()
+	repo.challenge.Challenge.MaxRenewCount = 0
+	service := NewService("http://localhost:8080", manager, repo)
+	service.now = func() time.Time { return time.Date(2025, time.March, 8, 9, 0, 0, 0, time.UTC) }
+
+	if _, _, err := service.StartInstance(context.Background(), 7, "1"); err != nil {
+		t.Fatalf("start instance: %v", err)
+	}
+	if _, err := service.RenewInstance(context.Background(), 7, "1"); err != ErrInstanceRenewLimitReached {
+		t.Fatalf("expected renew limit error, got %v", err)
 	}
 }
 

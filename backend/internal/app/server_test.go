@@ -46,6 +46,8 @@ type testGameRepo struct {
 	announcements    []game.Announcement
 	challenge        game.Challenge
 	flag             string
+	submissions      []game.UserSubmission
+	solves           []game.UserSolve
 	scoreboard       []game.ScoreboardEntry
 	solved           map[int64]bool
 	nextSubmissionID int64
@@ -75,6 +77,7 @@ func newTestServer(t *testing.T) *Server {
 				ExposedProtocol: "http",
 				ContainerPort:   80,
 				TTL:             30 * time.Minute,
+				MaxRenewCount:   1,
 				MemoryLimitMB:   256,
 				CPUMilli:        500,
 			},
@@ -85,6 +88,7 @@ func newTestServer(t *testing.T) *Server {
 		identifier: make(map[string]int64),
 		nextID:     1,
 	}
+	now := time.Date(2025, time.March, 8, 9, 0, 0, 0, time.UTC)
 	gameRepo := &testGameRepo{
 		announcements: []game.Announcement{{ID: 1, Title: "Welcome", Content: "Hello", Pinned: true}},
 		challenge: game.Challenge{
@@ -97,7 +101,27 @@ func newTestServer(t *testing.T) *Server {
 			Description: "demo",
 			Dynamic:     true,
 		},
-		flag:             "flag{welcome}",
+		flag: "flag{welcome}",
+		submissions: []game.UserSubmission{{
+			ID:             1,
+			ChallengeID:    1,
+			ChallengeSlug:  "web-welcome",
+			ChallengeTitle: "Welcome Panel",
+			Category:       "web",
+			Correct:        true,
+			SubmittedAt:    now,
+			SourceIP:       "127.0.0.1",
+		}},
+		solves: []game.UserSolve{{
+			ID:             1,
+			ChallengeID:    1,
+			ChallengeSlug:  "web-welcome",
+			ChallengeTitle: "Welcome Panel",
+			Category:       "web",
+			SubmissionID:   1,
+			AwardedPoints:  100,
+			SolvedAt:       now.Add(5 * time.Minute),
+		}},
 		scoreboard:       []game.ScoreboardEntry{{UserID: 1, Username: "alice", DisplayName: "Alice", Score: 100}},
 		solved:           make(map[int64]bool),
 		nextSubmissionID: 1,
@@ -141,6 +165,15 @@ func (r *testRuntimeRepo) CreateInstance(_ context.Context, runtimeConfigID int6
 	record := runtime.InstanceRecord{ID: 1, RuntimeConfigID: runtimeConfigID, Instance: instance}
 	r.instance = &record
 	return record, nil
+}
+
+func (r *testRuntimeRepo) RenewInstance(_ context.Context, instanceID int64, expiresAt time.Time) (runtime.InstanceRecord, error) {
+	if r.instance == nil || r.instance.ID != instanceID {
+		return runtime.InstanceRecord{}, runtime.ErrRepositoryNotFound
+	}
+	r.instance.Instance.RenewCount++
+	r.instance.Instance.ExpiresAt = expiresAt
+	return *r.instance, nil
 }
 
 func (r *testRuntimeRepo) TerminateInstance(_ context.Context, instanceID int64, _ time.Time) error {
@@ -209,6 +242,14 @@ func (r *testGameRepo) CreateSolve(_ context.Context, _ int64, userID int64, _ i
 	r.solved[userID] = true
 	now := time.Now().UTC()
 	return now, nil
+}
+
+func (r *testGameRepo) ListUserSubmissions(_ context.Context, _ int64) ([]game.UserSubmission, error) {
+	return r.submissions, nil
+}
+
+func (r *testGameRepo) ListUserSolves(_ context.Context, _ int64) ([]game.UserSolve, error) {
+	return r.solves, nil
 }
 
 func (r *testGameRepo) ListScoreboard(context.Context) ([]game.ScoreboardEntry, error) {
@@ -284,6 +325,48 @@ func TestRegisterThenAccessMe(t *testing.T) {
 	}
 }
 
+func TestMySubmissionsEndpoint(t *testing.T) {
+	server := newTestServer(t)
+	token := registerTestUser(t, server)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/me/submissions", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	res := httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.Code)
+	}
+	var payload struct {
+		Items []game.UserSubmission `json:"items"`
+	}
+	if err := json.Unmarshal(res.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode submissions response: %v", err)
+	}
+	if len(payload.Items) != 1 || payload.Items[0].ChallengeSlug != "web-welcome" {
+		t.Fatalf("unexpected submissions payload: %+v", payload.Items)
+	}
+}
+
+func TestMySolvesEndpoint(t *testing.T) {
+	server := newTestServer(t)
+	token := registerTestUser(t, server)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/me/solves", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	res := httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.Code)
+	}
+	var payload struct {
+		Items []game.UserSolve `json:"items"`
+	}
+	if err := json.Unmarshal(res.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode solves response: %v", err)
+	}
+	if len(payload.Items) != 1 || payload.Items[0].AwardedPoints != 100 {
+		t.Fatalf("unexpected solves payload: %+v", payload.Items)
+	}
+}
+
 func TestChallengeDetailEndpoint(t *testing.T) {
 	server := newTestServer(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/challenges/1", nil)
@@ -305,6 +388,63 @@ func TestSubmitFlagEndpoint(t *testing.T) {
 	server.Handler().ServeHTTP(res, req)
 	if res.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.Code)
+	}
+}
+
+func TestRenewInstanceEndpoint(t *testing.T) {
+	server := newTestServer(t)
+	token := registerTestUser(t, server)
+
+	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/challenges/1/instances/me", nil)
+	createReq.Header.Set("Authorization", "Bearer "+token)
+	createRes := httptest.NewRecorder()
+	server.Handler().ServeHTTP(createRes, createReq)
+	if createRes.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", createRes.Code)
+	}
+
+	renewReq := httptest.NewRequest(http.MethodPost, "/api/v1/challenges/1/instances/me/renew", nil)
+	renewReq.Header.Set("Authorization", "Bearer "+token)
+	renewRes := httptest.NewRecorder()
+	server.Handler().ServeHTTP(renewRes, renewReq)
+	if renewRes.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", renewRes.Code)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(renewRes.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode renew response: %v", err)
+	}
+	if value, ok := payload["renew_count"].(float64); !ok || value != 1 {
+		t.Fatalf("expected renew_count=1, got %#v", payload["renew_count"])
+	}
+}
+
+func TestRenewInstanceEndpointRejectsLimitReached(t *testing.T) {
+	server := newTestServer(t)
+	token := registerTestUser(t, server)
+
+	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/challenges/1/instances/me", nil)
+	createReq.Header.Set("Authorization", "Bearer "+token)
+	createRes := httptest.NewRecorder()
+	server.Handler().ServeHTTP(createRes, createReq)
+	if createRes.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", createRes.Code)
+	}
+
+	firstRenewReq := httptest.NewRequest(http.MethodPost, "/api/v1/challenges/1/instances/me/renew", nil)
+	firstRenewReq.Header.Set("Authorization", "Bearer "+token)
+	firstRenewRes := httptest.NewRecorder()
+	server.Handler().ServeHTTP(firstRenewRes, firstRenewReq)
+	if firstRenewRes.Code != http.StatusOK {
+		t.Fatalf("expected first renew 200, got %d", firstRenewRes.Code)
+	}
+
+	secondRenewReq := httptest.NewRequest(http.MethodPost, "/api/v1/challenges/1/instances/me/renew", nil)
+	secondRenewReq.Header.Set("Authorization", "Bearer "+token)
+	secondRenewRes := httptest.NewRecorder()
+	server.Handler().ServeHTTP(secondRenewRes, secondRenewReq)
+	if secondRenewRes.Code != http.StatusConflict {
+		t.Fatalf("expected second renew 409, got %d", secondRenewRes.Code)
 	}
 }
 

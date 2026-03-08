@@ -24,6 +24,7 @@ func (r *RuntimeRepository) ListChallenges(ctx context.Context) ([]runtime.Chall
 SELECT c.id::text, c.slug, c.title, cat.slug, c.points, c.dynamic_enabled
 FROM challenges c
 JOIN categories cat ON cat.id = c.category_id
+WHERE c.visible = TRUE
 ORDER BY c.id ASC
 `
 
@@ -61,6 +62,7 @@ SELECT
     rc.exposed_protocol,
     rc.container_port,
     rc.default_ttl_seconds,
+    rc.max_renew_count,
     rc.memory_limit_mb,
     rc.cpu_limit_millicores,
     COALESCE(rc.env_json, '{}'::jsonb),
@@ -68,7 +70,7 @@ SELECT
 FROM challenges c
 JOIN categories cat ON cat.id = c.category_id
 LEFT JOIN challenge_runtime_configs rc ON rc.challenge_id = c.id AND rc.enabled = TRUE
-WHERE c.id::text = $1 OR lower(c.slug) = lower($1)
+WHERE c.visible = TRUE AND (c.id::text = $1 OR lower(c.slug) = lower($1))
 LIMIT 1
 `
 
@@ -84,6 +86,7 @@ LIMIT 1
 		exposedProtocol sql.NullString
 		containerPort   sql.NullInt32
 		defaultTTL      sql.NullInt32
+		maxRenewCount   sql.NullInt32
 		memoryLimitMB   sql.NullInt32
 		cpuLimitMilli   sql.NullInt32
 		envJSON         []byte
@@ -102,6 +105,7 @@ LIMIT 1
 		&exposedProtocol,
 		&containerPort,
 		&defaultTTL,
+		&maxRenewCount,
 		&memoryLimitMB,
 		&cpuLimitMilli,
 		&envJSON,
@@ -128,6 +132,7 @@ LIMIT 1
 		cfg.ExposedProtocol = exposedProtocol.String
 		cfg.ContainerPort = int(containerPort.Int32)
 		cfg.TTL = time.Duration(defaultTTL.Int32) * time.Second
+		cfg.MaxRenewCount = int(maxRenewCount.Int32)
 		cfg.MemoryLimitMB = int(memoryLimitMB.Int32)
 		cfg.CPUMilli = int(cpuLimitMilli.Int32)
 	}
@@ -159,6 +164,7 @@ SELECT
     ci.user_id,
     ci.status,
     ci.host_port,
+    ci.renew_count,
     ci.started_at,
     ci.expires_at,
     ci.terminated_at,
@@ -182,6 +188,7 @@ LIMIT 1
 		&record.Instance.UserID,
 		&record.Instance.Status,
 		&record.Instance.HostPort,
+		&record.Instance.RenewCount,
 		&record.Instance.StartedAt,
 		&record.Instance.ExpiresAt,
 		&terminated,
@@ -214,9 +221,10 @@ INSERT INTO challenge_instances (
     host_ip,
     host_port,
     status,
+    renew_count,
     started_at,
     expires_at
-) VALUES ($1::bigint, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+) VALUES ($1::bigint, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 RETURNING id
 `
 
@@ -230,6 +238,7 @@ RETURNING id
 		instance.HostIP,
 		instance.HostPort,
 		instance.Status,
+		instance.RenewCount,
 		instance.StartedAt,
 		instance.ExpiresAt,
 	).Scan(&id)
@@ -242,6 +251,58 @@ RETURNING id
 		RuntimeConfigID: runtimeConfigID,
 		Instance:        instance,
 	}, nil
+}
+
+func (r *RuntimeRepository) RenewInstance(ctx context.Context, instanceID int64, expiresAt time.Time) (runtime.InstanceRecord, error) {
+	const query = `
+UPDATE challenge_instances ci
+SET renew_count = ci.renew_count + 1, expires_at = $2, updated_at = NOW()
+WHERE ci.id = $1 AND ci.status IN ('creating', 'running')
+RETURNING
+    ci.id,
+    ci.runtime_config_id,
+    ci.challenge_id::text,
+    ci.user_id,
+    ci.status,
+    ci.host_port,
+    ci.renew_count,
+    ci.started_at,
+    ci.expires_at,
+    ci.terminated_at,
+    ci.docker_container_id,
+    ci.docker_container_name,
+    ci.host_ip
+`
+
+	var (
+		record     runtime.InstanceRecord
+		terminated sql.NullTime
+	)
+	if err := r.db.QueryRowContext(ctx, query, instanceID, expiresAt).Scan(
+		&record.ID,
+		&record.RuntimeConfigID,
+		&record.Instance.ChallengeID,
+		&record.Instance.UserID,
+		&record.Instance.Status,
+		&record.Instance.HostPort,
+		&record.Instance.RenewCount,
+		&record.Instance.StartedAt,
+		&record.Instance.ExpiresAt,
+		&terminated,
+		&record.Instance.ContainerID,
+		&record.Instance.ContainerName,
+		&record.Instance.HostIP,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return runtime.InstanceRecord{}, runtime.ErrRepositoryNotFound
+		}
+		return runtime.InstanceRecord{}, fmt.Errorf("renew instance: %w", err)
+	}
+	if terminated.Valid {
+		t := terminated.Time
+		record.Instance.TerminatedAt = &t
+	}
+	return record, nil
 }
 
 func (r *RuntimeRepository) TerminateInstance(ctx context.Context, instanceID int64, terminatedAt time.Time) error {
@@ -270,6 +331,7 @@ SELECT
     ci.user_id,
     ci.status,
     ci.host_port,
+    ci.renew_count,
     ci.started_at,
     ci.expires_at,
     ci.terminated_at,
@@ -300,6 +362,7 @@ ORDER BY ci.expires_at ASC
 			&record.Instance.UserID,
 			&record.Instance.Status,
 			&record.Instance.HostPort,
+			&record.Instance.RenewCount,
 			&record.Instance.StartedAt,
 			&record.Instance.ExpiresAt,
 			&terminated,

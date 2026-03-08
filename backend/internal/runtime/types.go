@@ -7,11 +7,12 @@ import (
 )
 
 var (
-	ErrChallengeNotFound    = errors.New("challenge not found")
-	ErrChallengeNotDynamic  = errors.New("challenge is not dynamic")
-	ErrRuntimeConfigMissing = errors.New("runtime config missing")
-	ErrInstanceNotFound     = errors.New("instance not found")
-	ErrRepositoryNotFound   = errors.New("repository record not found")
+	ErrChallengeNotFound         = errors.New("challenge not found")
+	ErrChallengeNotDynamic       = errors.New("challenge is not dynamic")
+	ErrRuntimeConfigMissing      = errors.New("runtime config missing")
+	ErrInstanceNotFound          = errors.New("instance not found")
+	ErrInstanceRenewLimitReached = errors.New("instance renew limit reached")
+	ErrRepositoryNotFound        = errors.New("repository record not found")
 )
 
 type ChallengeConfig struct {
@@ -25,6 +26,7 @@ type ChallengeConfig struct {
 	ExposedProtocol string
 	ContainerPort   int
 	TTL             time.Duration
+	MaxRenewCount   int
 	MemoryLimitMB   int
 	CPUMilli        int
 	Env             map[string]string
@@ -46,6 +48,7 @@ type Instance struct {
 	Status        string     `json:"status"`
 	AccessURL     string     `json:"access_url,omitempty"`
 	HostPort      int        `json:"host_port,omitempty"`
+	RenewCount    int        `json:"renew_count"`
 	StartedAt     time.Time  `json:"started_at"`
 	ExpiresAt     time.Time  `json:"expires_at"`
 	TerminatedAt  *time.Time `json:"terminated_at,omitempty"`
@@ -70,6 +73,7 @@ type Repository interface {
 	GetChallengeConfig(context.Context, string) (RuntimeConfigRecord, error)
 	GetActiveInstance(context.Context, int64, string) (InstanceRecord, error)
 	CreateInstance(context.Context, int64, Instance) (InstanceRecord, error)
+	RenewInstance(context.Context, int64, time.Time) (InstanceRecord, error)
 	TerminateInstance(context.Context, int64, time.Time) error
 	ListExpiredInstances(context.Context, time.Time) ([]InstanceRecord, error)
 }

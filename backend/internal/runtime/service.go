@@ -75,6 +75,7 @@ func (s *Service) StartInstance(ctx context.Context, userID int64, challengeRef 
 		Status:        "running",
 		AccessURL:     buildAccessURL(cfg.ExposedProtocol, s.publicBaseURL, started.HostPort),
 		HostPort:      started.HostPort,
+		RenewCount:    0,
 		StartedAt:     now,
 		ExpiresAt:     now.Add(cfg.TTL),
 		ContainerID:   started.ContainerID,
@@ -120,6 +121,53 @@ func (s *Service) GetInstance(ctx context.Context, userID int64, challengeRef st
 	}
 	instanceRecord.Instance.AccessURL = buildAccessURL(cfg.ExposedProtocol, s.publicBaseURL, instanceRecord.Instance.HostPort)
 	return instanceRecord.Instance, nil
+}
+
+func (s *Service) RenewInstance(ctx context.Context, userID int64, challengeRef string) (Instance, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	record, err := s.repo.GetChallengeConfig(ctx, challengeRef)
+	if err != nil {
+		if errors.Is(err, ErrRepositoryNotFound) {
+			return Instance{}, ErrChallengeNotFound
+		}
+		return Instance{}, err
+	}
+
+	cfg := record.Challenge
+	if !cfg.Dynamic {
+		return Instance{}, ErrChallengeNotDynamic
+	}
+	if record.ID == 0 || cfg.ImageName == "" || cfg.ContainerPort == 0 {
+		return Instance{}, ErrRuntimeConfigMissing
+	}
+
+	instanceRecord, err := s.repo.GetActiveInstance(ctx, userID, cfg.ID)
+	if err != nil {
+		if errors.Is(err, ErrRepositoryNotFound) {
+			return Instance{}, ErrInstanceNotFound
+		}
+		return Instance{}, err
+	}
+	if instanceRecord.Instance.RenewCount >= cfg.MaxRenewCount {
+		return Instance{}, ErrInstanceRenewLimitReached
+	}
+
+	now := s.now().UTC()
+	base := instanceRecord.Instance.ExpiresAt.UTC()
+	if base.Before(now) {
+		base = now
+	}
+	updated, err := s.repo.RenewInstance(ctx, instanceRecord.ID, base.Add(cfg.TTL))
+	if err != nil {
+		if errors.Is(err, ErrRepositoryNotFound) {
+			return Instance{}, ErrInstanceNotFound
+		}
+		return Instance{}, err
+	}
+	updated.Instance.AccessURL = buildAccessURL(cfg.ExposedProtocol, s.publicBaseURL, updated.Instance.HostPort)
+	return updated.Instance, nil
 }
 
 func (s *Service) DeleteInstance(ctx context.Context, userID int64, challengeRef string) (Instance, error) {

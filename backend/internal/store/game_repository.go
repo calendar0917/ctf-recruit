@@ -157,6 +157,84 @@ RETURNING solved_at
 	return solvedAt, nil
 }
 
+func (r *GameRepository) ListUserSubmissions(ctx context.Context, userID int64) ([]game.UserSubmission, error) {
+	const query = `
+SELECT s.id, c.id, c.slug, c.title, cat.slug, s.is_correct, s.submitted_at, s.source_ip
+FROM submissions s
+JOIN challenges c ON c.id = s.challenge_id
+JOIN categories cat ON cat.id = c.category_id
+WHERE s.user_id = $1
+ORDER BY s.submitted_at DESC, s.id DESC
+`
+
+	rows, err := r.db.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list user submissions: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]game.UserSubmission, 0)
+	for rows.Next() {
+		var item game.UserSubmission
+		if err := rows.Scan(
+			&item.ID,
+			&item.ChallengeID,
+			&item.ChallengeSlug,
+			&item.ChallengeTitle,
+			&item.Category,
+			&item.Correct,
+			&item.SubmittedAt,
+			&item.SourceIP,
+		); err != nil {
+			return nil, fmt.Errorf("scan user submission: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate user submissions: %w", err)
+	}
+	return items, nil
+}
+
+func (r *GameRepository) ListUserSolves(ctx context.Context, userID int64) ([]game.UserSolve, error) {
+	const query = `
+SELECT s.id, c.id, c.slug, c.title, cat.slug, s.submission_id, s.awarded_points, s.solved_at
+FROM solves s
+JOIN challenges c ON c.id = s.challenge_id
+JOIN categories cat ON cat.id = c.category_id
+WHERE s.user_id = $1
+ORDER BY s.solved_at DESC, s.id DESC
+`
+
+	rows, err := r.db.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list user solves: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]game.UserSolve, 0)
+	for rows.Next() {
+		var item game.UserSolve
+		if err := rows.Scan(
+			&item.ID,
+			&item.ChallengeID,
+			&item.ChallengeSlug,
+			&item.ChallengeTitle,
+			&item.Category,
+			&item.SubmissionID,
+			&item.AwardedPoints,
+			&item.SolvedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan user solve: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate user solves: %w", err)
+	}
+	return items, nil
+}
+
 func (r *GameRepository) ListScoreboard(ctx context.Context) ([]game.ScoreboardEntry, error) {
 	const query = `
 SELECT

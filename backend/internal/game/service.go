@@ -19,6 +19,14 @@ func (s *Service) Challenge(ctx context.Context, challengeRef string) (Challenge
 	return challenge, err
 }
 
+func (s *Service) UserSubmissions(ctx context.Context, userID int64) ([]UserSubmission, error) {
+	return s.repo.ListUserSubmissions(ctx, userID)
+}
+
+func (s *Service) UserSolves(ctx context.Context, userID int64) ([]UserSolve, error) {
+	return s.repo.ListUserSolves(ctx, userID)
+}
+
 func (s *Service) SubmitFlag(ctx context.Context, userID int64, challengeRef, submittedFlag, sourceIP string) (SubmitResult, error) {
 	challenge, flagValue, err := s.repo.GetChallenge(ctx, challengeRef)
 	if err != nil {

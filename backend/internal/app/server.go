@@ -78,6 +78,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/auth/register", s.handleRegister)
 	mux.HandleFunc("POST /api/v1/auth/login", s.handleLogin)
 	mux.Handle("GET /api/v1/me", s.authenticated(http.HandlerFunc(s.handleMe)))
+	mux.Handle("GET /api/v1/me/submissions", s.authenticated(http.HandlerFunc(s.handleMeSubmissions)))
+	mux.Handle("GET /api/v1/me/solves", s.authenticated(http.HandlerFunc(s.handleMeSolves)))
 	mux.HandleFunc("GET /api/v1/announcements", s.handleAnnouncements)
 	mux.HandleFunc("GET /api/v1/challenges", s.handleChallenges)
 	mux.HandleFunc("GET /api/v1/challenges/{challengeID}", s.handleChallengeDetail)
@@ -85,6 +87,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/challenges/{challengeID}/instances/me", s.authenticated(http.HandlerFunc(s.handleCreateInstance)))
 	mux.Handle("GET /api/v1/challenges/{challengeID}/instances/me", s.authenticated(http.HandlerFunc(s.handleGetInstance)))
 	mux.Handle("DELETE /api/v1/challenges/{challengeID}/instances/me", s.authenticated(http.HandlerFunc(s.handleDeleteInstance)))
+	mux.Handle("POST /api/v1/challenges/{challengeID}/instances/me/renew", s.authenticated(http.HandlerFunc(s.handleRenewInstance)))
 	mux.Handle("POST /api/v1/challenges/{challengeID}/submissions", s.authenticated(http.HandlerFunc(s.handleSubmitFlag)))
 	mux.Handle("GET /api/v1/admin/challenges", s.adminOnly(http.HandlerFunc(s.handleAdminChallenges)))
 	mux.Handle("POST /api/v1/admin/challenges", s.adminOnly(http.HandlerFunc(s.handleAdminCreateChallenge)))
@@ -199,6 +202,44 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"user": user})
 }
 
+func (s *Server) handleMeSubmissions(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
+		return
+	}
+
+	items, err := s.game.UserSubmissions(r.Context(), userID)
+	if err != nil {
+		log.Printf("list my submissions: %v", err)
+		httpx.WriteError(w, http.StatusBadGateway, "repository_error", "failed to load submissions")
+		return
+	}
+	for i := range items {
+		items[i].SubmittedAt = items[i].SubmittedAt.UTC()
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (s *Server) handleMeSolves(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
+		return
+	}
+
+	items, err := s.game.UserSolves(r.Context(), userID)
+	if err != nil {
+		log.Printf("list my solves: %v", err)
+		httpx.WriteError(w, http.StatusBadGateway, "repository_error", "failed to load solves")
+		return
+	}
+	for i := range items {
+		items[i].SolvedAt = items[i].SolvedAt.UTC()
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
 func (s *Server) handleAnnouncements(w http.ResponseWriter, r *http.Request) {
 	items, err := s.game.Announcements(r.Context())
 	if err != nil {
@@ -288,6 +329,20 @@ func (s *Server) handleDeleteInstance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	instance, err := s.runtime.DeleteInstance(r.Context(), userID, r.PathValue("challengeID"))
+	if err != nil {
+		s.writeRuntimeError(w, err)
+		return
+	}
+	writeInstanceResponse(w, http.StatusOK, instance)
+}
+
+func (s *Server) handleRenewInstance(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
+		return
+	}
+	instance, err := s.runtime.RenewInstance(r.Context(), userID, r.PathValue("challengeID"))
 	if err != nil {
 		s.writeRuntimeError(w, err)
 		return
@@ -455,6 +510,8 @@ func (s *Server) writeRuntimeError(w http.ResponseWriter, err error) {
 		httpx.WriteError(w, http.StatusConflict, "runtime_config_missing", err.Error())
 	case errors.Is(err, runtime.ErrInstanceNotFound):
 		httpx.WriteError(w, http.StatusNotFound, "instance_not_found", err.Error())
+	case errors.Is(err, runtime.ErrInstanceRenewLimitReached):
+		httpx.WriteError(w, http.StatusConflict, "instance_renew_limit_reached", err.Error())
 	default:
 		log.Printf("runtime error: %v", err)
 		httpx.WriteError(w, http.StatusBadGateway, "runtime_error", fmt.Sprintf("%v", err))
@@ -512,6 +569,7 @@ func writeInstanceResponse(w http.ResponseWriter, status int, instance runtime.I
 		"status":        instance.Status,
 		"access_url":    instance.AccessURL,
 		"host_port":     instance.HostPort,
+		"renew_count":   instance.RenewCount,
 		"started_at":    instance.StartedAt.UTC().Format(time.RFC3339),
 		"expires_at":    instance.ExpiresAt.UTC().Format(time.RFC3339),
 		"terminated_at": formatTime(instance.TerminatedAt),

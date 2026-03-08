@@ -11,6 +11,8 @@ type fakeRepo struct {
 	flag          string
 	solved        bool
 	announcements []Announcement
+	submissions   []UserSubmission
+	solves        []UserSolve
 	scoreboard    []ScoreboardEntry
 }
 
@@ -36,6 +38,14 @@ func (r *fakeRepo) HasSolved(_ context.Context, _ int64, _ int64) (bool, error) 
 func (r *fakeRepo) CreateSolve(_ context.Context, _ int64, _ int64, _ int64, _ int) (time.Time, error) {
 	now := time.Now().UTC()
 	return now, nil
+}
+
+func (r *fakeRepo) ListUserSubmissions(context.Context, int64) ([]UserSubmission, error) {
+	return r.submissions, nil
+}
+
+func (r *fakeRepo) ListUserSolves(context.Context, int64) ([]UserSolve, error) {
+	return r.solves, nil
 }
 
 func (r *fakeRepo) ListScoreboard(context.Context) ([]ScoreboardEntry, error) {
@@ -69,5 +79,30 @@ func TestSubmitFlagReturnsIncorrectForWrongFlag(t *testing.T) {
 	}
 	if result.Correct || result.Solved {
 		t.Fatalf("unexpected result: %+v", result)
+	}
+}
+
+func TestUserHistoryMethodsReturnRepositoryData(t *testing.T) {
+	now := time.Date(2025, time.March, 8, 10, 0, 0, 0, time.UTC)
+	repo := &fakeRepo{
+		submissions: []UserSubmission{{ID: 1, ChallengeID: 2, ChallengeSlug: "misc-1", SubmittedAt: now}},
+		solves:      []UserSolve{{ID: 3, ChallengeID: 2, ChallengeSlug: "misc-1", SolvedAt: now, AwardedPoints: 200}},
+	}
+	service := NewService(repo)
+
+	submissions, err := service.UserSubmissions(context.Background(), 7)
+	if err != nil {
+		t.Fatalf("user submissions: %v", err)
+	}
+	if len(submissions) != 1 || submissions[0].ID != 1 {
+		t.Fatalf("unexpected submissions: %+v", submissions)
+	}
+
+	solves, err := service.UserSolves(context.Background(), 7)
+	if err != nil {
+		t.Fatalf("user solves: %v", err)
+	}
+	if len(solves) != 1 || solves[0].ID != 3 || solves[0].AwardedPoints != 200 {
+		t.Fatalf("unexpected solves: %+v", solves)
 	}
 }

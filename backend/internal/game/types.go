@@ -37,6 +37,28 @@ type Challenge struct {
 	Attachments []Attachment `json:"attachments"`
 }
 
+type UserSubmission struct {
+	ID             int64     `json:"id"`
+	ChallengeID    int64     `json:"challenge_id"`
+	ChallengeSlug  string    `json:"challenge_slug"`
+	ChallengeTitle string    `json:"challenge_title"`
+	Category       string    `json:"category"`
+	Correct        bool      `json:"correct"`
+	SubmittedAt    time.Time `json:"submitted_at"`
+	SourceIP       string    `json:"source_ip"`
+}
+
+type UserSolve struct {
+	ID             int64     `json:"id"`
+	ChallengeID    int64     `json:"challenge_id"`
+	ChallengeSlug  string    `json:"challenge_slug"`
+	ChallengeTitle string    `json:"challenge_title"`
+	Category       string    `json:"category"`
+	SubmissionID   int64     `json:"submission_id"`
+	AwardedPoints  int       `json:"awarded_points"`
+	SolvedAt       time.Time `json:"solved_at"`
+}
+
 type SubmitResult struct {
 	SubmissionID  int64      `json:"submission_id"`
 	Correct       bool       `json:"correct"`
@@ -61,5 +83,7 @@ type Repository interface {
 	CreateSubmission(context.Context, int64, int64, string, bool, string) (int64, time.Time, error)
 	HasSolved(context.Context, int64, int64) (bool, error)
 	CreateSolve(context.Context, int64, int64, int64, int) (time.Time, error)
+	ListUserSubmissions(context.Context, int64) ([]UserSubmission, error)
+	ListUserSolves(context.Context, int64) ([]UserSolve, error)
 	ListScoreboard(context.Context) ([]ScoreboardEntry, error)
 }
