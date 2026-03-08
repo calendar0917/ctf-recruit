@@ -11,3 +11,5 @@ frontend/node_modules/
 coverage/
 .tmp/
 .DS_Store
+
+frontend/tsconfig.tsbuildinfo
