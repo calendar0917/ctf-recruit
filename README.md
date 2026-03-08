@@ -22,7 +22,7 @@
 - 用户提交记录、解题记录查询
 - 动态实例启动、查询、删除、续期、后台过期清理
 - 管理端题目、附件、公告、提交记录、实例、用户、审计日志基础能力
-- Docker Compose 开发环境和动态题模板示例
+- Docker Compose 开发环境和生产部署骨架
 - 后端单元测试基础覆盖
 
 ## 文档入口
@@ -40,6 +40,7 @@
 - [动态实例设计](docs/dynamic-instances.md)
 - [数据模型](docs/data-model.md)
 - [API 文档](docs/api.md)
+- [部署说明](deploy/README.md)
 
 ## 目录规划
 
@@ -94,10 +95,37 @@ export DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/ctf?sslmode=dis
 scripts/dev-seed.sh
 ```
 
+## 生产部署骨架
+
+最小生产部署入口：
+
+```bash
+export POSTGRES_PASSWORD='replace-with-strong-db-password'
+export JWT_SECRET='replace-with-long-random-secret'
+export PUBLIC_BASE_URL='https://ctf.example.edu'
+make prod-compose-up
+```
+
+迁移数据库并创建首个管理员：
+
+```bash
+docker compose -f deploy/docker-compose.prod.yml exec -T \
+  -e DATABASE_URL="postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/ctf?sslmode=disable" \
+  api /usr/local/bin/apply-migrations.sh
+
+docker compose -f deploy/docker-compose.prod.yml exec -T \
+  -e DATABASE_URL="postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/ctf?sslmode=disable" \
+  -e BOOTSTRAP_ADMIN_USERNAME='admin' \
+  -e BOOTSTRAP_ADMIN_EMAIL='admin@example.edu' \
+  -e BOOTSTRAP_ADMIN_PASSWORD='replace-with-strong-admin-password' \
+  api /usr/local/bin/bootstrap-admin
+```
+
 说明：
 
 - `scripts/apply-migrations.sh` 不再创建默认管理员账号，避免生产式初始化路径自动带出已知口令
 - `scripts/dev-seed.sh` 仅用于本地开发，会创建 `admin@ctf.local / Admin123!`
 - API 在非 `development` 环境下会拒绝空值、`change-me` 和开发态默认 `JWT_SECRET`
-- `deploy/docker-compose.yml` 当前是开发环境，不是最终生产部署形态
+- `deploy/docker-compose.yml` 是开发环境；`deploy/docker-compose.prod.yml` 是当前最小生产骨架
+- 生产环境首个管理员必须通过显式 bootstrap 命令创建
 - 接下来的开发优先级以 [开发基线与升级路线](docs/development-baseline.md) 为准

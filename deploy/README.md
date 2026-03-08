@@ -1,45 +1,109 @@
 # Deploy
 
-当前 `deploy/docker-compose.yml` 主要用于开发环境。
+当前仓库现在同时提供两套部署入口：
 
-默认包含：
+- [deploy/docker-compose.yml](/home/calendar/code/ctf/deploy/docker-compose.yml)：开发环境
+- [deploy/docker-compose.prod.yml](/home/calendar/code/ctf/deploy/docker-compose.prod.yml)：最小生产部署骨架
+
+## 开发环境
+
+开发 Compose 默认包含：
 
 - PostgreSQL
 - Redis
 - API
 - Frontend（放在 `ui` profile 中）
 
-## 当前状态
+开发环境约束：
 
 - API 通过挂载 Docker Socket 预留动态实例管理能力
-- 当前 Compose 仍然是开发态：源码挂载、`go run`、Vite dev server
-- 这适合本地开发和联调，不适合作为正式比赛的最终部署形态
-
-## 开发环境约束
-
+- 当前 Compose 是开发态：源码挂载、`go run`、Vite dev server
 - `APP_ENV` 固定为 `development`
 - `JWT_SECRET` 使用开发占位值 `dev-only-insecure-jwt-secret`
-- 这个占位值只允许在开发环境使用；一旦切到非 `development` 环境，API 启动会直接失败
 - 默认迁移不再自动创建管理员；如需本地默认账号，需要额外执行 `scripts/dev-seed.sh`
 
-## 目标生产形态
+## 生产骨架
 
-比赛前的目标部署应至少包含：
+`deploy/docker-compose.prod.yml` 现在提供最小生产拓扑：
 
-- 反向代理
-- 构建后的前端静态资源
-- 构建后的 Go API 服务
-- PostgreSQL
-- Redis
-- Docker Engine 与动态题容器
+- `gateway`：对外 Nginx 反向代理
+- `frontend`：构建后的静态资源镜像
+- `api`：构建后的 Go 二进制镜像
+- `postgres`
+- `redis`
 
-## 比赛前必须补齐的部署项
+生产 Compose 特点：
 
-- 生产模式构建与运行脚本
-- TLS 和反向代理配置
-- 数据库初始化与种子流程统一
-- 备份与恢复说明
-- 日志、指标和基础告警
+- 不再依赖 `go run`
+- 不再依赖 Vite dev server
+- 前端通过 Nginx 提供静态资源并支持 SPA fallback
+- API 运行在 `APP_ENV=production`
+- `JWT_SECRET`、`POSTGRES_PASSWORD`、`PUBLIC_BASE_URL` 必须显式提供
+- 附件目录持久化到 volume
+- 仍保留 Docker Socket 挂载给动态题运行时使用
+
+## 生产初始化流程
+
+1. 准备环境变量：
+
+```bash
+export POSTGRES_PASSWORD='replace-with-strong-db-password'
+export JWT_SECRET='replace-with-long-random-secret'
+export PUBLIC_BASE_URL='https://ctf.example.edu'
+```
+
+2. 启动生产依赖和应用：
+
+```bash
+make prod-compose-up
+```
+
+3. 应用数据库迁移：
+
+```bash
+docker compose -f deploy/docker-compose.prod.yml exec -T \
+  -e DATABASE_URL="postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/ctf?sslmode=disable" \
+  api /usr/local/bin/apply-migrations.sh
+```
+
+4. 显式创建首个管理员：
+
+```bash
+docker compose -f deploy/docker-compose.prod.yml exec -T \
+  -e DATABASE_URL="postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/ctf?sslmode=disable" \
+  -e BOOTSTRAP_ADMIN_USERNAME='admin' \
+  -e BOOTSTRAP_ADMIN_EMAIL='admin@example.edu' \
+  -e BOOTSTRAP_ADMIN_PASSWORD='replace-with-strong-admin-password' \
+  -e BOOTSTRAP_ADMIN_DISPLAY_NAME='CTF Admin' \
+  api /usr/local/bin/bootstrap-admin
+```
+
+说明：
+
+- `bootstrap-admin` 是一次性初始化入口，不应在日常运维流程中反复执行
+- 默认迁移不会再生成任何已知管理员口令
+- `scripts/dev-seed.sh` 只用于本地开发，不能进入生产流程
+
+## 反向代理与 TLS
+
+当前仓库已提供：
+
+- [deploy/nginx/default.conf](/home/calendar/code/ctf/deploy/nginx/default.conf)：网关层，将 `/api/` 转发到 API，其余流量转发到前端静态服务
+- [deploy/nginx/frontend.conf](/home/calendar/code/ctf/deploy/nginx/frontend.conf)：前端静态资源服务配置
+
+当前仍未完成：
+
+- TLS 证书接入
+- HSTS / 安全响应头
+- 访问日志与错误日志落盘策略
+
+## 当前限制
+
+这套生产 Compose 是赛前最小骨架，不是最终完备方案。当前仍待补齐：
+
+- 数据库备份与恢复手册
+- 结构化日志和指标采集
 - 赛前彩排与压测流程
+- 动态题宿主机和主站流量的更严格隔离
 
 具体优先级以 [开发基线与升级路线](/home/calendar/code/ctf/docs/development-baseline.md) 为准。

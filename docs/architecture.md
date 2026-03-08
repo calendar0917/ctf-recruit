@@ -62,13 +62,13 @@ Browser
       -> Challenge Containers
 ```
 
-### 目标生产形态
+### 当前生产骨架
 
 ```text
 Browser
-  -> Reverse Proxy
-    -> Frontend Static Assets
-    -> Go API
+  -> Gateway Nginx
+    -> Frontend Nginx (static files)
+    -> Go API binary
       -> PostgreSQL
       -> Redis
       -> Docker Engine
@@ -77,7 +77,8 @@ Browser
 
 说明：
 
-- 比赛前应切换到“静态前端 + 构建后的 Go 二进制 + 反向代理”模式
+- 仓库已提供“静态前端 + 构建后的 Go 二进制 + 反向代理”最小生产骨架
+- 网关与前端静态服务当前仍是两层 Nginx，后续可按部署复杂度再决定是否合并
 - 当前不做 reducer / worker、多进程状态同步或消息队列化
 
 ## 动态实例设计原则
@@ -100,6 +101,7 @@ Browser
 - 动态容器不得使用 privileged 模式
 - 动态容器必须限制 CPU、内存和生命周期
 - 附件、题目和实例接口不得仅依赖前端控制可见性
+- 生产初始化不得自动生成默认管理员口令
 
 ## 运维基线
 
