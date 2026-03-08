@@ -3,6 +3,7 @@ package admin
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -12,6 +13,20 @@ import (
 type fakeRepo struct {
 	users     []UserRecord
 	auditLogs []AuditLogRecord
+	instances []InstanceRecord
+}
+
+type fakeManager struct {
+	stopped []string
+	err     error
+}
+
+func (m *fakeManager) Stop(_ context.Context, containerID string) error {
+	if m.err != nil {
+		return m.err
+	}
+	m.stopped = append(m.stopped, containerID)
+	return nil
 }
 
 func (r *fakeRepo) ListChallenges(context.Context) ([]ChallengeSummary, error) {
@@ -59,10 +74,26 @@ func (r *fakeRepo) ListSubmissions(context.Context) ([]SubmissionRecord, error) 
 	return []SubmissionRecord{{ID: 1}}, nil
 }
 func (r *fakeRepo) ListInstances(context.Context) ([]InstanceRecord, error) {
-	return []InstanceRecord{{ID: 1}}, nil
+	return r.instances, nil
 }
-func (r *fakeRepo) TerminateInstance(context.Context, int64, time.Time) (InstanceRecord, error) {
-	return InstanceRecord{ID: 1, Status: "terminated"}, nil
+func (r *fakeRepo) GetInstance(_ context.Context, instanceID int64) (InstanceRecord, error) {
+	for _, item := range r.instances {
+		if item.ID == instanceID {
+			return item, nil
+		}
+	}
+	return InstanceRecord{}, ErrResourceNotFound
+}
+func (r *fakeRepo) TerminateInstance(_ context.Context, instanceID int64, terminatedAt time.Time) (InstanceRecord, error) {
+	for i := range r.instances {
+		if r.instances[i].ID == instanceID {
+			r.instances[i].Status = "terminated"
+			t := terminatedAt.UTC()
+			r.instances[i].TerminatedAt = &t
+			return r.instances[i], nil
+		}
+	}
+	return InstanceRecord{}, ErrResourceNotFound
 }
 
 func TestChallenge(t *testing.T) {
@@ -125,9 +156,10 @@ func TestUsersAndAuditLogs(t *testing.T) {
 	}
 }
 
-func TestTerminateInstance(t *testing.T) {
-	repo := &fakeRepo{}
-	service := NewService(repo, t.TempDir())
+func TestTerminateInstanceStopsContainerAndAudits(t *testing.T) {
+	repo := &fakeRepo{instances: []InstanceRecord{{ID: 1, ChallengeID: 7, Username: "alice", Status: "running", ContainerID: "cid-1"}}}
+	manager := &fakeManager{}
+	service := NewServiceWithManager(repo, t.TempDir(), manager)
 	instance, err := service.TerminateInstance(context.Background(), 2, 1)
 	if err != nil {
 		t.Fatalf("terminate instance: %v", err)
@@ -135,8 +167,24 @@ func TestTerminateInstance(t *testing.T) {
 	if instance.Status != "terminated" {
 		t.Fatalf("unexpected status: %s", instance.Status)
 	}
+	if len(manager.stopped) != 1 || manager.stopped[0] != "cid-1" {
+		t.Fatalf("expected container stop, got %+v", manager.stopped)
+	}
 	if len(repo.auditLogs) != 1 || repo.auditLogs[0].Action != "instance.terminate" {
 		t.Fatalf("expected terminate audit log, got %+v", repo.auditLogs)
+	}
+}
+
+func TestTerminateInstanceReturnsStopFailure(t *testing.T) {
+	repo := &fakeRepo{instances: []InstanceRecord{{ID: 1, ChallengeID: 7, Username: "alice", Status: "running", ContainerID: "cid-1"}}}
+	manager := &fakeManager{err: errors.New("stop failed")}
+	service := NewServiceWithManager(repo, t.TempDir(), manager)
+	_, err := service.TerminateInstance(context.Background(), 2, 1)
+	if err == nil || err.Error() != "stop failed" {
+		t.Fatalf("expected stop failure, got %v", err)
+	}
+	if len(repo.auditLogs) != 0 {
+		t.Fatalf("unexpected audit logs on failure: %+v", repo.auditLogs)
 	}
 }
 

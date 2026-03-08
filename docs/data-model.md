@@ -1,12 +1,15 @@
-# 数据模型草案
+# 数据模型
 
-初始迁移文件位于 [0001_initial_schema.sql](/home/calendar/code/ctf/backend/migrations/0001_initial_schema.sql)。
+当前核心数据结构定义以实际迁移文件为准：
+
+- [0001_initial_schema.sql](/home/calendar/code/ctf/backend/migrations/0001_initial_schema.sql)
+- 后续种子与演进迁移位于 [backend/migrations](/home/calendar/code/ctf/backend/migrations)
 
 ## 核心实体
 
 ### `contests`
 
-平台当前按单场比赛优先设计，但仍保留比赛实体，避免后续硬编码。
+平台当前按单场比赛优先设计，但仍保留比赛实体，避免后续硬编码比赛状态。
 
 ### `users`
 
@@ -26,7 +29,7 @@
 
 ### `challenge_runtime_configs`
 
-保存动态实例题目的运行配置，是首期模型里的关键表。
+保存动态实例题目的运行配置，是当前模型里的关键表。
 
 ### `challenge_instances`
 
@@ -62,3 +65,4 @@
 
 - 团队模式可在后续增加 `teams`、`team_members`、`team_solves`
 - 长期训练模式可在后续支持多个长期 contest
+- 比赛生命周期控制应与 `contests` 的状态字段一起落地

@@ -19,7 +19,9 @@ import (
 	"ctf/backend/internal/runtime"
 )
 
-type testManager struct{}
+type testManager struct {
+	stopped []string
+}
 
 func (m *testManager) Start(_ context.Context, _ runtime.StartRequest) (runtime.StartedContainer, error) {
 	return runtime.StartedContainer{
@@ -30,7 +32,8 @@ func (m *testManager) Start(_ context.Context, _ runtime.StartRequest) (runtime.
 	}, nil
 }
 
-func (m *testManager) Stop(_ context.Context, _ string) error {
+func (m *testManager) Stop(_ context.Context, containerID string) error {
+	m.stopped = append(m.stopped, containerID)
 	return nil
 }
 
@@ -46,14 +49,17 @@ type testUserRepo struct {
 }
 
 type testGameRepo struct {
-	announcements    []game.Announcement
-	challenge        game.Challenge
-	flag             string
-	submissions      []game.UserSubmission
-	solves           []game.UserSolve
-	scoreboard       []game.ScoreboardEntry
-	solved           map[int64]bool
-	nextSubmissionID int64
+	announcements       []game.Announcement
+	challenge           game.Challenge
+	hiddenChallengeRef  string
+	flag                string
+	submissions         []game.UserSubmission
+	solves              []game.UserSolve
+	scoreboard          []game.ScoreboardEntry
+	solved              map[int64]bool
+	nextSubmissionID    int64
+	attachment          game.Attachment
+	attachmentPath      string
 }
 
 type testAdminRepo struct {
@@ -76,6 +82,7 @@ func newTestServer(t *testing.T) *Server {
 	t.Helper()
 
 	attachmentDir := t.TempDir()
+	manager := &testManager{}
 	runtimeRepo := &testRuntimeRepo{
 		challenge: runtime.RuntimeConfigRecord{
 			ID: 11,
@@ -102,6 +109,10 @@ func newTestServer(t *testing.T) *Server {
 		nextID:     1,
 	}
 	now := time.Date(2025, time.March, 8, 9, 0, 0, 0, time.UTC)
+	attachmentPath := filepath.Join(attachmentDir, "statement.pdf")
+	if err := os.WriteFile(attachmentPath, []byte("statement-data"), 0o644); err != nil {
+		t.Fatalf("write attachment fixture: %v", err)
+	}
 	gameRepo := &testGameRepo{
 		announcements: []game.Announcement{{ID: 1, Title: "Welcome", Content: "Hello", Pinned: true}},
 		challenge: game.Challenge{
@@ -113,8 +124,10 @@ func newTestServer(t *testing.T) *Server {
 			Difficulty:  "easy",
 			Description: "demo",
 			Dynamic:     true,
+			Attachments: []game.Attachment{{ID: 1, Filename: "statement.pdf", ContentType: "application/pdf", SizeBytes: 14}},
 		},
-		flag: "flag{welcome}",
+		hiddenChallengeRef: "2",
+		flag:               "flag{welcome}",
 		submissions: []game.UserSubmission{{
 			ID:             1,
 			ChallengeID:    1,
@@ -138,10 +151,8 @@ func newTestServer(t *testing.T) *Server {
 		scoreboard: []game.ScoreboardEntry{{UserID: 1, Username: "alice", DisplayName: "Alice", Score: 100, Solves: []game.ScoreboardSolve{{ChallengeID: 1, ChallengeSlug: "web-welcome", ChallengeTitle: "Welcome Panel", Category: "web", Difficulty: "easy", AwardedPoints: 100, SolvedAt: now}}}},
 		solved:           make(map[int64]bool),
 		nextSubmissionID: 1,
-	}
-	attachmentPath := filepath.Join(attachmentDir, "statement.pdf")
-	if err := os.WriteFile(attachmentPath, []byte("statement-data"), 0o644); err != nil {
-		t.Fatalf("write attachment fixture: %v", err)
+		attachment:       game.Attachment{ID: 1, Filename: "statement.pdf", ContentType: "application/pdf", SizeBytes: 14},
+		attachmentPath:   attachmentPath,
 	}
 	adminRepo := &testAdminRepo{
 		challenges: []admin.ChallengeSummary{{ID: 1, Slug: "web-welcome", Title: "Welcome Panel", Category: "web", Points: 100, Visible: true, DynamicEnabled: true}},
@@ -181,7 +192,7 @@ func newTestServer(t *testing.T) *Server {
 		auditLogs:     []admin.AuditLogRecord{{ID: 1, Action: "challenge.update", ResourceType: "challenge", ResourceID: "1", CreatedAt: now}},
 		announcements: []admin.Announcement{{ID: 1, Title: "Welcome", Published: true}},
 		submissions:   []admin.SubmissionRecord{{ID: 1, ChallengeSlug: "web-welcome", Username: "alice"}},
-		instances:     []admin.InstanceRecord{{ID: 1, ChallengeSlug: "web-welcome", Username: "alice", Status: "running"}},
+		instances:     []admin.InstanceRecord{{ID: 1, ChallengeID: 1, ChallengeSlug: "web-welcome", Username: "alice", Status: "running", ContainerID: "test-container"}},
 	}
 
 	cfg := config.Load()
@@ -190,9 +201,9 @@ func newTestServer(t *testing.T) *Server {
 	cfg.SubmissionRateLimitMax = 2
 	tokens := auth.NewTokenManager(cfg.JWTSecret, cfg.JWTTTL)
 	authService := auth.NewService(userRepo, tokens)
-	adminService := admin.NewService(adminRepo, cfg.AttachmentStorageDir)
+	adminService := admin.NewServiceWithManager(adminRepo, cfg.AttachmentStorageDir, manager)
 	gameService := game.NewService(gameRepo)
-	runtimeService := runtime.NewService("http://localhost:8080", &testManager{}, runtimeRepo)
+	runtimeService := runtime.NewService("http://localhost:8080", manager, runtimeRepo)
 	server := NewServerForTests(cfg, adminService, authService, gameService, runtimeService)
 	server.submissionLimiter.now = func() time.Time { return now }
 	return server
@@ -288,10 +299,26 @@ func (r *testGameRepo) ListAnnouncements(context.Context) ([]game.Announcement, 
 }
 
 func (r *testGameRepo) GetChallenge(_ context.Context, challengeRef string) (game.Challenge, string, error) {
+	if challengeRef == r.hiddenChallengeRef {
+		return game.Challenge{}, "", game.ErrChallengeNotFound
+	}
 	if challengeRef != r.challenge.Slug && challengeRef != "1" {
 		return game.Challenge{}, "", game.ErrChallengeNotFound
 	}
 	return r.challenge, r.flag, nil
+}
+
+func (r *testGameRepo) GetChallengeAttachment(_ context.Context, challengeRef string, attachmentID int64) (game.Attachment, string, error) {
+	if challengeRef == r.hiddenChallengeRef {
+		return game.Attachment{}, "", game.ErrChallengeNotFound
+	}
+	if challengeRef != r.challenge.Slug && challengeRef != "1" {
+		return game.Attachment{}, "", game.ErrChallengeNotFound
+	}
+	if attachmentID != r.attachment.ID {
+		return game.Attachment{}, "", game.ErrAttachmentNotFound
+	}
+	return r.attachment, r.attachmentPath, nil
 }
 
 func (r *testGameRepo) CreateSubmission(_ context.Context, _ int64, _ int64, _ string, _ bool, _ string) (int64, time.Time, error) {
@@ -406,6 +433,14 @@ func (r *testAdminRepo) ListSubmissions(context.Context) ([]admin.SubmissionReco
 func (r *testAdminRepo) ListInstances(context.Context) ([]admin.InstanceRecord, error) {
 	return r.instances, nil
 }
+func (r *testAdminRepo) GetInstance(_ context.Context, instanceID int64) (admin.InstanceRecord, error) {
+	for _, item := range r.instances {
+		if item.ID == instanceID {
+			return item, nil
+		}
+	}
+	return admin.InstanceRecord{}, admin.ErrResourceNotFound
+}
 func (r *testAdminRepo) TerminateInstance(_ context.Context, instanceID int64, terminatedAt time.Time) (admin.InstanceRecord, error) {
 	for i := range r.instances {
 		if r.instances[i].ID == instanceID {
@@ -497,6 +532,16 @@ func TestChallengeAttachmentDownloadEndpoint(t *testing.T) {
 	}
 	if body := res.Body.String(); body != "statement-data" {
 		t.Fatalf("unexpected attachment body: %q", body)
+	}
+}
+
+func TestChallengeAttachmentDownloadRejectsHiddenChallenge(t *testing.T) {
+	server := newTestServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/challenges/2/attachments/1", nil)
+	res := httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", res.Code)
 	}
 }
 

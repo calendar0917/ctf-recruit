@@ -7,13 +7,16 @@ import (
 )
 
 type fakeRepo struct {
-	challenge     Challenge
-	flag          string
-	solved        bool
-	announcements []Announcement
-	submissions   []UserSubmission
-	solves        []UserSolve
-	scoreboard    []ScoreboardEntry
+	challenge          Challenge
+	flag               string
+	solved             bool
+	announcements      []Announcement
+	submissions        []UserSubmission
+	solves             []UserSolve
+	scoreboard         []ScoreboardEntry
+	attachment         Attachment
+	attachmentPath     string
+	attachmentVisible  bool
 }
 
 func (r *fakeRepo) ListAnnouncements(context.Context) ([]Announcement, error) {
@@ -25,6 +28,16 @@ func (r *fakeRepo) GetChallenge(_ context.Context, challengeRef string) (Challen
 		return Challenge{}, "", ErrChallengeNotFound
 	}
 	return r.challenge, r.flag, nil
+}
+
+func (r *fakeRepo) GetChallengeAttachment(_ context.Context, challengeRef string, attachmentID int64) (Attachment, string, error) {
+	if challengeRef != r.challenge.Slug && challengeRef != "1" {
+		return Attachment{}, "", ErrChallengeNotFound
+	}
+	if !r.attachmentVisible || attachmentID != r.attachment.ID {
+		return Attachment{}, "", ErrAttachmentNotFound
+	}
+	return r.attachment, r.attachmentPath, nil
 }
 
 func (r *fakeRepo) CreateSubmission(_ context.Context, _ int64, _ int64, _ string, _ bool, _ string) (int64, time.Time, error) {
@@ -79,6 +92,37 @@ func TestSubmitFlagReturnsIncorrectForWrongFlag(t *testing.T) {
 	}
 	if result.Correct || result.Solved {
 		t.Fatalf("unexpected result: %+v", result)
+	}
+}
+
+func TestAttachmentReturnsVisibleAttachment(t *testing.T) {
+	service := NewService(&fakeRepo{
+		challenge:         Challenge{ID: 1, Slug: "web-welcome", Points: 100},
+		attachment:        Attachment{ID: 2, Filename: "statement.pdf"},
+		attachmentPath:    "/tmp/statement.pdf",
+		attachmentVisible: true,
+	})
+
+	attachment, path, err := service.Attachment(context.Background(), "web-welcome", 2)
+	if err != nil {
+		t.Fatalf("attachment: %v", err)
+	}
+	if attachment.Filename != "statement.pdf" || path != "/tmp/statement.pdf" {
+		t.Fatalf("unexpected attachment result: %+v %s", attachment, path)
+	}
+}
+
+func TestAttachmentRejectsHiddenAttachment(t *testing.T) {
+	service := NewService(&fakeRepo{
+		challenge:         Challenge{ID: 1, Slug: "web-welcome", Points: 100},
+		attachment:        Attachment{ID: 2, Filename: "statement.pdf"},
+		attachmentPath:    "/tmp/statement.pdf",
+		attachmentVisible: false,
+	})
+
+	_, _, err := service.Attachment(context.Background(), "web-welcome", 2)
+	if err != ErrAttachmentNotFound {
+		t.Fatalf("expected attachment not found, got %v", err)
 	}
 }
 

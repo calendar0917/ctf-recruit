@@ -7,7 +7,8 @@ import (
 )
 
 var (
-	ErrChallengeNotFound = errors.New("challenge not found")
+	ErrChallengeNotFound  = errors.New("challenge not found")
+	ErrAttachmentNotFound = errors.New("challenge attachment not found")
 )
 
 type Announcement struct {
@@ -69,28 +70,29 @@ type SubmitResult struct {
 }
 
 type ScoreboardSolve struct {
-	ChallengeID    int64     `json:"challenge_id"`
-	ChallengeSlug  string    `json:"challenge_slug"`
-	ChallengeTitle string    `json:"challenge_title"`
-	Category       string    `json:"category"`
-	Difficulty     string    `json:"difficulty"`
-	AwardedPoints  int       `json:"awarded_points"`
-	SolvedAt       time.Time `json:"solved_at"`
+	ChallengeID    int64      `json:"challenge_id"`
+	ChallengeSlug  string     `json:"challenge_slug"`
+	ChallengeTitle string     `json:"challenge_title"`
+	Category       string     `json:"category"`
+	Difficulty     string     `json:"difficulty"`
+	AwardedPoints  int        `json:"awarded_points"`
+	SolvedAt       time.Time  `json:"solved_at"`
 }
 
 type ScoreboardEntry struct {
-	Rank        int              `json:"rank"`
-	UserID      int64            `json:"user_id"`
-	Username    string           `json:"username"`
-	DisplayName string           `json:"display_name"`
-	Score       int              `json:"score"`
-	LastSolveAt *time.Time       `json:"last_solve_at,omitempty"`
+	Rank        int               `json:"rank"`
+	UserID      int64             `json:"user_id"`
+	Username    string            `json:"username"`
+	DisplayName string            `json:"display_name"`
+	Score       int               `json:"score"`
+	LastSolveAt *time.Time        `json:"last_solve_at,omitempty"`
 	Solves      []ScoreboardSolve `json:"solves"`
 }
 
 type Repository interface {
 	ListAnnouncements(context.Context) ([]Announcement, error)
 	GetChallenge(context.Context, string) (Challenge, string, error)
+	GetChallengeAttachment(context.Context, string, int64) (Attachment, string, error)
 	CreateSubmission(context.Context, int64, int64, string, bool, string) (int64, time.Time, error)
 	HasSolved(context.Context, int64, int64) (bool, error)
 	CreateSolve(context.Context, int64, int64, int64, int) (time.Time, error)

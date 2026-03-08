@@ -549,6 +549,42 @@ ORDER BY ci.created_at DESC, ci.id DESC
 	return items, nil
 }
 
+func (r *AdminRepository) GetInstance(ctx context.Context, instanceID int64) (admin.InstanceRecord, error) {
+	const query = `
+SELECT ci.id, c.id, c.slug, u.username, ci.status, ci.host_port, ci.expires_at, ci.terminated_at, ci.docker_container_id
+FROM challenge_instances ci
+JOIN challenges c ON c.id = ci.challenge_id
+JOIN users u ON u.id = ci.user_id
+WHERE ci.id = $1
+LIMIT 1
+`
+	var (
+		item         admin.InstanceRecord
+		terminatedAt sql.NullTime
+	)
+	if err := r.db.QueryRowContext(ctx, query, instanceID).Scan(
+		&item.ID,
+		&item.ChallengeID,
+		&item.ChallengeSlug,
+		&item.Username,
+		&item.Status,
+		&item.HostPort,
+		&item.ExpiresAt,
+		&terminatedAt,
+		&item.ContainerID,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return admin.InstanceRecord{}, admin.ErrResourceNotFound
+		}
+		return admin.InstanceRecord{}, fmt.Errorf("get instance: %w", err)
+	}
+	if terminatedAt.Valid {
+		t := terminatedAt.Time
+		item.TerminatedAt = &t
+	}
+	return item, nil
+}
+
 func (r *AdminRepository) TerminateInstance(ctx context.Context, instanceID int64, terminatedAt time.Time) (admin.InstanceRecord, error) {
 	const query = `
 UPDATE challenge_instances ci

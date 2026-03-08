@@ -52,7 +52,7 @@ func NewServer(cfg config.Config) (*Server, error) {
 
 	return &Server{
 		cfg:               cfg,
-		admin:             admin.NewService(adminRepo, cfg.AttachmentStorageDir),
+		admin:             admin.NewServiceWithManager(adminRepo, cfg.AttachmentStorageDir, manager),
 		auth:              auth.NewService(userRepo, tokens),
 		game:              game.NewService(gameRepo),
 		runtime:           runtime.NewService(cfg.PublicBaseURL, manager, runtimeRepo),
@@ -299,25 +299,23 @@ func (s *Server) handleChallengeDetail(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleChallengeAttachmentDownload(w http.ResponseWriter, r *http.Request) {
-	challengeID, err := strconv.ParseInt(r.PathValue("challengeID"), 10, 64)
-	if err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid_challenge_id", "challenge id must be numeric")
-		return
-	}
 	attachmentID, err := strconv.ParseInt(r.PathValue("attachmentID"), 10, 64)
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_attachment_id", "attachment id must be numeric")
 		return
 	}
 
-	attachment, storagePath, err := s.admin.Attachment(r.Context(), challengeID, attachmentID)
+	attachment, storagePath, err := s.game.Attachment(r.Context(), r.PathValue("challengeID"), attachmentID)
 	if err != nil {
-		if errors.Is(err, admin.ErrResourceNotFound) {
+		switch {
+		case errors.Is(err, game.ErrChallengeNotFound):
+			httpx.WriteError(w, http.StatusNotFound, "challenge_not_found", err.Error())
+		case errors.Is(err, game.ErrAttachmentNotFound):
 			httpx.WriteError(w, http.StatusNotFound, "attachment_not_found", err.Error())
-			return
+		default:
+			log.Printf("load challenge attachment: %v", err)
+			httpx.WriteError(w, http.StatusBadGateway, "repository_error", "failed to load attachment")
 		}
-		log.Printf("load challenge attachment: %v", err)
-		httpx.WriteError(w, http.StatusBadGateway, "repository_error", "failed to load attachment")
 		return
 	}
 	file, err := os.Open(storagePath)
@@ -824,16 +822,37 @@ func bearerToken(header string) string {
 	return strings.TrimSpace(strings.TrimPrefix(header, prefix))
 }
 
+func withAuthContext(ctx context.Context, claims auth.TokenClaims) context.Context {
+	ctx = context.WithValue(ctx, authUserIDKey{}, claims.UserID)
+	ctx = context.WithValue(ctx, authRoleKey{}, claims.Role)
+	return ctx
+}
+
+type authUserIDKey struct{}
+type authRoleKey struct{}
+
+func userIDFromContext(ctx context.Context) (int64, bool) {
+	value, ok := ctx.Value(authUserIDKey{}).(int64)
+	return value, ok
+}
+
+func roleFromContext(ctx context.Context) (string, bool) {
+	value, ok := ctx.Value(authRoleKey{}).(string)
+	return value, ok
+}
+
 func requestSourceIP(r *http.Request) string {
 	if forwarded := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); forwarded != "" {
 		parts := strings.Split(forwarded, ",")
-		return strings.TrimSpace(parts[0])
+		if len(parts) > 0 {
+			return strings.TrimSpace(parts[0])
+		}
 	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err == nil {
+	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
+	if err == nil && host != "" {
 		return host
 	}
-	return r.RemoteAddr
+	return strings.TrimSpace(r.RemoteAddr)
 }
 
 func extractUpload(r *http.Request) (string, string, int64, multipart.File, error) {
@@ -842,45 +861,19 @@ func extractUpload(r *http.Request) (string, string, int64, multipart.File, erro
 	}
 	file, header, err := r.FormFile("file")
 	if err != nil {
-		return "", "", 0, nil, fmt.Errorf("missing file field: %w", err)
+		return "", "", 0, nil, fmt.Errorf("load file part: %w", err)
 	}
 	contentType := header.Header.Get("Content-Type")
 	if contentType == "" {
 		contentType = mime.TypeByExtension(filepath.Ext(header.Filename))
-		if contentType == "" {
-			contentType = "application/octet-stream"
-		}
 	}
 	return header.Filename, contentType, header.Size, file, nil
-}
-
-type ctxKey string
-
-const (
-	userIDContextKey ctxKey = "user_id"
-	roleContextKey   ctxKey = "role"
-)
-
-func withAuthContext(ctx context.Context, claims auth.TokenClaims) context.Context {
-	ctx = context.WithValue(ctx, userIDContextKey, claims.UserID)
-	ctx = context.WithValue(ctx, roleContextKey, claims.Role)
-	return ctx
-}
-
-func userIDFromContext(ctx context.Context) (int64, bool) {
-	value, ok := ctx.Value(userIDContextKey).(int64)
-	return value, ok && value > 0
-}
-
-func roleFromContext(ctx context.Context) (string, bool) {
-	value, ok := ctx.Value(roleContextKey).(string)
-	return value, ok && value != ""
 }
 
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		next.ServeHTTP(w, r)
-		log.Printf("%s %s %s", r.Method, r.URL.Path, time.Since(start))
+		log.Printf("%s %s finished in %s", r.Method, r.URL.Path, time.Since(start))
 	})
 }

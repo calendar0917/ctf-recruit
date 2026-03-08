@@ -84,31 +84,44 @@ LIMIT 1
 		return game.Challenge{}, "", fmt.Errorf("get challenge: %w", err)
 	}
 
-	const attachmentsQuery = `
-SELECT id, filename, content_type, size_bytes
-FROM challenge_attachments
-WHERE challenge_id = $1
-ORDER BY id ASC
-`
-	rows, err := r.db.QueryContext(ctx, attachmentsQuery, challenge.ID)
+	attachments, err := r.listChallengeAttachments(ctx, challenge.ID)
 	if err != nil {
-		return game.Challenge{}, "", fmt.Errorf("list attachments: %w", err)
+		return game.Challenge{}, "", err
 	}
-	defer rows.Close()
-
-	challenge.Attachments = make([]game.Attachment, 0)
-	for rows.Next() {
-		var attachment game.Attachment
-		if err := rows.Scan(&attachment.ID, &attachment.Filename, &attachment.ContentType, &attachment.SizeBytes); err != nil {
-			return game.Challenge{}, "", fmt.Errorf("scan attachment: %w", err)
-		}
-		challenge.Attachments = append(challenge.Attachments, attachment)
-	}
-	if err := rows.Err(); err != nil {
-		return game.Challenge{}, "", fmt.Errorf("iterate attachments: %w", err)
-	}
+	challenge.Attachments = attachments
 
 	return challenge, flagValue, nil
+}
+
+func (r *GameRepository) GetChallengeAttachment(ctx context.Context, challengeRef string, attachmentID int64) (game.Attachment, string, error) {
+	challenge, _, err := r.GetChallenge(ctx, challengeRef)
+	if err != nil {
+		return game.Attachment{}, "", err
+	}
+
+	const query = `
+SELECT id, filename, storage_path, content_type, size_bytes
+FROM challenge_attachments
+WHERE challenge_id = $1 AND id = $2
+LIMIT 1
+`
+	var (
+		attachment  game.Attachment
+		storagePath string
+	)
+	if err := r.db.QueryRowContext(ctx, query, challenge.ID, attachmentID).Scan(
+		&attachment.ID,
+		&attachment.Filename,
+		&storagePath,
+		&attachment.ContentType,
+		&attachment.SizeBytes,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return game.Attachment{}, "", game.ErrAttachmentNotFound
+		}
+		return game.Attachment{}, "", fmt.Errorf("get challenge attachment: %w", err)
+	}
+	return attachment, storagePath, nil
 }
 
 func (r *GameRepository) CreateSubmission(ctx context.Context, challengeID int64, userID int64, submittedFlag string, correct bool, sourceIP string) (int64, time.Time, error) {
@@ -270,17 +283,43 @@ ORDER BY score DESC, last_solve_at ASC NULLS LAST, u.id ASC
 			t := lastSolveAt.Time
 			item.LastSolveAt = &t
 		}
-		solves, err := r.listScoreboardSolves(ctx, item.UserID)
+		item.Solves, err = r.listScoreboardSolves(ctx, item.UserID)
 		if err != nil {
 			return nil, err
 		}
-		item.Solves = solves
 		items = append(items, item)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate scoreboard: %w", err)
+		return nil, fmt.Errorf("iterate scoreboard entries: %w", err)
 	}
 	return items, nil
+}
+
+func (r *GameRepository) listChallengeAttachments(ctx context.Context, challengeID int64) ([]game.Attachment, error) {
+	const query = `
+SELECT id, filename, content_type, size_bytes
+FROM challenge_attachments
+WHERE challenge_id = $1
+ORDER BY id ASC
+`
+	rows, err := r.db.QueryContext(ctx, query, challengeID)
+	if err != nil {
+		return nil, fmt.Errorf("list attachments: %w", err)
+	}
+	defer rows.Close()
+
+	attachments := make([]game.Attachment, 0)
+	for rows.Next() {
+		var attachment game.Attachment
+		if err := rows.Scan(&attachment.ID, &attachment.Filename, &attachment.ContentType, &attachment.SizeBytes); err != nil {
+			return nil, fmt.Errorf("scan attachment: %w", err)
+		}
+		attachments = append(attachments, attachment)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate attachments: %w", err)
+	}
+	return attachments, nil
 }
 
 func (r *GameRepository) listScoreboardSolves(ctx context.Context, userID int64) ([]game.ScoreboardSolve, error) {

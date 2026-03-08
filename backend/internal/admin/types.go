@@ -143,6 +143,10 @@ type InstanceRecord struct {
 	ContainerID   string     `json:"container_id"`
 }
 
+type InstanceManager interface {
+	Stop(context.Context, string) error
+}
+
 type Repository interface {
 	ListChallenges(context.Context) ([]ChallengeSummary, error)
 	GetChallenge(context.Context, int64) (ChallengeDetail, error)
@@ -159,5 +163,6 @@ type Repository interface {
 	DeleteAnnouncement(context.Context, int64) (Announcement, error)
 	ListSubmissions(context.Context) ([]SubmissionRecord, error)
 	ListInstances(context.Context) ([]InstanceRecord, error)
+	GetInstance(context.Context, int64) (InstanceRecord, error)
 	TerminateInstance(context.Context, int64, time.Time) (InstanceRecord, error)
 }

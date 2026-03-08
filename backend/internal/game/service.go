@@ -19,6 +19,10 @@ func (s *Service) Challenge(ctx context.Context, challengeRef string) (Challenge
 	return challenge, err
 }
 
+func (s *Service) Attachment(ctx context.Context, challengeRef string, attachmentID int64) (Attachment, string, error) {
+	return s.repo.GetChallengeAttachment(ctx, challengeRef, attachmentID)
+}
+
 func (s *Service) UserSubmissions(ctx context.Context, userID int64) ([]UserSubmission, error) {
 	return s.repo.ListUserSubmissions(ctx, userID)
 }

@@ -3,4 +3,7 @@ set -euo pipefail
 
 : "${DATABASE_URL:?DATABASE_URL is required}"
 
-psql "$DATABASE_URL" -f backend/migrations/0001_initial_schema.sql
+for f in backend/migrations/*.sql; do
+  echo "applying $(basename "$f")"
+  psql "$DATABASE_URL" -f "$f"
+done

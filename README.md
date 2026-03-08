@@ -1,32 +1,45 @@
 # CTF Recruit Platform
 
-面向单场 CTF 招新的比赛平台，当前仓库已经进入初始化开发阶段。
+面向单场校内 CTF 招新、允许校外访问的比赛平台。
 
-项目当前采用以下已确认方向：
+当前项目已经完成基础业务闭环，接下来进入“生产化加固与上线准备”阶段，而不是继续停留在初始化脚手架阶段。
+
+## 当前定位
 
 - 平台定位：单场 CTF 招新比赛平台
 - 比赛模式：个人赛
+- 访问范围：校内为主，可开放校外访问
+- 目标规模：`500 ~ 1000` 注册量
 - 后端：Go
 - 前端：Vite + React + TypeScript
 - 数据库：PostgreSQL
-- 部署模型：单机 Docker Compose
-- 动态题目：首期纳入，按用户独立实例作为默认模型
+- 部署模型：单机优先，动态题基于 Docker Engine
 
-## 当前状态
+## 当前已具备的能力
 
-仓库已经具备以下开发基线：
+- 注册、登录、Bearer Token 鉴权、`GET /me`
+- 公告列表、题目列表、题目详情、附件下载、Flag 提交、排行榜
+- 用户提交记录、解题记录查询
+- 动态实例启动、查询、删除、续期、后台过期清理
+- 管理端题目、附件、公告、提交记录、实例、用户、审计日志基础能力
+- Docker Compose 开发环境和动态题模板示例
+- 后端单元测试基础覆盖
 
-- 产品范围、需求、架构和路线文档
-- 动态实例设计文档
-- 数据模型与 API 草案
-- 后端最小可运行骨架
-- 动态实例数据库驱动版基础闭环
-- 注册、登录和 JWT 鉴权基础链路
-- 公告、题目详情、Flag 提交和排行榜基础接口
-- 管理端题目、公告、提交记录和实例监控基础接口
-- 前端基础骨架
-- Docker Compose 开发环境草案
-- 动态题目模板示例
+## 文档入口
+
+优先阅读：
+
+- [开发基线与升级路线](docs/development-baseline.md)
+
+补充文档：
+
+- [项目范围](docs/scope.md)
+- [需求梳理](docs/requirements.md)
+- [技术方案](docs/architecture.md)
+- [开发路线](docs/roadmap.md)
+- [动态实例设计](docs/dynamic-instances.md)
+- [数据模型](docs/data-model.md)
+- [API 文档](docs/api.md)
 
 ## 目录规划
 
@@ -36,20 +49,10 @@
 |-- frontend/              # React 前端
 |-- deploy/                # Compose、Nginx、部署说明
 |-- docs/                  # 产品、架构、接口、数据模型文档
-|-- challenges/            # 动态题目模板与示例资源
+|-- challenges/            # 动态题模板与示例资源
 |-- scripts/               # 开发辅助脚本
-`-- tests/                 # 集成测试或 E2E 预留目录
+`-- tests/                 # 集成测试与 E2E 预留目录
 ```
-
-## 文档入口
-
-- [项目范围](docs/scope.md)
-- [需求梳理](docs/requirements.md)
-- [技术方案](docs/architecture.md)
-- [开发路线](docs/roadmap.md)
-- [动态实例设计](docs/dynamic-instances.md)
-- [数据模型草案](docs/data-model.md)
-- [API 草案](docs/api.md)
 
 ## 快速开始
 
@@ -65,30 +68,29 @@ make backend-run
 cd backend && GOCACHE=/tmp/ctf-go-build GOMODCACHE=/tmp/ctf-go-mod go test ./...
 ```
 
+前端开发：
+
+```bash
+cd frontend && pnpm install && pnpm dev
+```
+
 启动开发依赖：
 
 ```bash
 docker compose -f deploy/docker-compose.yml up postgres redis api
 ```
 
-应用数据库迁移：
+初始化数据库：
 
 ```bash
-DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/ctf?sslmode=disable' ./scripts/apply-migrations.sh
+export DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/ctf?sslmode=disable'
+for f in backend/migrations/*.sql; do
+  psql "$DATABASE_URL" -f "$f"
+done
 ```
 
 说明：
 
-- `frontend/` 已经建立基础骨架，但当前还没有执行依赖安装
-- 动态实例运行配置已从数据库读取
-- 动态实例记录已落库到 `challenge_instances`
-- 当前已提供注册、登录、`GET /me`、公告列表、题目详情、Flag 提交和排行榜基础链路
-- 当前已提供管理端题目、公告、提交记录和实例监控基础接口
-- 默认管理员种子账号为 `admin@ctf.local / Admin123!`
-
-## 近期开发顺序
-
-1. 完成题目运行配置和附件管理 API
-2. 完成用户管理与管理员权限细化
-3. 完成前端登录流、题目详情页、实例面板和管理员后台
-4. 再补实例恢复与审计日志
+- 默认管理员种子账号依赖完整执行全部迁移
+- `deploy/docker-compose.yml` 当前是开发环境，不是最终生产部署形态
+- 接下来的开发优先级以 [开发基线与升级路线](docs/development-baseline.md) 为准

@@ -12,12 +12,17 @@ import (
 
 type Service struct {
 	repo                 Repository
+	manager              InstanceManager
 	now                  func() time.Time
 	attachmentStorageDir string
 }
 
 func NewService(repo Repository, attachmentStorageDir string) *Service {
-	return &Service{repo: repo, now: time.Now, attachmentStorageDir: attachmentStorageDir}
+	return NewServiceWithManager(repo, attachmentStorageDir, nil)
+}
+
+func NewServiceWithManager(repo Repository, attachmentStorageDir string, manager InstanceManager) *Service {
+	return &Service{repo: repo, manager: manager, now: time.Now, attachmentStorageDir: attachmentStorageDir}
 }
 
 func (s *Service) Challenges(ctx context.Context) ([]ChallengeSummary, error) {
@@ -115,6 +120,18 @@ func (s *Service) Instances(ctx context.Context) ([]InstanceRecord, error) {
 }
 
 func (s *Service) TerminateInstance(ctx context.Context, actorUserID int64, instanceID int64) (InstanceRecord, error) {
+	if s.manager != nil {
+		current, err := s.repo.GetInstance(ctx, instanceID)
+		if err != nil {
+			return InstanceRecord{}, err
+		}
+		if current.ContainerID != "" && current.Status != "terminated" {
+			if err := s.manager.Stop(ctx, current.ContainerID); err != nil {
+				return InstanceRecord{}, err
+			}
+		}
+	}
+
 	instance, err := s.repo.TerminateInstance(ctx, instanceID, s.now().UTC())
 	if err != nil {
 		return InstanceRecord{}, err
