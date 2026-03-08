@@ -1438,6 +1438,8 @@ function App(): React.JSX.Element {
   }
 
   function renderBoard(): React.JSX.Element {
+    const showBoardRuntimePanel = Boolean(selectedChallengeSummary?.dynamic)
+
     return (
       <div className="challenge-desk board-view">
           <Panel eyebrow="题目列表" title="题目" subtitle="按分类折叠，支持标题和分类检索。" className="rail-panel challenge-rail-panel">
@@ -1498,7 +1500,9 @@ function App(): React.JSX.Element {
 
           <div className="content-stack">
             <Panel
+              key={selectedChallengeId || 'empty'}
               eyebrow="当前题面"
+              className={selectedChallengeId ? `challenge-detail-panel challenge-shift challenge-${selectedChallengeId}` : 'challenge-detail-panel'}
               title={challengeDetail?.title ?? selectedChallengeSummary?.title ?? '选择题目'}
               subtitle={
                 challengeDetail
@@ -1547,12 +1551,12 @@ function App(): React.JSX.Element {
               ) : null}
             </Panel>
 
-            <div className="solve-actions-grid">
-              <Panel eyebrow="Flag 提交" title="提交" subtitle="提交后会刷新个人历史和排行榜。">
+            <div className={showBoardRuntimePanel ? 'solve-actions-grid board-actions-grid' : 'solve-actions-grid board-actions-grid single-action-grid'}>
+              <Panel eyebrow="Flag 提交" title="提交" subtitle="提交当前题 Flag，结果会同步刷新。">
                 <NoticeBanner notice={submitNotice} />
                 {!authUser ? <div className="empty-state">登录后可提交 Flag。</div> : null}
                 {authUser ? (
-                  <form className="form-grid single-column" onSubmit={handleSubmitFlag}>
+                  <form className="form-grid single-column action-form" onSubmit={handleSubmitFlag}>
                     <label className="field">
                       <span>Flag</span>
                       <input
@@ -1569,21 +1573,9 @@ function App(): React.JSX.Element {
                 ) : null}
               </Panel>
 
-              <Panel
-                eyebrow="实例控制"
-                title={selectedChallengeSummary?.dynamic ? '动态实例' : '实例状态'}
-                subtitle={
-                  selectedChallengeSummary?.dynamic
-                    ? '当前题支持动态实例，可直接启动、续期和回收。'
-                    : '当前题不需要独立实例，专注读题和提交即可。'
-                }
-              >
-                <NoticeBanner notice={runtimeNotice} />
-                {!selectedChallengeSummary ? <div className="empty-state">先选择题目，再决定是否需要启动实例。</div> : null}
-                {selectedChallengeSummary && !selectedChallengeSummary.dynamic ? (
-                  <div className="empty-state">当前题为静态题，无需独立实例。</div>
-                ) : null}
-                {selectedChallengeSummary?.dynamic ? (
+              {showBoardRuntimePanel ? (
+                <Panel eyebrow="实例控制" className="runtime-control-panel" title="动态实例" subtitle="当前题支持动态实例，可直接启动、续期和回收。">
+                  <NoticeBanner notice={runtimeNotice} />
                   <div className="runtime-quick-card">
                     <div className="runtime-metrics-grid">
                       <div className="runtime-metric">
@@ -1635,8 +1627,8 @@ function App(): React.JSX.Element {
                       ) : null}
                     </div>
                   </div>
-                ) : null}
-              </Panel>
+                </Panel>
+              ) : null}
             </div>
 
             <Panel eyebrow="记录" title="最近提交" subtitle="只显示当前题的个人提交记录。">
