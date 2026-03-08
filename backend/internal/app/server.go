@@ -3,13 +3,15 @@ package app
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
-	"strconv"
+	"strings"
 	"time"
 
+	"ctf/backend/internal/auth"
 	"ctf/backend/internal/config"
 	"ctf/backend/internal/httpx"
 	"ctf/backend/internal/runtime"
@@ -18,6 +20,7 @@ import (
 
 type Server struct {
 	cfg     config.Config
+	auth    *auth.Service
 	runtime *runtime.Service
 	db      *sql.DB
 }
@@ -28,18 +31,23 @@ func NewServer(cfg config.Config) (*Server, error) {
 		return nil, err
 	}
 
-	repo := store.NewRuntimeRepository(db)
+	userRepo := store.NewUserRepository(db)
+	runtimeRepo := store.NewRuntimeRepository(db)
+	tokens := auth.NewTokenManager(cfg.JWTSecret, cfg.JWTTTL)
 	manager := runtime.NewDockerManager(cfg.DockerSocketPath)
+
 	return &Server{
 		cfg:     cfg,
-		runtime: runtime.NewService(cfg.PublicBaseURL, manager, repo),
+		auth:    auth.NewService(userRepo, tokens),
+		runtime: runtime.NewService(cfg.PublicBaseURL, manager, runtimeRepo),
 		db:      db,
 	}, nil
 }
 
-func NewServerWithRuntime(cfg config.Config, runtimeService *runtime.Service) *Server {
+func NewServerForTests(cfg config.Config, authService *auth.Service, runtimeService *runtime.Service) *Server {
 	return &Server{
 		cfg:     cfg,
+		auth:    authService,
 		runtime: runtimeService,
 	}
 }
@@ -55,11 +63,14 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/health", s.handleHealth)
 	mux.HandleFunc("GET /api/v1/ready", s.handleReady)
+	mux.HandleFunc("POST /api/v1/auth/register", s.handleRegister)
+	mux.HandleFunc("POST /api/v1/auth/login", s.handleLogin)
+	mux.Handle("GET /api/v1/me", s.authenticated(http.HandlerFunc(s.handleMe)))
 	mux.HandleFunc("GET /api/v1/challenges", s.handleChallenges)
 	mux.HandleFunc("GET /api/v1/scoreboard", s.handleScoreboard)
-	mux.HandleFunc("POST /api/v1/challenges/{challengeID}/instances/me", s.handleCreateInstance)
-	mux.HandleFunc("GET /api/v1/challenges/{challengeID}/instances/me", s.handleGetInstance)
-	mux.HandleFunc("DELETE /api/v1/challenges/{challengeID}/instances/me", s.handleDeleteInstance)
+	mux.Handle("POST /api/v1/challenges/{challengeID}/instances/me", s.authenticated(http.HandlerFunc(s.handleCreateInstance)))
+	mux.Handle("GET /api/v1/challenges/{challengeID}/instances/me", s.authenticated(http.HandlerFunc(s.handleGetInstance)))
+	mux.Handle("DELETE /api/v1/challenges/{challengeID}/instances/me", s.authenticated(http.HandlerFunc(s.handleDeleteInstance)))
 	return loggingMiddleware(mux)
 }
 
@@ -116,6 +127,58 @@ func (s *Server) handleReady(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
+func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
+	var input auth.RegisterInput
+	if err := decodeJSON(r, &input); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+
+	result, err := s.auth.Register(r.Context(), input)
+	if err != nil {
+		log.Printf("register user: %v", err)
+		httpx.WriteError(w, http.StatusBadRequest, "register_failed", "failed to register user")
+		return
+	}
+	writeAuthResponse(w, http.StatusCreated, result)
+}
+
+func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
+	var input auth.LoginInput
+	if err := decodeJSON(r, &input); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+
+	result, err := s.auth.Login(r.Context(), input)
+	if err != nil {
+		if errors.Is(err, auth.ErrInvalidCredentials) {
+			httpx.WriteError(w, http.StatusUnauthorized, "invalid_credentials", err.Error())
+			return
+		}
+		log.Printf("login user: %v", err)
+		httpx.WriteError(w, http.StatusBadGateway, "login_failed", "failed to login")
+		return
+	}
+	writeAuthResponse(w, http.StatusOK, result)
+}
+
+func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
+		return
+	}
+
+	user, err := s.auth.Me(r.Context(), userID)
+	if err != nil {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "failed to load user")
+		return
+	}
+	user.PasswordHash = ""
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"user": user})
+}
+
 func (s *Server) handleChallenges(w http.ResponseWriter, r *http.Request) {
 	items, err := s.runtime.Challenges(r.Context())
 	if err != nil {
@@ -136,9 +199,9 @@ func (s *Server) handleScoreboard(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) handleCreateInstance(w http.ResponseWriter, r *http.Request) {
-	userID, ok := userIDFromRequest(r)
+	userID, ok := userIDFromContext(r.Context())
 	if !ok {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid_user", "missing or invalid X-User-ID header")
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
 		return
 	}
 
@@ -156,9 +219,9 @@ func (s *Server) handleCreateInstance(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetInstance(w http.ResponseWriter, r *http.Request) {
-	userID, ok := userIDFromRequest(r)
+	userID, ok := userIDFromContext(r.Context())
 	if !ok {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid_user", "missing or invalid X-User-ID header")
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
 		return
 	}
 
@@ -171,9 +234,9 @@ func (s *Server) handleGetInstance(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeleteInstance(w http.ResponseWriter, r *http.Request) {
-	userID, ok := userIDFromRequest(r)
+	userID, ok := userIDFromContext(r.Context())
 	if !ok {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid_user", "missing or invalid X-User-ID header")
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
 		return
 	}
 
@@ -201,6 +264,36 @@ func (s *Server) writeRuntimeError(w http.ResponseWriter, err error) {
 	}
 }
 
+func (s *Server) authenticated(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token := bearerToken(r.Header.Get("Authorization"))
+		if token == "" {
+			httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing bearer token")
+			return
+		}
+
+		claims, err := s.auth.Authenticate(token)
+		if err != nil {
+			code := "unauthorized"
+			if auth.IsTokenError(err) {
+				code = "invalid_token"
+			}
+			httpx.WriteError(w, http.StatusUnauthorized, code, err.Error())
+			return
+		}
+
+		next.ServeHTTP(w, r.WithContext(withUserID(r.Context(), claims.UserID)))
+	})
+}
+
+func writeAuthResponse(w http.ResponseWriter, status int, result auth.AuthResult) {
+	httpx.WriteJSON(w, status, map[string]any{
+		"token":      result.Token,
+		"expires_at": result.ExpiresAt.UTC().Format(time.RFC3339),
+		"user":       result.User,
+	})
+}
+
 func writeInstanceResponse(w http.ResponseWriter, status int, instance runtime.Instance) {
 	httpx.WriteJSON(w, status, map[string]any{
 		"challenge_id":  instance.ChallengeID,
@@ -220,17 +313,30 @@ func formatTime(value *time.Time) any {
 	return value.UTC().Format(time.RFC3339)
 }
 
-func userIDFromRequest(r *http.Request) (int64, bool) {
-	value := r.Header.Get("X-User-ID")
-	if value == "" {
-		return 0, false
-	}
+func decodeJSON(r *http.Request, target any) error {
+	defer r.Body.Close()
+	return json.NewDecoder(r.Body).Decode(target)
+}
 
-	parsed, err := strconv.ParseInt(value, 10, 64)
-	if err != nil || parsed <= 0 {
-		return 0, false
+func bearerToken(header string) string {
+	const prefix = "Bearer "
+	if !strings.HasPrefix(header, prefix) {
+		return ""
 	}
-	return parsed, true
+	return strings.TrimSpace(strings.TrimPrefix(header, prefix))
+}
+
+type ctxKey string
+
+const userIDContextKey ctxKey = "user_id"
+
+func withUserID(ctx context.Context, userID int64) context.Context {
+	return context.WithValue(ctx, userIDContextKey, userID)
+}
+
+func userIDFromContext(ctx context.Context) (int64, bool) {
+	value, ok := ctx.Value(userIDContextKey).(int64)
+	return value, ok && value > 0
 }
 
 func loggingMiddleware(next http.Handler) http.Handler {

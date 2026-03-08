@@ -13,13 +13,15 @@
 - `GET /challenges/{challengeID}`
 - `GET /scoreboard`
 
-## 用户接口
+## 已认证用户接口
 
 - `GET /me`
 - `GET /me/submissions`
 - `GET /me/solves`
 
 ## 动态实例接口
+
+这些接口当前要求 `Authorization: Bearer <token>`：
 
 - `POST /challenges/{challengeID}/instances/me`
 - `GET /challenges/{challengeID}/instances/me`
@@ -49,5 +51,6 @@
 
 - 成功响应统一返回 JSON
 - 错误响应统一包含 `error` 与 `message`
+- 注册和登录接口返回 `token`、`expires_at` 和 `user`
+- `GET /me` 返回当前登录用户信息
 - 动态实例接口返回实例状态、访问地址和过期时间
-- 是否已解题、是否有动态实例等派生状态由服务端计算返回
