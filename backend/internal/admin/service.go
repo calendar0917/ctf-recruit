@@ -18,6 +18,10 @@ func (s *Service) Challenges(ctx context.Context) ([]ChallengeSummary, error) {
 	return s.repo.ListChallenges(ctx)
 }
 
+func (s *Service) Challenge(ctx context.Context, challengeID int64) (ChallengeDetail, error) {
+	return s.repo.GetChallenge(ctx, challengeID)
+}
+
 func (s *Service) CreateChallenge(ctx context.Context, input UpsertChallengeInput) (ChallengeSummary, error) {
 	return s.repo.CreateChallenge(ctx, input)
 }

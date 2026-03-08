@@ -8,6 +8,26 @@ import (
 
 var ErrResourceNotFound = errors.New("resource not found")
 
+type RuntimeConfig struct {
+	Enabled         bool              `json:"enabled"`
+	ImageName       string            `json:"image_name"`
+	ExposedProtocol string            `json:"exposed_protocol"`
+	ContainerPort   int               `json:"container_port"`
+	DefaultTTL      int               `json:"default_ttl_seconds"`
+	MaxRenewCount   int               `json:"max_renew_count"`
+	MemoryLimitMB   int               `json:"memory_limit_mb"`
+	CPUMilli        int               `json:"cpu_limit_millicores"`
+	Env             map[string]string `json:"env,omitempty"`
+	Command         []string          `json:"command,omitempty"`
+}
+
+type Attachment struct {
+	ID          int64  `json:"id"`
+	Filename    string `json:"filename"`
+	ContentType string `json:"content_type"`
+	SizeBytes   int64  `json:"size_bytes"`
+}
+
 type ChallengeSummary struct {
 	ID             int64  `json:"id"`
 	Slug           string `json:"slug"`
@@ -18,18 +38,36 @@ type ChallengeSummary struct {
 	DynamicEnabled bool   `json:"dynamic_enabled"`
 }
 
+type ChallengeDetail struct {
+	ID             int64         `json:"id"`
+	Slug           string        `json:"slug"`
+	Title          string        `json:"title"`
+	Category       string        `json:"category"`
+	Description    string        `json:"description"`
+	Points         int           `json:"points"`
+	Difficulty     string        `json:"difficulty"`
+	FlagType       string        `json:"flag_type"`
+	FlagValue      string        `json:"flag_value"`
+	Visible        bool          `json:"visible"`
+	DynamicEnabled bool          `json:"dynamic_enabled"`
+	SortOrder      int           `json:"sort_order"`
+	Attachments    []Attachment  `json:"attachments"`
+	RuntimeConfig  RuntimeConfig `json:"runtime_config"`
+}
+
 type UpsertChallengeInput struct {
-	Slug           string `json:"slug"`
-	Title          string `json:"title"`
-	CategorySlug   string `json:"category_slug"`
-	Description    string `json:"description"`
-	Points         int    `json:"points"`
-	Difficulty     string `json:"difficulty"`
-	FlagType       string `json:"flag_type"`
-	FlagValue      string `json:"flag_value"`
-	DynamicEnabled bool   `json:"dynamic_enabled"`
-	Visible        bool   `json:"visible"`
-	SortOrder      int    `json:"sort_order"`
+	Slug           string         `json:"slug"`
+	Title          string         `json:"title"`
+	CategorySlug   string         `json:"category_slug"`
+	Description    string         `json:"description"`
+	Points         int            `json:"points"`
+	Difficulty     string         `json:"difficulty"`
+	FlagType       string         `json:"flag_type"`
+	FlagValue      string         `json:"flag_value"`
+	DynamicEnabled bool           `json:"dynamic_enabled"`
+	Visible        bool           `json:"visible"`
+	SortOrder      int            `json:"sort_order"`
+	RuntimeConfig  *RuntimeConfig `json:"runtime_config,omitempty"`
 }
 
 type Announcement struct {
@@ -72,6 +110,7 @@ type InstanceRecord struct {
 
 type Repository interface {
 	ListChallenges(context.Context) ([]ChallengeSummary, error)
+	GetChallenge(context.Context, int64) (ChallengeDetail, error)
 	CreateChallenge(context.Context, UpsertChallengeInput) (ChallengeSummary, error)
 	UpdateChallenge(context.Context, int64, UpsertChallengeInput) (ChallengeSummary, error)
 	ListAnnouncements(context.Context) ([]Announcement, error)

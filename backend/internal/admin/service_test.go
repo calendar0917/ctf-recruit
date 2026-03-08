@@ -11,6 +11,9 @@ type fakeRepo struct{}
 func (r *fakeRepo) ListChallenges(context.Context) ([]ChallengeSummary, error) {
 	return []ChallengeSummary{{ID: 1, Slug: "web-welcome"}}, nil
 }
+func (r *fakeRepo) GetChallenge(context.Context, int64) (ChallengeDetail, error) {
+	return ChallengeDetail{ID: 1, Slug: "web-welcome", RuntimeConfig: RuntimeConfig{Enabled: true, ImageName: "ctf/web-welcome:dev"}}, nil
+}
 func (r *fakeRepo) CreateChallenge(context.Context, UpsertChallengeInput) (ChallengeSummary, error) {
 	return ChallengeSummary{ID: 2, Slug: "new-challenge"}, nil
 }
@@ -31,6 +34,17 @@ func (r *fakeRepo) ListInstances(context.Context) ([]InstanceRecord, error) {
 }
 func (r *fakeRepo) TerminateInstance(context.Context, int64, time.Time) (InstanceRecord, error) {
 	return InstanceRecord{ID: 1, Status: "terminated"}, nil
+}
+
+func TestChallenge(t *testing.T) {
+	service := NewService(&fakeRepo{})
+	challenge, err := service.Challenge(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("challenge: %v", err)
+	}
+	if challenge.RuntimeConfig.ImageName != "ctf/web-welcome:dev" {
+		t.Fatalf("unexpected challenge: %+v", challenge)
+	}
 }
 
 func TestTerminateInstance(t *testing.T) {

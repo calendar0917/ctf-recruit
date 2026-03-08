@@ -91,6 +91,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/challenges/{challengeID}/submissions", s.authenticated(http.HandlerFunc(s.handleSubmitFlag)))
 	mux.Handle("GET /api/v1/admin/challenges", s.adminOnly(http.HandlerFunc(s.handleAdminChallenges)))
 	mux.Handle("POST /api/v1/admin/challenges", s.adminOnly(http.HandlerFunc(s.handleAdminCreateChallenge)))
+	mux.Handle("GET /api/v1/admin/challenges/{challengeID}", s.adminOnly(http.HandlerFunc(s.handleAdminChallengeDetail)))
 	mux.Handle("PATCH /api/v1/admin/challenges/{challengeID}", s.adminOnly(http.HandlerFunc(s.handleAdminUpdateChallenge)))
 	mux.Handle("GET /api/v1/admin/announcements", s.adminOnly(http.HandlerFunc(s.handleAdminAnnouncements)))
 	mux.Handle("POST /api/v1/admin/announcements", s.adminOnly(http.HandlerFunc(s.handleAdminCreateAnnouncement)))
@@ -390,6 +391,25 @@ func (s *Server) handleAdminChallenges(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (s *Server) handleAdminChallengeDetail(w http.ResponseWriter, r *http.Request) {
+	challengeID, err := strconv.ParseInt(r.PathValue("challengeID"), 10, 64)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_challenge_id", "challenge id must be numeric")
+		return
+	}
+	challenge, err := s.admin.Challenge(r.Context(), challengeID)
+	if err != nil {
+		if errors.Is(err, admin.ErrResourceNotFound) {
+			httpx.WriteError(w, http.StatusNotFound, "challenge_not_found", err.Error())
+			return
+		}
+		log.Printf("load admin challenge detail: %v", err)
+		httpx.WriteError(w, http.StatusBadGateway, "repository_error", "failed to load admin challenge")
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"challenge": challenge})
 }
 
 func (s *Server) handleAdminCreateChallenge(w http.ResponseWriter, r *http.Request) {

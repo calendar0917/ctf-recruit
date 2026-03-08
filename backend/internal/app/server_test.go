@@ -55,6 +55,7 @@ type testGameRepo struct {
 
 type testAdminRepo struct {
 	challenges    []admin.ChallengeSummary
+	challenge     admin.ChallengeDetail
 	announcements []admin.Announcement
 	submissions   []admin.SubmissionRecord
 	instances     []admin.InstanceRecord
@@ -127,7 +128,32 @@ func newTestServer(t *testing.T) *Server {
 		nextSubmissionID: 1,
 	}
 	adminRepo := &testAdminRepo{
-		challenges:    []admin.ChallengeSummary{{ID: 1, Slug: "web-welcome", Title: "Welcome Panel", Category: "web"}},
+		challenges: []admin.ChallengeSummary{{ID: 1, Slug: "web-welcome", Title: "Welcome Panel", Category: "web", Points: 100, Visible: true, DynamicEnabled: true}},
+		challenge: admin.ChallengeDetail{
+			ID:             1,
+			Slug:           "web-welcome",
+			Title:          "Welcome Panel",
+			Category:       "web",
+			Description:    "demo",
+			Points:         100,
+			Difficulty:     "easy",
+			FlagType:       "static",
+			FlagValue:      "flag{welcome}",
+			Visible:        true,
+			DynamicEnabled: true,
+			SortOrder:      10,
+			Attachments:    []admin.Attachment{{ID: 1, Filename: "statement.pdf", ContentType: "application/pdf", SizeBytes: 1024}},
+			RuntimeConfig: admin.RuntimeConfig{
+				Enabled:         true,
+				ImageName:       "ctf/web-welcome:dev",
+				ExposedProtocol: "http",
+				ContainerPort:   80,
+				DefaultTTL:      1800,
+				MaxRenewCount:   1,
+				MemoryLimitMB:   256,
+				CPUMilli:        500,
+			},
+		},
 		announcements: []admin.Announcement{{ID: 1, Title: "Welcome", Published: true}},
 		submissions:   []admin.SubmissionRecord{{ID: 1, ChallengeSlug: "web-welcome", Username: "alice"}},
 		instances:     []admin.InstanceRecord{{ID: 1, ChallengeSlug: "web-welcome", Username: "alice", Status: "running"}},
@@ -259,12 +285,53 @@ func (r *testGameRepo) ListScoreboard(context.Context) ([]game.ScoreboardEntry, 
 func (r *testAdminRepo) ListChallenges(context.Context) ([]admin.ChallengeSummary, error) {
 	return r.challenges, nil
 }
+func (r *testAdminRepo) GetChallenge(_ context.Context, challengeID int64) (admin.ChallengeDetail, error) {
+	if r.challenge.ID != challengeID {
+		return admin.ChallengeDetail{}, admin.ErrResourceNotFound
+	}
+	return r.challenge, nil
+}
 func (r *testAdminRepo) CreateChallenge(_ context.Context, input admin.UpsertChallengeInput) (admin.ChallengeSummary, error) {
 	challenge := admin.ChallengeSummary{ID: 2, Slug: input.Slug, Title: input.Title, Category: input.CategorySlug, Points: input.Points, Visible: input.Visible, DynamicEnabled: input.DynamicEnabled}
 	r.challenges = append(r.challenges, challenge)
+	r.challenge = admin.ChallengeDetail{
+		ID:             2,
+		Slug:           input.Slug,
+		Title:          input.Title,
+		Category:       input.CategorySlug,
+		Description:    input.Description,
+		Points:         input.Points,
+		Difficulty:     input.Difficulty,
+		FlagType:       input.FlagType,
+		FlagValue:      input.FlagValue,
+		Visible:        input.Visible,
+		DynamicEnabled: input.DynamicEnabled,
+		SortOrder:      input.SortOrder,
+	}
+	if input.RuntimeConfig != nil {
+		r.challenge.RuntimeConfig = *input.RuntimeConfig
+	}
 	return challenge, nil
 }
 func (r *testAdminRepo) UpdateChallenge(_ context.Context, challengeID int64, input admin.UpsertChallengeInput) (admin.ChallengeSummary, error) {
+	r.challenge = admin.ChallengeDetail{
+		ID:             challengeID,
+		Slug:           input.Slug,
+		Title:          input.Title,
+		Category:       input.CategorySlug,
+		Description:    input.Description,
+		Points:         input.Points,
+		Difficulty:     input.Difficulty,
+		FlagType:       input.FlagType,
+		FlagValue:      input.FlagValue,
+		Visible:        input.Visible,
+		DynamicEnabled: input.DynamicEnabled,
+		SortOrder:      input.SortOrder,
+		Attachments:    r.challenge.Attachments,
+	}
+	if input.RuntimeConfig != nil {
+		r.challenge.RuntimeConfig = *input.RuntimeConfig
+	}
 	return admin.ChallengeSummary{ID: challengeID, Slug: input.Slug, Title: input.Title, Category: input.CategorySlug, Points: input.Points, Visible: input.Visible, DynamicEnabled: input.DynamicEnabled}, nil
 }
 func (r *testAdminRepo) ListAnnouncements(context.Context) ([]admin.Announcement, error) {
@@ -479,6 +546,56 @@ func TestAdminChallengesEndpoint(t *testing.T) {
 	server.Handler().ServeHTTP(res, req)
 	if res.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.Code)
+	}
+}
+
+func TestAdminChallengeDetailEndpoint(t *testing.T) {
+	server := newTestServer(t)
+	adminToken := issueAdminToken(t, server)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/challenges/1", nil)
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	res := httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.Code)
+	}
+	var payload struct {
+		Challenge admin.ChallengeDetail `json:"challenge"`
+	}
+	if err := json.Unmarshal(res.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode admin challenge response: %v", err)
+	}
+	if payload.Challenge.RuntimeConfig.ImageName != "ctf/web-welcome:dev" {
+		t.Fatalf("unexpected runtime config: %+v", payload.Challenge.RuntimeConfig)
+	}
+}
+
+func TestAdminUpdateChallengePersistsRuntimeConfigPayload(t *testing.T) {
+	server := newTestServer(t)
+	adminToken := issueAdminToken(t, server)
+	body := []byte(`{"slug":"web-welcome","title":"Welcome Panel","category_slug":"web","description":"updated","points":100,"difficulty":"easy","flag_type":"static","flag_value":"flag{welcome}","dynamic_enabled":true,"visible":true,"sort_order":10,"runtime_config":{"enabled":true,"image_name":"ctf/web-welcome:v2","exposed_protocol":"http","container_port":8080,"default_ttl_seconds":2400,"max_renew_count":2,"memory_limit_mb":512,"cpu_limit_millicores":1000,"env":{"MODE":"prod"},"command":["/app/start"]}}`)
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/admin/challenges/1", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	res := httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.Code)
+	}
+	detailReq := httptest.NewRequest(http.MethodGet, "/api/v1/admin/challenges/1", nil)
+	detailReq.Header.Set("Authorization", "Bearer "+adminToken)
+	detailRes := httptest.NewRecorder()
+	server.Handler().ServeHTTP(detailRes, detailReq)
+	if detailRes.Code != http.StatusOK {
+		t.Fatalf("expected detail 200, got %d", detailRes.Code)
+	}
+	var payload struct {
+		Challenge admin.ChallengeDetail `json:"challenge"`
+	}
+	if err := json.Unmarshal(detailRes.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode detail response: %v", err)
+	}
+	if payload.Challenge.RuntimeConfig.ImageName != "ctf/web-welcome:v2" || payload.Challenge.RuntimeConfig.ContainerPort != 8080 {
+		t.Fatalf("unexpected runtime config after update: %+v", payload.Challenge.RuntimeConfig)
 	}
 }
 

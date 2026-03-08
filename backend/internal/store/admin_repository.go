@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -45,7 +46,59 @@ ORDER BY cat.sort_order ASC, c.sort_order ASC, c.id ASC
 	return items, nil
 }
 
+func (r *AdminRepository) GetChallenge(ctx context.Context, challengeID int64) (admin.ChallengeDetail, error) {
+	const challengeQuery = `
+SELECT c.id, c.slug, c.title, cat.slug, c.description, c.points, c.difficulty, c.flag_type, c.flag_value, c.visible, c.dynamic_enabled, c.sort_order
+FROM challenges c
+JOIN categories cat ON cat.id = c.category_id
+WHERE c.id = $1
+LIMIT 1
+`
+
+	var detail admin.ChallengeDetail
+	if err := r.db.QueryRowContext(ctx, challengeQuery, challengeID).Scan(
+		&detail.ID,
+		&detail.Slug,
+		&detail.Title,
+		&detail.Category,
+		&detail.Description,
+		&detail.Points,
+		&detail.Difficulty,
+		&detail.FlagType,
+		&detail.FlagValue,
+		&detail.Visible,
+		&detail.DynamicEnabled,
+		&detail.SortOrder,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return admin.ChallengeDetail{}, admin.ErrResourceNotFound
+		}
+		return admin.ChallengeDetail{}, fmt.Errorf("get admin challenge: %w", err)
+	}
+
+	attachments, err := r.listChallengeAttachments(ctx, challengeID)
+	if err != nil {
+		return admin.ChallengeDetail{}, err
+	}
+	detail.Attachments = attachments
+
+	runtimeConfig, err := r.getChallengeRuntimeConfig(ctx, challengeID)
+	if err != nil {
+		return admin.ChallengeDetail{}, err
+	}
+	detail.RuntimeConfig = runtimeConfig
+	return detail, nil
+}
+
 func (r *AdminRepository) CreateChallenge(ctx context.Context, input admin.UpsertChallengeInput) (admin.ChallengeSummary, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return admin.ChallengeSummary{}, fmt.Errorf("begin create challenge tx: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
 	const query = `
 INSERT INTO challenges (
     contest_id,
@@ -67,7 +120,7 @@ WHERE c.slug = 'recruit-2025' AND cat.slug = $11
 RETURNING id
 `
 	var id int64
-	err := r.db.QueryRowContext(ctx, query,
+	err = tx.QueryRowContext(ctx, query,
 		input.Slug,
 		input.Title,
 		input.Description,
@@ -83,6 +136,14 @@ RETURNING id
 	if err != nil {
 		return admin.ChallengeSummary{}, fmt.Errorf("create challenge: %w", err)
 	}
+
+	if err := upsertChallengeRuntimeConfig(ctx, tx, id, input.RuntimeConfig); err != nil {
+		return admin.ChallengeSummary{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return admin.ChallengeSummary{}, fmt.Errorf("commit create challenge: %w", err)
+	}
+
 	return admin.ChallengeSummary{
 		ID:             id,
 		Slug:           input.Slug,
@@ -95,6 +156,14 @@ RETURNING id
 }
 
 func (r *AdminRepository) UpdateChallenge(ctx context.Context, challengeID int64, input admin.UpsertChallengeInput) (admin.ChallengeSummary, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return admin.ChallengeSummary{}, fmt.Errorf("begin update challenge tx: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
 	const query = `
 UPDATE challenges c
 SET
@@ -115,7 +184,7 @@ WHERE c.id = $1 AND cat.slug = $12
 RETURNING c.id
 `
 	var id int64
-	err := r.db.QueryRowContext(ctx, query,
+	err = tx.QueryRowContext(ctx, query,
 		challengeID,
 		input.Slug,
 		input.Title,
@@ -135,6 +204,14 @@ RETURNING c.id
 		}
 		return admin.ChallengeSummary{}, fmt.Errorf("update challenge: %w", err)
 	}
+
+	if err := upsertChallengeRuntimeConfig(ctx, tx, challengeID, input.RuntimeConfig); err != nil {
+		return admin.ChallengeSummary{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return admin.ChallengeSummary{}, fmt.Errorf("commit update challenge: %w", err)
+	}
+
 	return admin.ChallengeSummary{
 		ID:             id,
 		Slug:           input.Slug,
@@ -312,4 +389,151 @@ RETURNING ci.id, c.id, c.slug, u.username, ci.status, ci.host_port, ci.expires_a
 		item.TerminatedAt = &t
 	}
 	return item, nil
+}
+
+func (r *AdminRepository) listChallengeAttachments(ctx context.Context, challengeID int64) ([]admin.Attachment, error) {
+	const query = `
+SELECT id, filename, content_type, size_bytes
+FROM challenge_attachments
+WHERE challenge_id = $1
+ORDER BY id ASC
+`
+	rows, err := r.db.QueryContext(ctx, query, challengeID)
+	if err != nil {
+		return nil, fmt.Errorf("list admin challenge attachments: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]admin.Attachment, 0)
+	for rows.Next() {
+		var item admin.Attachment
+		if err := rows.Scan(&item.ID, &item.Filename, &item.ContentType, &item.SizeBytes); err != nil {
+			return nil, fmt.Errorf("scan admin challenge attachment: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate admin challenge attachments: %w", err)
+	}
+	return items, nil
+}
+
+func (r *AdminRepository) getChallengeRuntimeConfig(ctx context.Context, challengeID int64) (admin.RuntimeConfig, error) {
+	const query = `
+SELECT enabled, image_name, exposed_protocol, container_port, default_ttl_seconds, max_renew_count, memory_limit_mb, cpu_limit_millicores,
+       COALESCE(env_json, '{}'::jsonb), COALESCE(command_json, '[]'::jsonb)
+FROM challenge_runtime_configs
+WHERE challenge_id = $1
+LIMIT 1
+`
+
+	var (
+		cfg           admin.RuntimeConfig
+		enabled       bool
+		imageName     string
+		protocol      string
+		containerPort int
+		defaultTTL    int
+		maxRenewCount int
+		memoryLimitMB int
+		cpuLimitMilli int
+		envJSON       []byte
+		commandJSON   []byte
+	)
+	if err := r.db.QueryRowContext(ctx, query, challengeID).Scan(
+		&enabled,
+		&imageName,
+		&protocol,
+		&containerPort,
+		&defaultTTL,
+		&maxRenewCount,
+		&memoryLimitMB,
+		&cpuLimitMilli,
+		&envJSON,
+		&commandJSON,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return admin.RuntimeConfig{}, nil
+		}
+		return admin.RuntimeConfig{}, fmt.Errorf("get admin challenge runtime config: %w", err)
+	}
+	cfg.Enabled = enabled
+	cfg.ImageName = imageName
+	cfg.ExposedProtocol = protocol
+	cfg.ContainerPort = containerPort
+	cfg.DefaultTTL = defaultTTL
+	cfg.MaxRenewCount = maxRenewCount
+	cfg.MemoryLimitMB = memoryLimitMB
+	cfg.CPUMilli = cpuLimitMilli
+	if len(envJSON) > 0 {
+		cfg.Env = make(map[string]string)
+		if err := json.Unmarshal(envJSON, &cfg.Env); err != nil {
+			return admin.RuntimeConfig{}, fmt.Errorf("decode admin runtime env: %w", err)
+		}
+	}
+	if len(commandJSON) > 0 {
+		if err := json.Unmarshal(commandJSON, &cfg.Command); err != nil {
+			return admin.RuntimeConfig{}, fmt.Errorf("decode admin runtime command: %w", err)
+		}
+	}
+	return cfg, nil
+}
+
+func upsertChallengeRuntimeConfig(ctx context.Context, tx *sql.Tx, challengeID int64, cfg *admin.RuntimeConfig) error {
+	if cfg == nil {
+		return nil
+	}
+	envJSON, err := json.Marshal(cfg.Env)
+	if err != nil {
+		return fmt.Errorf("encode runtime env: %w", err)
+	}
+	commandJSON, err := json.Marshal(cfg.Command)
+	if err != nil {
+		return fmt.Errorf("encode runtime command: %w", err)
+	}
+
+	const query = `
+INSERT INTO challenge_runtime_configs (
+    challenge_id,
+    image_name,
+    exposed_protocol,
+    container_port,
+    default_ttl_seconds,
+    max_renew_count,
+    memory_limit_mb,
+    cpu_limit_millicores,
+    env_json,
+    command_json,
+    enabled,
+    updated_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+ON CONFLICT (challenge_id) DO UPDATE SET
+    image_name = EXCLUDED.image_name,
+    exposed_protocol = EXCLUDED.exposed_protocol,
+    container_port = EXCLUDED.container_port,
+    default_ttl_seconds = EXCLUDED.default_ttl_seconds,
+    max_renew_count = EXCLUDED.max_renew_count,
+    memory_limit_mb = EXCLUDED.memory_limit_mb,
+    cpu_limit_millicores = EXCLUDED.cpu_limit_millicores,
+    env_json = EXCLUDED.env_json,
+    command_json = EXCLUDED.command_json,
+    enabled = EXCLUDED.enabled,
+    updated_at = NOW()
+`
+	if _, err := tx.ExecContext(ctx, query,
+		challengeID,
+		cfg.ImageName,
+		cfg.ExposedProtocol,
+		cfg.ContainerPort,
+		cfg.DefaultTTL,
+		cfg.MaxRenewCount,
+		cfg.MemoryLimitMB,
+		cfg.CPUMilli,
+		envJSON,
+		commandJSON,
+		cfg.Enabled,
+	); err != nil {
+		return fmt.Errorf("upsert runtime config: %w", err)
+	}
+	return nil
 }
