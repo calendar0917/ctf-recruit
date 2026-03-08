@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -64,7 +65,8 @@ func NewDockerManager(socketPath string) *DockerManager {
 	}
 
 	return &DockerManager{
-		apiVersion: "v1.41",
+		// Prefer the daemon's default negotiated API unless an override is provided.
+		apiVersion: strings.TrimSpace(os.Getenv("DOCKER_API_VERSION")),
 		client: &http.Client{
 			Transport: transport,
 			Timeout:   15 * time.Second,
@@ -99,7 +101,7 @@ func (m *DockerManager) Start(ctx context.Context, req StartRequest) (StartedCon
 		},
 	}
 
-	createPath := fmt.Sprintf("/%s/containers/create?name=%s", m.apiVersion, url.QueryEscape(containerName))
+	createPath := m.apiPath(fmt.Sprintf("/containers/create?name=%s", url.QueryEscape(containerName)))
 	resp, err := m.request(ctx, http.MethodPost, createPath, payload)
 	if err != nil {
 		return StartedContainer{}, err
@@ -123,7 +125,7 @@ func (m *DockerManager) Start(ctx context.Context, req StartRequest) (StartedCon
 		_ = m.removeContainer(context.Background(), created.ID)
 	}()
 
-	startPath := fmt.Sprintf("/%s/containers/%s/start", m.apiVersion, created.ID)
+	startPath := m.apiPath(fmt.Sprintf("/containers/%s/start", created.ID))
 	resp, err = m.request(ctx, http.MethodPost, startPath, nil)
 	if err != nil {
 		return StartedContainer{}, err
@@ -149,7 +151,7 @@ func (m *DockerManager) Start(ctx context.Context, req StartRequest) (StartedCon
 }
 
 func (m *DockerManager) Stop(ctx context.Context, containerID string) error {
-	stopPath := fmt.Sprintf("/%s/containers/%s/stop?t=5", m.apiVersion, containerID)
+	stopPath := m.apiPath(fmt.Sprintf("/containers/%s/stop?t=5", containerID))
 	resp, err := m.request(ctx, http.MethodPost, stopPath, nil)
 	if err != nil {
 		return err
@@ -164,7 +166,7 @@ func (m *DockerManager) Stop(ctx context.Context, containerID string) error {
 }
 
 func (m *DockerManager) inspectContainer(ctx context.Context, containerID, portKey string) (inspectContainerResponse, error) {
-	inspectPath := fmt.Sprintf("/%s/containers/%s/json", m.apiVersion, containerID)
+	inspectPath := m.apiPath(fmt.Sprintf("/containers/%s/json", containerID))
 	resp, err := m.request(ctx, http.MethodGet, inspectPath, nil)
 	if err != nil {
 		return inspectContainerResponse{}, err
@@ -189,7 +191,7 @@ func (m *DockerManager) inspectContainer(ctx context.Context, containerID, portK
 }
 
 func (m *DockerManager) removeContainer(ctx context.Context, containerID string) error {
-	removePath := fmt.Sprintf("/%s/containers/%s?force=true", m.apiVersion, containerID)
+	removePath := m.apiPath(fmt.Sprintf("/containers/%s?force=true", containerID))
 	resp, err := m.request(ctx, http.MethodDelete, removePath, nil)
 	if err != nil {
 		return err
@@ -200,6 +202,13 @@ func (m *DockerManager) removeContainer(ctx context.Context, containerID string)
 		return nil
 	}
 	return expectStatus(resp, http.StatusNoContent, http.StatusNotFound)
+}
+
+func (m *DockerManager) apiPath(path string) string {
+	if m.apiVersion == "" {
+		return path
+	}
+	return "/" + strings.TrimPrefix(m.apiVersion, "/") + path
 }
 
 func (m *DockerManager) request(ctx context.Context, method, path string, payload any) (*http.Response, error) {
