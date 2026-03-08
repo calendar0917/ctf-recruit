@@ -33,6 +33,7 @@ export type PublicChallengeSummary = {
   title: string
   category: string
   points: number
+  difficulty: string
   dynamic: boolean
 }
 

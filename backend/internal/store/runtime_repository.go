@@ -21,7 +21,7 @@ func NewRuntimeRepository(db *sql.DB) *RuntimeRepository {
 
 func (r *RuntimeRepository) ListChallenges(ctx context.Context) ([]runtime.ChallengeSummary, error) {
 	const query = `
-SELECT c.id::text, c.slug, c.title, cat.slug, c.points, c.dynamic_enabled
+SELECT c.id::text, c.slug, c.title, cat.slug, c.points, c.difficulty, c.dynamic_enabled
 FROM challenges c
 JOIN categories cat ON cat.id = c.category_id
 WHERE c.visible = TRUE
@@ -37,7 +37,7 @@ ORDER BY c.id ASC
 	items := make([]runtime.ChallengeSummary, 0)
 	for rows.Next() {
 		var item runtime.ChallengeSummary
-		if err := rows.Scan(&item.ID, &item.Slug, &item.Title, &item.Category, &item.Points, &item.Dynamic); err != nil {
+		if err := rows.Scan(&item.ID, &item.Slug, &item.Title, &item.Category, &item.Points, &item.Difficulty, &item.Dynamic); err != nil {
 			return nil, fmt.Errorf("scan challenge summary: %w", err)
 		}
 		items = append(items, item)

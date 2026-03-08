@@ -200,7 +200,7 @@ func newTestServer(t *testing.T) *Server {
 
 func (r *testRuntimeRepo) ListChallenges(context.Context) ([]runtime.ChallengeSummary, error) {
 	cfg := r.challenge.Challenge
-	return []runtime.ChallengeSummary{{ID: cfg.ID, Slug: cfg.Slug, Title: cfg.Title, Category: cfg.Category, Points: cfg.Points, Dynamic: cfg.Dynamic}}, nil
+	return []runtime.ChallengeSummary{{ID: cfg.ID, Slug: cfg.Slug, Title: cfg.Title, Category: cfg.Category, Points: cfg.Points, Difficulty: "normal", Dynamic: cfg.Dynamic}}, nil
 }
 
 func (r *testRuntimeRepo) GetChallengeConfig(_ context.Context, challengeRef string) (runtime.RuntimeConfigRecord, error) {

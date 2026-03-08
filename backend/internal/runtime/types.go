@@ -34,12 +34,13 @@ type ChallengeConfig struct {
 }
 
 type ChallengeSummary struct {
-	ID       string `json:"id"`
-	Slug     string `json:"slug"`
-	Title    string `json:"title"`
-	Category string `json:"category"`
-	Points   int    `json:"points"`
-	Dynamic  bool   `json:"dynamic"`
+	ID         string `json:"id"`
+	Slug       string `json:"slug"`
+	Title      string `json:"title"`
+	Category   string `json:"category"`
+	Points     int    `json:"points"`
+	Difficulty string `json:"difficulty"`
+	Dynamic    bool   `json:"dynamic"`
 }
 
 type Instance struct {
