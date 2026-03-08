@@ -30,6 +30,8 @@
 
 ## 提交接口
 
+这些接口当前要求 `Authorization: Bearer <token>`：
+
 - `POST /challenges/{challengeID}/submissions`
 
 ## 管理接口
@@ -53,4 +55,6 @@
 - 错误响应统一包含 `error` 与 `message`
 - 注册和登录接口返回 `token`、`expires_at` 和 `user`
 - `GET /me` 返回当前登录用户信息
+- `GET /challenges/{challengeID}` 返回题目详情与附件元数据
+- `POST /challenges/{challengeID}/submissions` 返回提交结果、是否首次解题和得分
 - 动态实例接口返回实例状态、访问地址和过期时间

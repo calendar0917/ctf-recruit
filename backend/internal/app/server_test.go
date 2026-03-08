@@ -11,6 +11,7 @@ import (
 
 	"ctf/backend/internal/auth"
 	"ctf/backend/internal/config"
+	"ctf/backend/internal/game"
 	"ctf/backend/internal/runtime"
 )
 
@@ -40,6 +41,15 @@ type testUserRepo struct {
 	nextID     int64
 }
 
+type testGameRepo struct {
+	announcements    []game.Announcement
+	challenge        game.Challenge
+	flag             string
+	scoreboard       []game.ScoreboardEntry
+	solved           map[int64]bool
+	nextSubmissionID int64
+}
+
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
 
@@ -67,12 +77,30 @@ func newTestServer(t *testing.T) *Server {
 		identifier: make(map[string]int64),
 		nextID:     1,
 	}
+	gameRepo := &testGameRepo{
+		announcements: []game.Announcement{{ID: 1, Title: "Welcome", Content: "Hello", Pinned: true}},
+		challenge: game.Challenge{
+			ID:          1,
+			Slug:        "web-welcome",
+			Title:       "Welcome Panel",
+			Category:    "web",
+			Points:      100,
+			Difficulty:  "easy",
+			Description: "demo",
+			Dynamic:     true,
+		},
+		flag:             "flag{welcome}",
+		scoreboard:       []game.ScoreboardEntry{{UserID: 1, Username: "alice", DisplayName: "Alice", Score: 100}},
+		solved:           make(map[int64]bool),
+		nextSubmissionID: 1,
+	}
 
 	cfg := config.Load()
 	tokens := auth.NewTokenManager(cfg.JWTSecret, cfg.JWTTTL)
 	authService := auth.NewService(userRepo, tokens)
+	gameService := game.NewService(gameRepo)
 	runtimeService := runtime.NewService("http://localhost:8080", &testManager{}, runtimeRepo)
-	return NewServerForTests(cfg, authService, runtimeService)
+	return NewServerForTests(cfg, authService, gameService, runtimeService)
 }
 
 func (r *testRuntimeRepo) ListChallenges(context.Context) ([]runtime.ChallengeSummary, error) {
@@ -156,6 +184,37 @@ func (r *testUserRepo) GetUserByID(_ context.Context, userID int64) (auth.User, 
 	return user, nil
 }
 
+func (r *testGameRepo) ListAnnouncements(context.Context) ([]game.Announcement, error) {
+	return r.announcements, nil
+}
+
+func (r *testGameRepo) GetChallenge(_ context.Context, challengeRef string) (game.Challenge, string, error) {
+	if challengeRef != r.challenge.Slug && challengeRef != "1" {
+		return game.Challenge{}, "", game.ErrChallengeNotFound
+	}
+	return r.challenge, r.flag, nil
+}
+
+func (r *testGameRepo) CreateSubmission(_ context.Context, _ int64, _ int64, _ string, _ bool, _ string) (int64, time.Time, error) {
+	id := r.nextSubmissionID
+	r.nextSubmissionID++
+	return id, time.Now().UTC(), nil
+}
+
+func (r *testGameRepo) HasSolved(_ context.Context, challengeID int64, userID int64) (bool, error) {
+	return r.solved[userID], nil
+}
+
+func (r *testGameRepo) CreateSolve(_ context.Context, challengeID int64, userID int64, submissionID int64, points int) (time.Time, error) {
+	r.solved[userID] = true
+	now := time.Now().UTC()
+	return now, nil
+}
+
+func (r *testGameRepo) ListScoreboard(context.Context) ([]game.ScoreboardEntry, error) {
+	return r.scoreboard, nil
+}
+
 func TestHealthEndpoint(t *testing.T) {
 	server := newTestServer(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
@@ -191,7 +250,67 @@ func TestProtectedInstanceEndpointRequiresBearerToken(t *testing.T) {
 
 func TestRegisterThenAccessMe(t *testing.T) {
 	server := newTestServer(t)
+	token := registerTestUser(t, server)
 
+	meReq := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
+	meReq.Header.Set("Authorization", "Bearer "+token)
+	meRes := httptest.NewRecorder()
+	server.Handler().ServeHTTP(meRes, meReq)
+
+	if meRes.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", meRes.Code)
+	}
+}
+
+func TestChallengeDetailEndpoint(t *testing.T) {
+	server := newTestServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/challenges/1", nil)
+	res := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(res, req)
+
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.Code)
+	}
+}
+
+func TestSubmitFlagEndpoint(t *testing.T) {
+	server := newTestServer(t)
+	token := registerTestUser(t, server)
+
+	body := []byte(`{"flag":"flag{welcome}"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/challenges/1/submissions", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.RemoteAddr = "127.0.0.1:54321"
+	res := httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, req)
+
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.Code)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(res.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode submit response: %v", err)
+	}
+	if payload["correct"] != true {
+		t.Fatalf("expected correct flag response, got %#v", payload)
+	}
+}
+
+func TestScoreboardEndpoint(t *testing.T) {
+	server := newTestServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/scoreboard", nil)
+	res := httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, req)
+
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.Code)
+	}
+}
+
+func registerTestUser(t *testing.T, server *Server) string {
+	t.Helper()
 	registerBody := []byte(`{"username":"alice","email":"alice@example.com","password":"Password123!","display_name":"Alice"}`)
 	registerReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewReader(registerBody))
 	registerRes := httptest.NewRecorder()
@@ -210,13 +329,5 @@ func TestRegisterThenAccessMe(t *testing.T) {
 	if !ok || token == "" {
 		t.Fatalf("expected token in register response")
 	}
-
-	meReq := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
-	meReq.Header.Set("Authorization", "Bearer "+token)
-	meRes := httptest.NewRecorder()
-	server.Handler().ServeHTTP(meRes, meReq)
-
-	if meRes.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", meRes.Code)
-	}
+	return token
 }

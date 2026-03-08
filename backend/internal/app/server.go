@@ -7,12 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"strings"
 	"time"
 
 	"ctf/backend/internal/auth"
 	"ctf/backend/internal/config"
+	"ctf/backend/internal/game"
 	"ctf/backend/internal/httpx"
 	"ctf/backend/internal/runtime"
 	"ctf/backend/internal/store"
@@ -21,6 +23,7 @@ import (
 type Server struct {
 	cfg     config.Config
 	auth    *auth.Service
+	game    *game.Service
 	runtime *runtime.Service
 	db      *sql.DB
 }
@@ -32,6 +35,7 @@ func NewServer(cfg config.Config) (*Server, error) {
 	}
 
 	userRepo := store.NewUserRepository(db)
+	gameRepo := store.NewGameRepository(db)
 	runtimeRepo := store.NewRuntimeRepository(db)
 	tokens := auth.NewTokenManager(cfg.JWTSecret, cfg.JWTTTL)
 	manager := runtime.NewDockerManager(cfg.DockerSocketPath)
@@ -39,15 +43,17 @@ func NewServer(cfg config.Config) (*Server, error) {
 	return &Server{
 		cfg:     cfg,
 		auth:    auth.NewService(userRepo, tokens),
+		game:    game.NewService(gameRepo),
 		runtime: runtime.NewService(cfg.PublicBaseURL, manager, runtimeRepo),
 		db:      db,
 	}, nil
 }
 
-func NewServerForTests(cfg config.Config, authService *auth.Service, runtimeService *runtime.Service) *Server {
+func NewServerForTests(cfg config.Config, authService *auth.Service, gameService *game.Service, runtimeService *runtime.Service) *Server {
 	return &Server{
 		cfg:     cfg,
 		auth:    authService,
+		game:    gameService,
 		runtime: runtimeService,
 	}
 }
@@ -66,11 +72,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/auth/register", s.handleRegister)
 	mux.HandleFunc("POST /api/v1/auth/login", s.handleLogin)
 	mux.Handle("GET /api/v1/me", s.authenticated(http.HandlerFunc(s.handleMe)))
+	mux.HandleFunc("GET /api/v1/announcements", s.handleAnnouncements)
 	mux.HandleFunc("GET /api/v1/challenges", s.handleChallenges)
+	mux.HandleFunc("GET /api/v1/challenges/{challengeID}", s.handleChallengeDetail)
 	mux.HandleFunc("GET /api/v1/scoreboard", s.handleScoreboard)
 	mux.Handle("POST /api/v1/challenges/{challengeID}/instances/me", s.authenticated(http.HandlerFunc(s.handleCreateInstance)))
 	mux.Handle("GET /api/v1/challenges/{challengeID}/instances/me", s.authenticated(http.HandlerFunc(s.handleGetInstance)))
 	mux.Handle("DELETE /api/v1/challenges/{challengeID}/instances/me", s.authenticated(http.HandlerFunc(s.handleDeleteInstance)))
+	mux.Handle("POST /api/v1/challenges/{challengeID}/submissions", s.authenticated(http.HandlerFunc(s.handleSubmitFlag)))
 	return loggingMiddleware(mux)
 }
 
@@ -179,6 +188,22 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"user": user})
 }
 
+func (s *Server) handleAnnouncements(w http.ResponseWriter, r *http.Request) {
+	items, err := s.game.Announcements(r.Context())
+	if err != nil {
+		log.Printf("list announcements: %v", err)
+		httpx.WriteError(w, http.StatusBadGateway, "repository_error", "failed to load announcements")
+		return
+	}
+	for i := range items {
+		if items[i].PublishedAt != nil {
+			t := items[i].PublishedAt.UTC()
+			items[i].PublishedAt = &t
+		}
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
 func (s *Server) handleChallenges(w http.ResponseWriter, r *http.Request) {
 	items, err := s.runtime.Challenges(r.Context())
 	if err != nil {
@@ -192,10 +217,28 @@ func (s *Server) handleChallenges(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) handleScoreboard(w http.ResponseWriter, _ *http.Request) {
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{
-		"items": []map[string]any{},
-	})
+func (s *Server) handleChallengeDetail(w http.ResponseWriter, r *http.Request) {
+	challenge, err := s.game.Challenge(r.Context(), r.PathValue("challengeID"))
+	if err != nil {
+		if errors.Is(err, game.ErrChallengeNotFound) {
+			httpx.WriteError(w, http.StatusNotFound, "challenge_not_found", err.Error())
+			return
+		}
+		log.Printf("load challenge detail: %v", err)
+		httpx.WriteError(w, http.StatusBadGateway, "repository_error", "failed to load challenge")
+		return
+	}
+	writeChallengeResponse(w, http.StatusOK, challenge)
+}
+
+func (s *Server) handleScoreboard(w http.ResponseWriter, r *http.Request) {
+	items, err := s.game.Scoreboard(r.Context())
+	if err != nil {
+		log.Printf("load scoreboard: %v", err)
+		httpx.WriteError(w, http.StatusBadGateway, "repository_error", "failed to load scoreboard")
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
 func (s *Server) handleCreateInstance(w http.ResponseWriter, r *http.Request) {
@@ -248,6 +291,38 @@ func (s *Server) handleDeleteInstance(w http.ResponseWriter, r *http.Request) {
 	writeInstanceResponse(w, http.StatusOK, instance)
 }
 
+func (s *Server) handleSubmitFlag(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
+		return
+	}
+
+	var input struct {
+		Flag string `json:"flag"`
+	}
+	if err := decodeJSON(r, &input); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+
+	result, err := s.game.SubmitFlag(r.Context(), userID, r.PathValue("challengeID"), input.Flag, requestSourceIP(r))
+	if err != nil {
+		if errors.Is(err, game.ErrChallengeNotFound) {
+			httpx.WriteError(w, http.StatusNotFound, "challenge_not_found", err.Error())
+			return
+		}
+		log.Printf("submit flag: %v", err)
+		httpx.WriteError(w, http.StatusBadGateway, "submit_failed", "failed to submit flag")
+		return
+	}
+	if result.SolvedAt != nil {
+		t := result.SolvedAt.UTC()
+		result.SolvedAt = &t
+	}
+	httpx.WriteJSON(w, http.StatusOK, result)
+}
+
 func (s *Server) writeRuntimeError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, runtime.ErrChallengeNotFound):
@@ -294,6 +369,10 @@ func writeAuthResponse(w http.ResponseWriter, status int, result auth.AuthResult
 	})
 }
 
+func writeChallengeResponse(w http.ResponseWriter, status int, challenge game.Challenge) {
+	httpx.WriteJSON(w, status, map[string]any{"challenge": challenge})
+}
+
 func writeInstanceResponse(w http.ResponseWriter, status int, instance runtime.Instance) {
 	httpx.WriteJSON(w, status, map[string]any{
 		"challenge_id":  instance.ChallengeID,
@@ -324,6 +403,18 @@ func bearerToken(header string) string {
 		return ""
 	}
 	return strings.TrimSpace(strings.TrimPrefix(header, prefix))
+}
+
+func requestSourceIP(r *http.Request) string {
+	if forwarded := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); forwarded != "" {
+		parts := strings.Split(forwarded, ",")
+		return strings.TrimSpace(parts[0])
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err == nil {
+		return host
+	}
+	return r.RemoteAddr
 }
 
 type ctxKey string
