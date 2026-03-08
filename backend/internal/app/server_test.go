@@ -29,3 +29,15 @@ func TestHealthEndpoint(t *testing.T) {
 		t.Fatalf("expected status ok, got %#v", payload["status"])
 	}
 }
+
+func TestCreateInstanceRequiresUserHeader(t *testing.T) {
+	server := NewServer(config.Load())
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/challenges/1/instances/me", nil)
+	res := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(res, req)
+
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", res.Code)
+	}
+}

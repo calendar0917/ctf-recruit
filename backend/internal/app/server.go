@@ -2,20 +2,28 @@ package app
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"ctf/backend/internal/config"
 	"ctf/backend/internal/httpx"
+	"ctf/backend/internal/runtime"
 )
 
 type Server struct {
-	cfg config.Config
+	cfg     config.Config
+	runtime *runtime.Service
 }
 
 func NewServer(cfg config.Config) *Server {
-	return &Server{cfg: cfg}
+	manager := runtime.NewDockerManager(cfg.DockerSocketPath)
+	return &Server{
+		cfg:     cfg,
+		runtime: runtime.NewService(cfg.PublicBaseURL, manager),
+	}
 }
 
 func (s *Server) Handler() http.Handler {
@@ -47,7 +55,14 @@ func (s *Server) StartBackground(ctx context.Context) {
 			log.Printf("instance sweeper stopped")
 			return
 		case <-ticker.C:
-			log.Printf("instance sweeper tick")
+			terminated, err := s.runtime.SweepExpired(ctx)
+			if err != nil {
+				log.Printf("instance sweeper error: %v", err)
+				continue
+			}
+			if terminated > 0 {
+				log.Printf("instance sweeper terminated %d expired instances", terminated)
+			}
 		}
 	}
 }
@@ -64,21 +79,13 @@ func (s *Server) handleReady(w http.ResponseWriter, _ *http.Request) {
 		"status":                  "ready",
 		"database_url_configured": s.cfg.DatabaseURL != "",
 		"docker_socket_path":      s.cfg.DockerSocketPath,
+		"dynamic_runtime_enabled": true,
 	})
 }
 
 func (s *Server) handleChallenges(w http.ResponseWriter, _ *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
-		"items": []map[string]any{
-			{
-				"id":       1,
-				"slug":     "web-welcome",
-				"title":    "Welcome Panel",
-				"category": "web",
-				"points":   100,
-				"dynamic":  true,
-			},
-		},
+		"items": s.runtime.Challenges(),
 	})
 }
 
@@ -89,30 +96,99 @@ func (s *Server) handleScoreboard(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) handleCreateInstance(w http.ResponseWriter, r *http.Request) {
-	challengeID := r.PathValue("challengeID")
-	httpx.WriteJSON(w, http.StatusCreated, map[string]any{
-		"challenge_id": challengeID,
-		"status":       "pending",
-		"access_url":   s.cfg.PublicBaseURL + "/instance/demo",
-		"expires_at":   time.Now().Add(30 * time.Minute).UTC().Format(time.RFC3339),
-		"note":         "docker runtime integration not implemented yet",
-	})
+	userID, ok := userIDFromRequest(r)
+	if !ok {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_user", "missing or invalid X-User-ID header")
+		return
+	}
+
+	instance, created, err := s.runtime.StartInstance(r.Context(), userID, r.PathValue("challengeID"))
+	if err != nil {
+		s.writeRuntimeError(w, err)
+		return
+	}
+
+	status := http.StatusCreated
+	if !created {
+		status = http.StatusOK
+	}
+	writeInstanceResponse(w, status, instance)
 }
 
 func (s *Server) handleGetInstance(w http.ResponseWriter, r *http.Request) {
-	challengeID := r.PathValue("challengeID")
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{
-		"challenge_id": challengeID,
-		"status":       "not_found",
-	})
+	userID, ok := userIDFromRequest(r)
+	if !ok {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_user", "missing or invalid X-User-ID header")
+		return
+	}
+
+	instance, err := s.runtime.GetInstance(userID, r.PathValue("challengeID"))
+	if err != nil {
+		s.writeRuntimeError(w, err)
+		return
+	}
+	writeInstanceResponse(w, http.StatusOK, instance)
 }
 
 func (s *Server) handleDeleteInstance(w http.ResponseWriter, r *http.Request) {
-	challengeID := r.PathValue("challengeID")
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{
-		"challenge_id": challengeID,
-		"status":       "terminated",
+	userID, ok := userIDFromRequest(r)
+	if !ok {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_user", "missing or invalid X-User-ID header")
+		return
+	}
+
+	instance, err := s.runtime.DeleteInstance(r.Context(), userID, r.PathValue("challengeID"))
+	if err != nil {
+		s.writeRuntimeError(w, err)
+		return
+	}
+	writeInstanceResponse(w, http.StatusOK, instance)
+}
+
+func (s *Server) writeRuntimeError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, runtime.ErrChallengeNotFound):
+		httpx.WriteError(w, http.StatusNotFound, "challenge_not_found", err.Error())
+	case errors.Is(err, runtime.ErrChallengeNotDynamic):
+		httpx.WriteError(w, http.StatusConflict, "challenge_not_dynamic", err.Error())
+	case errors.Is(err, runtime.ErrInstanceNotFound):
+		httpx.WriteError(w, http.StatusNotFound, "instance_not_found", err.Error())
+	default:
+		log.Printf("runtime error: %v", err)
+		httpx.WriteError(w, http.StatusBadGateway, "runtime_error", err.Error())
+	}
+}
+
+func writeInstanceResponse(w http.ResponseWriter, status int, instance runtime.Instance) {
+	httpx.WriteJSON(w, status, map[string]any{
+		"challenge_id":  instance.ChallengeID,
+		"status":        instance.Status,
+		"access_url":    instance.AccessURL,
+		"host_port":     instance.HostPort,
+		"started_at":    instance.StartedAt.UTC().Format(time.RFC3339),
+		"expires_at":    instance.ExpiresAt.UTC().Format(time.RFC3339),
+		"terminated_at": formatTime(instance.TerminatedAt),
 	})
+}
+
+func formatTime(value *time.Time) any {
+	if value == nil {
+		return nil
+	}
+	return value.UTC().Format(time.RFC3339)
+}
+
+func userIDFromRequest(r *http.Request) (int64, bool) {
+	value := r.Header.Get("X-User-ID")
+	if value == "" {
+		return 0, false
+	}
+
+	parsed, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || parsed <= 0 {
+		return 0, false
+	}
+	return parsed, true
 }
 
 func loggingMiddleware(next http.Handler) http.Handler {
