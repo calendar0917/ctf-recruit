@@ -1,6 +1,9 @@
 package auth
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
 var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
@@ -9,13 +12,14 @@ var (
 )
 
 type User struct {
-	ID           int64  `json:"id"`
-	Role         string `json:"role"`
-	Username     string `json:"username"`
-	Email        string `json:"email"`
-	DisplayName  string `json:"display_name"`
-	Status       string `json:"status"`
-	PasswordHash string `json:"-"`
+	ID           int64      `json:"id"`
+	Role         string     `json:"role"`
+	Username     string     `json:"username"`
+	Email        string     `json:"email"`
+	DisplayName  string     `json:"display_name"`
+	Status       string     `json:"status"`
+	LastLoginAt  *time.Time `json:"last_login_at,omitempty"`
+	PasswordHash string     `json:"-"`
 }
 
 type RegisterInput struct {

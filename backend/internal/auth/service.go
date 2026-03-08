@@ -11,6 +11,7 @@ type Repository interface {
 	CreateUser(context.Context, CreateUserParams) (User, error)
 	GetUserByIdentifier(context.Context, string) (User, error)
 	GetUserByID(context.Context, int64) (User, error)
+	UpdateLastLogin(context.Context, int64, time.Time) error
 }
 
 type CreateUserParams struct {
@@ -24,6 +25,7 @@ type CreateUserParams struct {
 type Service struct {
 	repo   Repository
 	tokens *TokenManager
+	now    func() time.Time
 }
 
 type AuthResult struct {
@@ -33,7 +35,7 @@ type AuthResult struct {
 }
 
 func NewService(repo Repository, tokens *TokenManager) *Service {
-	return &Service{repo: repo, tokens: tokens}
+	return &Service{repo: repo, tokens: tokens, now: time.Now}
 }
 
 func (s *Service) Register(ctx context.Context, input RegisterInput) (AuthResult, error) {
@@ -68,6 +70,10 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (AuthResult, erro
 		return AuthResult{}, ErrInvalidCredentials
 	}
 
+	loginAt := s.now().UTC()
+	if err := s.repo.UpdateLastLogin(ctx, user.ID, loginAt); err == nil {
+		user.LastLoginAt = &loginAt
+	}
 	return s.issueToken(user)
 }
 

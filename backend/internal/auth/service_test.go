@@ -56,6 +56,16 @@ func (r *fakeRepo) GetUserByID(_ context.Context, userID int64) (User, error) {
 	return user, nil
 }
 
+func (r *fakeRepo) UpdateLastLogin(_ context.Context, userID int64, loggedInAt time.Time) error {
+	user, ok := r.users[userID]
+	if !ok {
+		return runtime.ErrRepositoryNotFound
+	}
+	user.LastLoginAt = &loggedInAt
+	r.users[userID] = user
+	return nil
+}
+
 func TestRegisterAndAuthenticate(t *testing.T) {
 	repo := newFakeRepo()
 	tokens := NewTokenManager("secret", time.Hour)
@@ -107,5 +117,37 @@ func TestLoginRejectsWrongPassword(t *testing.T) {
 	})
 	if err != ErrInvalidCredentials {
 		t.Fatalf("expected invalid credentials, got %v", err)
+	}
+}
+
+func TestLoginUpdatesLastLogin(t *testing.T) {
+	repo := newFakeRepo()
+	hash, err := HashPassword("Password123!")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	user, err := repo.CreateUser(context.Background(), CreateUserParams{
+		RoleName:     "player",
+		Username:     "alice",
+		Email:        "alice@example.com",
+		DisplayName:  "Alice",
+		PasswordHash: hash,
+	})
+	if err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+
+	service := NewService(repo, NewTokenManager("secret", time.Hour))
+	service.now = func() time.Time { return time.Date(2025, time.March, 8, 12, 0, 0, 0, time.UTC) }
+	result, err := service.Login(context.Background(), LoginInput{Identifier: "alice", Password: "Password123!"})
+	if err != nil {
+		t.Fatalf("login: %v", err)
+	}
+	if result.User.LastLoginAt == nil || !result.User.LastLoginAt.Equal(service.now()) {
+		t.Fatalf("unexpected last login: %+v", result.User.LastLoginAt)
+	}
+	stored := repo.users[user.ID]
+	if stored.LastLoginAt == nil || !stored.LastLoginAt.Equal(service.now()) {
+		t.Fatalf("expected repo last login update, got %+v", stored.LastLoginAt)
 	}
 }

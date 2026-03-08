@@ -223,6 +223,176 @@ RETURNING c.id
 	}, nil
 }
 
+func (r *AdminRepository) CreateAttachment(ctx context.Context, challengeID int64, filename, storagePath, contentType string, sizeBytes int64) (admin.Attachment, error) {
+	const query = `
+INSERT INTO challenge_attachments (challenge_id, filename, storage_path, content_type, size_bytes)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, filename, content_type, size_bytes
+`
+	var item admin.Attachment
+	if err := r.db.QueryRowContext(ctx, query, challengeID, filename, storagePath, contentType, sizeBytes).Scan(
+		&item.ID,
+		&item.Filename,
+		&item.ContentType,
+		&item.SizeBytes,
+	); err != nil {
+		return admin.Attachment{}, fmt.Errorf("create attachment: %w", err)
+	}
+	return item, nil
+}
+
+func (r *AdminRepository) GetAttachment(ctx context.Context, challengeID int64, attachmentID int64) (admin.Attachment, string, error) {
+	const query = `
+SELECT id, filename, storage_path, content_type, size_bytes
+FROM challenge_attachments
+WHERE challenge_id = $1 AND id = $2
+LIMIT 1
+`
+	var (
+		item        admin.Attachment
+		storagePath string
+	)
+	if err := r.db.QueryRowContext(ctx, query, challengeID, attachmentID).Scan(
+		&item.ID,
+		&item.Filename,
+		&storagePath,
+		&item.ContentType,
+		&item.SizeBytes,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return admin.Attachment{}, "", admin.ErrResourceNotFound
+		}
+		return admin.Attachment{}, "", fmt.Errorf("get attachment: %w", err)
+	}
+	return item, storagePath, nil
+}
+
+func (r *AdminRepository) ListUsers(ctx context.Context) ([]admin.UserRecord, error) {
+	const query = `
+SELECT u.id, r.name, u.username, u.email, u.display_name, u.status, u.last_login_at, u.created_at
+FROM users u
+JOIN roles r ON r.id = u.role_id
+ORDER BY u.id ASC
+`
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("list users: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]admin.UserRecord, 0)
+	for rows.Next() {
+		var (
+			item        admin.UserRecord
+			lastLoginAt sql.NullTime
+		)
+		if err := rows.Scan(&item.ID, &item.Role, &item.Username, &item.Email, &item.DisplayName, &item.Status, &lastLoginAt, &item.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan user: %w", err)
+		}
+		if lastLoginAt.Valid {
+			t := lastLoginAt.Time
+			item.LastLoginAt = &t
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate users: %w", err)
+	}
+	return items, nil
+}
+
+func (r *AdminRepository) UpdateUser(ctx context.Context, userID int64, input admin.UpdateUserInput) (admin.UserRecord, error) {
+	const query = `
+UPDATE users u
+SET role_id = r.id, display_name = $2, status = $3, updated_at = NOW()
+FROM roles r
+WHERE u.id = $1 AND r.name = $4
+RETURNING u.id, r.name, u.username, u.email, u.display_name, u.status, u.last_login_at, u.created_at
+`
+	var (
+		item        admin.UserRecord
+		lastLoginAt sql.NullTime
+	)
+	if err := r.db.QueryRowContext(ctx, query, userID, input.DisplayName, input.Status, input.Role).Scan(
+		&item.ID,
+		&item.Role,
+		&item.Username,
+		&item.Email,
+		&item.DisplayName,
+		&item.Status,
+		&lastLoginAt,
+		&item.CreatedAt,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return admin.UserRecord{}, admin.ErrResourceNotFound
+		}
+		return admin.UserRecord{}, fmt.Errorf("update user: %w", err)
+	}
+	if lastLoginAt.Valid {
+		t := lastLoginAt.Time
+		item.LastLoginAt = &t
+	}
+	return item, nil
+}
+
+func (r *AdminRepository) ListAuditLogs(ctx context.Context) ([]admin.AuditLogRecord, error) {
+	const query = `
+SELECT id, actor_user_id, action, resource_type, resource_id, details_json, created_at
+FROM audit_logs
+ORDER BY created_at DESC, id DESC
+`
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("list audit logs: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]admin.AuditLogRecord, 0)
+	for rows.Next() {
+		var (
+			item        admin.AuditLogRecord
+			actorUserID sql.NullInt64
+			detailsJSON []byte
+		)
+		if err := rows.Scan(&item.ID, &actorUserID, &item.Action, &item.ResourceType, &item.ResourceID, &detailsJSON, &item.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan audit log: %w", err)
+		}
+		if actorUserID.Valid {
+			value := actorUserID.Int64
+			item.ActorUserID = &value
+		}
+		if len(detailsJSON) > 0 {
+			item.Details = make(map[string]any)
+			if err := json.Unmarshal(detailsJSON, &item.Details); err != nil {
+				return nil, fmt.Errorf("decode audit log details: %w", err)
+			}
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate audit logs: %w", err)
+	}
+	return items, nil
+}
+
+func (r *AdminRepository) CreateAuditLog(ctx context.Context, actorUserID *int64, action, resourceType, resourceID string, details map[string]any) error {
+	if details == nil {
+		details = map[string]any{}
+	}
+	detailsJSON, err := json.Marshal(details)
+	if err != nil {
+		return fmt.Errorf("encode audit log details: %w", err)
+	}
+	const query = `
+INSERT INTO audit_logs (actor_user_id, action, resource_type, resource_id, details_json)
+VALUES ($1, $2, $3, $4, $5)
+`
+	if _, err := r.db.ExecContext(ctx, query, actorUserID, action, resourceType, resourceID, detailsJSON); err != nil {
+		return fmt.Errorf("create audit log: %w", err)
+	}
+	return nil
+}
+
 func (r *AdminRepository) ListAnnouncements(ctx context.Context) ([]admin.Announcement, error) {
 	const query = `
 SELECT id, title, content, pinned, published, published_at

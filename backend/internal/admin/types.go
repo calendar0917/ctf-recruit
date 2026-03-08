@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"errors"
+	"io"
 	"time"
 )
 
@@ -70,6 +71,40 @@ type UpsertChallengeInput struct {
 	RuntimeConfig  *RuntimeConfig `json:"runtime_config,omitempty"`
 }
 
+type CreateAttachmentInput struct {
+	Filename    string
+	ContentType string
+	Body        io.Reader
+	SizeBytes   int64
+}
+
+type UserRecord struct {
+	ID          int64      `json:"id"`
+	Role        string     `json:"role"`
+	Username    string     `json:"username"`
+	Email       string     `json:"email"`
+	DisplayName string     `json:"display_name"`
+	Status      string     `json:"status"`
+	LastLoginAt *time.Time `json:"last_login_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+}
+
+type UpdateUserInput struct {
+	Role        string `json:"role"`
+	DisplayName string `json:"display_name"`
+	Status      string `json:"status"`
+}
+
+type AuditLogRecord struct {
+	ID           int64          `json:"id"`
+	ActorUserID  *int64         `json:"actor_user_id,omitempty"`
+	Action       string         `json:"action"`
+	ResourceType string         `json:"resource_type"`
+	ResourceID   string         `json:"resource_id"`
+	Details      map[string]any `json:"details"`
+	CreatedAt    time.Time      `json:"created_at"`
+}
+
 type Announcement struct {
 	ID          int64      `json:"id"`
 	Title       string     `json:"title"`
@@ -113,6 +148,12 @@ type Repository interface {
 	GetChallenge(context.Context, int64) (ChallengeDetail, error)
 	CreateChallenge(context.Context, UpsertChallengeInput) (ChallengeSummary, error)
 	UpdateChallenge(context.Context, int64, UpsertChallengeInput) (ChallengeSummary, error)
+	CreateAttachment(context.Context, int64, string, string, string, int64) (Attachment, error)
+	GetAttachment(context.Context, int64, int64) (Attachment, string, error)
+	ListUsers(context.Context) ([]UserRecord, error)
+	UpdateUser(context.Context, int64, UpdateUserInput) (UserRecord, error)
+	ListAuditLogs(context.Context) ([]AuditLogRecord, error)
+	CreateAuditLog(context.Context, *int64, string, string, string, map[string]any) error
 	ListAnnouncements(context.Context) ([]Announcement, error)
 	CreateAnnouncement(context.Context, int64, CreateAnnouncementInput) (Announcement, error)
 	ListSubmissions(context.Context) ([]SubmissionRecord, error)

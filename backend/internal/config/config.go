@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -14,6 +15,9 @@ type Config struct {
 	InstanceSweeperPollInterval string
 	DockerSocketPath            string
 	PublicBaseURL               string
+	AttachmentStorageDir        string
+	SubmissionRateLimitWindow   time.Duration
+	SubmissionRateLimitMax      int
 }
 
 func Load() Config {
@@ -26,6 +30,9 @@ func Load() Config {
 		InstanceSweeperPollInterval: getEnv("INSTANCE_SWEEPER_POLL_INTERVAL", "30s"),
 		DockerSocketPath:            getEnv("DOCKER_SOCKET_PATH", "/var/run/docker.sock"),
 		PublicBaseURL:               getEnv("PUBLIC_BASE_URL", "http://localhost:8080"),
+		AttachmentStorageDir:        getEnv("ATTACHMENT_STORAGE_DIR", "/tmp/ctf-attachments"),
+		SubmissionRateLimitWindow:   getDurationEnv("SUBMISSION_RATE_LIMIT_WINDOW", time.Minute),
+		SubmissionRateLimitMax:      getIntEnv("SUBMISSION_RATE_LIMIT_MAX", 10),
 	}
 }
 
@@ -42,6 +49,18 @@ func getDurationEnv(key string, fallback time.Duration) time.Duration {
 		return fallback
 	}
 	parsed, err := time.ParseDuration(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
+func getIntEnv(key string, fallback int) int {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
 	if err != nil {
 		return fallback
 	}

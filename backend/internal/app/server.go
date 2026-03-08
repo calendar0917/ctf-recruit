@@ -6,9 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
+	"mime"
+	"mime/multipart"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -23,12 +28,13 @@ import (
 )
 
 type Server struct {
-	cfg     config.Config
-	admin   *admin.Service
-	auth    *auth.Service
-	game    *game.Service
-	runtime *runtime.Service
-	db      *sql.DB
+	cfg               config.Config
+	admin             *admin.Service
+	auth              *auth.Service
+	game              *game.Service
+	runtime           *runtime.Service
+	submissionLimiter *submissionLimiter
+	db                *sql.DB
 }
 
 func NewServer(cfg config.Config) (*Server, error) {
@@ -45,22 +51,24 @@ func NewServer(cfg config.Config) (*Server, error) {
 	manager := runtime.NewDockerManager(cfg.DockerSocketPath)
 
 	return &Server{
-		cfg:     cfg,
-		admin:   admin.NewService(adminRepo),
-		auth:    auth.NewService(userRepo, tokens),
-		game:    game.NewService(gameRepo),
-		runtime: runtime.NewService(cfg.PublicBaseURL, manager, runtimeRepo),
-		db:      db,
+		cfg:               cfg,
+		admin:             admin.NewService(adminRepo, cfg.AttachmentStorageDir),
+		auth:              auth.NewService(userRepo, tokens),
+		game:              game.NewService(gameRepo),
+		runtime:           runtime.NewService(cfg.PublicBaseURL, manager, runtimeRepo),
+		submissionLimiter: newSubmissionLimiter(cfg.SubmissionRateLimitWindow, cfg.SubmissionRateLimitMax),
+		db:                db,
 	}, nil
 }
 
 func NewServerForTests(cfg config.Config, adminService *admin.Service, authService *auth.Service, gameService *game.Service, runtimeService *runtime.Service) *Server {
 	return &Server{
-		cfg:     cfg,
-		admin:   adminService,
-		auth:    authService,
-		game:    gameService,
-		runtime: runtimeService,
+		cfg:               cfg,
+		admin:             adminService,
+		auth:              authService,
+		game:              gameService,
+		runtime:           runtimeService,
+		submissionLimiter: newSubmissionLimiter(cfg.SubmissionRateLimitWindow, cfg.SubmissionRateLimitMax),
 	}
 }
 
@@ -83,21 +91,26 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/announcements", s.handleAnnouncements)
 	mux.HandleFunc("GET /api/v1/challenges", s.handleChallenges)
 	mux.HandleFunc("GET /api/v1/challenges/{challengeID}", s.handleChallengeDetail)
+	mux.HandleFunc("GET /api/v1/challenges/{challengeID}/attachments/{attachmentID}", s.handleChallengeAttachmentDownload)
 	mux.HandleFunc("GET /api/v1/scoreboard", s.handleScoreboard)
 	mux.Handle("POST /api/v1/challenges/{challengeID}/instances/me", s.authenticated(http.HandlerFunc(s.handleCreateInstance)))
 	mux.Handle("GET /api/v1/challenges/{challengeID}/instances/me", s.authenticated(http.HandlerFunc(s.handleGetInstance)))
 	mux.Handle("DELETE /api/v1/challenges/{challengeID}/instances/me", s.authenticated(http.HandlerFunc(s.handleDeleteInstance)))
 	mux.Handle("POST /api/v1/challenges/{challengeID}/instances/me/renew", s.authenticated(http.HandlerFunc(s.handleRenewInstance)))
 	mux.Handle("POST /api/v1/challenges/{challengeID}/submissions", s.authenticated(http.HandlerFunc(s.handleSubmitFlag)))
-	mux.Handle("GET /api/v1/admin/challenges", s.adminOnly(http.HandlerFunc(s.handleAdminChallenges)))
-	mux.Handle("POST /api/v1/admin/challenges", s.adminOnly(http.HandlerFunc(s.handleAdminCreateChallenge)))
-	mux.Handle("GET /api/v1/admin/challenges/{challengeID}", s.adminOnly(http.HandlerFunc(s.handleAdminChallengeDetail)))
-	mux.Handle("PATCH /api/v1/admin/challenges/{challengeID}", s.adminOnly(http.HandlerFunc(s.handleAdminUpdateChallenge)))
-	mux.Handle("GET /api/v1/admin/announcements", s.adminOnly(http.HandlerFunc(s.handleAdminAnnouncements)))
-	mux.Handle("POST /api/v1/admin/announcements", s.adminOnly(http.HandlerFunc(s.handleAdminCreateAnnouncement)))
-	mux.Handle("GET /api/v1/admin/submissions", s.adminOnly(http.HandlerFunc(s.handleAdminSubmissions)))
-	mux.Handle("GET /api/v1/admin/instances", s.adminOnly(http.HandlerFunc(s.handleAdminInstances)))
-	mux.Handle("POST /api/v1/admin/instances/{instanceID}/terminate", s.adminOnly(http.HandlerFunc(s.handleAdminTerminateInstance)))
+	mux.Handle("GET /api/v1/admin/challenges", s.requirePermission("challenge:read", http.HandlerFunc(s.handleAdminChallenges)))
+	mux.Handle("POST /api/v1/admin/challenges", s.requirePermission("challenge:write", http.HandlerFunc(s.handleAdminCreateChallenge)))
+	mux.Handle("GET /api/v1/admin/challenges/{challengeID}", s.requirePermission("challenge:read", http.HandlerFunc(s.handleAdminChallengeDetail)))
+	mux.Handle("PATCH /api/v1/admin/challenges/{challengeID}", s.requirePermission("challenge:write", http.HandlerFunc(s.handleAdminUpdateChallenge)))
+	mux.Handle("POST /api/v1/admin/challenges/{challengeID}/attachments", s.requirePermission("attachment:write", http.HandlerFunc(s.handleAdminCreateAttachment)))
+	mux.Handle("GET /api/v1/admin/announcements", s.requirePermission("announcement:read", http.HandlerFunc(s.handleAdminAnnouncements)))
+	mux.Handle("POST /api/v1/admin/announcements", s.requirePermission("announcement:write", http.HandlerFunc(s.handleAdminCreateAnnouncement)))
+	mux.Handle("GET /api/v1/admin/submissions", s.requirePermission("submission:read", http.HandlerFunc(s.handleAdminSubmissions)))
+	mux.Handle("GET /api/v1/admin/instances", s.requirePermission("instance:read", http.HandlerFunc(s.handleAdminInstances)))
+	mux.Handle("POST /api/v1/admin/instances/{instanceID}/terminate", s.requirePermission("instance:write", http.HandlerFunc(s.handleAdminTerminateInstance)))
+	mux.Handle("GET /api/v1/admin/users", s.requirePermission("user:read", http.HandlerFunc(s.handleAdminUsers)))
+	mux.Handle("PATCH /api/v1/admin/users/{userID}", s.requirePermission("user:write", http.HandlerFunc(s.handleAdminUpdateUser)))
+	mux.Handle("GET /api/v1/admin/audit-logs", s.requirePermission("audit:read", http.HandlerFunc(s.handleAdminAuditLogs)))
 	return loggingMiddleware(mux)
 }
 
@@ -143,11 +156,14 @@ func (s *Server) handleReady(w http.ResponseWriter, _ *http.Request) {
 	}
 
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
-		"status":                  "ready",
-		"database_url_configured": s.cfg.DatabaseURL != "",
-		"database_connected":      ready,
-		"docker_socket_path":      s.cfg.DockerSocketPath,
-		"dynamic_runtime_enabled": true,
+		"status":                       "ready",
+		"database_url_configured":      s.cfg.DatabaseURL != "",
+		"database_connected":           ready,
+		"docker_socket_path":           s.cfg.DockerSocketPath,
+		"dynamic_runtime_enabled":      true,
+		"attachment_storage_dir":       s.cfg.AttachmentStorageDir,
+		"submission_rate_limit_window": s.cfg.SubmissionRateLimitWindow.String(),
+		"submission_rate_limit_max":    s.cfg.SubmissionRateLimitMax,
 	})
 }
 
@@ -281,6 +297,48 @@ func (s *Server) handleChallengeDetail(w http.ResponseWriter, r *http.Request) {
 	writeChallengeResponse(w, http.StatusOK, challenge)
 }
 
+func (s *Server) handleChallengeAttachmentDownload(w http.ResponseWriter, r *http.Request) {
+	challengeID, err := strconv.ParseInt(r.PathValue("challengeID"), 10, 64)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_challenge_id", "challenge id must be numeric")
+		return
+	}
+	attachmentID, err := strconv.ParseInt(r.PathValue("attachmentID"), 10, 64)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_attachment_id", "attachment id must be numeric")
+		return
+	}
+
+	attachment, storagePath, err := s.admin.Attachment(r.Context(), challengeID, attachmentID)
+	if err != nil {
+		if errors.Is(err, admin.ErrResourceNotFound) {
+			httpx.WriteError(w, http.StatusNotFound, "attachment_not_found", err.Error())
+			return
+		}
+		log.Printf("load challenge attachment: %v", err)
+		httpx.WriteError(w, http.StatusBadGateway, "repository_error", "failed to load attachment")
+		return
+	}
+	file, err := os.Open(storagePath)
+	if err != nil {
+		log.Printf("open challenge attachment: %v", err)
+		httpx.WriteError(w, http.StatusBadGateway, "attachment_unavailable", "failed to open attachment")
+		return
+	}
+	defer file.Close()
+	contentType := attachment.ContentType
+	if contentType == "" {
+		contentType = mime.TypeByExtension(filepath.Ext(attachment.Filename))
+		if contentType == "" {
+			contentType = "application/octet-stream"
+		}
+	}
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", attachment.Filename))
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.Copy(w, file)
+}
+
 func (s *Server) handleScoreboard(w http.ResponseWriter, r *http.Request) {
 	items, err := s.game.Scoreboard(r.Context())
 	if err != nil {
@@ -355,6 +413,11 @@ func (s *Server) handleSubmitFlag(w http.ResponseWriter, r *http.Request) {
 	userID, ok := userIDFromContext(r.Context())
 	if !ok {
 		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
+		return
+	}
+	limiterKey := fmt.Sprintf("%d:%s", userID, r.PathValue("challengeID"))
+	if !s.submissionLimiter.Allow(limiterKey) {
+		httpx.WriteError(w, http.StatusTooManyRequests, "submission_rate_limited", "too many submissions, please try again later")
 		return
 	}
 
@@ -451,6 +514,37 @@ func (s *Server) handleAdminUpdateChallenge(w http.ResponseWriter, r *http.Reque
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"challenge": challenge})
 }
 
+func (s *Server) handleAdminCreateAttachment(w http.ResponseWriter, r *http.Request) {
+	actorUserID, ok := userIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
+		return
+	}
+	challengeID, err := strconv.ParseInt(r.PathValue("challengeID"), 10, 64)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_challenge_id", "challenge id must be numeric")
+		return
+	}
+	filename, contentType, size, file, err := extractUpload(r)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_upload", err.Error())
+		return
+	}
+	defer file.Close()
+	attachment, err := s.admin.CreateAttachment(r.Context(), actorUserID, challengeID, admin.CreateAttachmentInput{
+		Filename:    filename,
+		ContentType: contentType,
+		Body:        file,
+		SizeBytes:   size,
+	})
+	if err != nil {
+		log.Printf("create admin attachment: %v", err)
+		httpx.WriteError(w, http.StatusBadGateway, "create_failed", "failed to create attachment")
+		return
+	}
+	httpx.WriteJSON(w, http.StatusCreated, map[string]any{"attachment": attachment})
+}
+
 func (s *Server) handleAdminAnnouncements(w http.ResponseWriter, r *http.Request) {
 	items, err := s.admin.Announcements(r.Context())
 	if err != nil {
@@ -502,12 +596,17 @@ func (s *Server) handleAdminInstances(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAdminTerminateInstance(w http.ResponseWriter, r *http.Request) {
+	actorUserID, ok := userIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
+		return
+	}
 	instanceID, err := strconv.ParseInt(r.PathValue("instanceID"), 10, 64)
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_instance_id", "instance id must be numeric")
 		return
 	}
-	instance, err := s.admin.TerminateInstance(r.Context(), instanceID)
+	instance, err := s.admin.TerminateInstance(r.Context(), actorUserID, instanceID)
 	if err != nil {
 		if errors.Is(err, admin.ErrResourceNotFound) {
 			httpx.WriteError(w, http.StatusNotFound, "instance_not_found", err.Error())
@@ -518,6 +617,55 @@ func (s *Server) handleAdminTerminateInstance(w http.ResponseWriter, r *http.Req
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"instance": instance})
+}
+
+func (s *Server) handleAdminUsers(w http.ResponseWriter, r *http.Request) {
+	items, err := s.admin.Users(r.Context())
+	if err != nil {
+		log.Printf("list admin users: %v", err)
+		httpx.WriteError(w, http.StatusBadGateway, "repository_error", "failed to load users")
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (s *Server) handleAdminUpdateUser(w http.ResponseWriter, r *http.Request) {
+	actorUserID, ok := userIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
+		return
+	}
+	userID, err := strconv.ParseInt(r.PathValue("userID"), 10, 64)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_user_id", "user id must be numeric")
+		return
+	}
+	var input admin.UpdateUserInput
+	if err := decodeJSON(r, &input); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	user, err := s.admin.UpdateUser(r.Context(), actorUserID, userID, input)
+	if err != nil {
+		if errors.Is(err, admin.ErrResourceNotFound) {
+			httpx.WriteError(w, http.StatusNotFound, "user_not_found", err.Error())
+			return
+		}
+		log.Printf("update admin user: %v", err)
+		httpx.WriteError(w, http.StatusBadGateway, "update_failed", "failed to update user")
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"user": user})
+}
+
+func (s *Server) handleAdminAuditLogs(w http.ResponseWriter, r *http.Request) {
+	items, err := s.admin.AuditLogs(r.Context())
+	if err != nil {
+		log.Printf("list admin audit logs: %v", err)
+		httpx.WriteError(w, http.StatusBadGateway, "repository_error", "failed to load audit logs")
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
 func (s *Server) writeRuntimeError(w http.ResponseWriter, err error) {
@@ -560,15 +708,50 @@ func (s *Server) authenticated(next http.Handler) http.Handler {
 	})
 }
 
-func (s *Server) adminOnly(next http.Handler) http.Handler {
+func (s *Server) requirePermission(permission string, next http.Handler) http.Handler {
 	return s.authenticated(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		role, ok := roleFromContext(r.Context())
-		if !ok || role != "admin" {
-			httpx.WriteError(w, http.StatusForbidden, "forbidden", "admin role required")
+		if !ok {
+			httpx.WriteError(w, http.StatusForbidden, "forbidden", "missing role")
+			return
+		}
+		if !hasPermission(role, permission) {
+			httpx.WriteError(w, http.StatusForbidden, "forbidden", fmt.Sprintf("missing permission: %s", permission))
 			return
 		}
 		next.ServeHTTP(w, r)
 	}))
+}
+
+func hasPermission(role, permission string) bool {
+	permissions := map[string]map[string]bool{
+		"admin": {
+			"challenge:read":     true,
+			"challenge:write":    true,
+			"attachment:write":   true,
+			"announcement:read":  true,
+			"announcement:write": true,
+			"submission:read":    true,
+			"instance:read":      true,
+			"instance:write":     true,
+			"user:read":          true,
+			"user:write":         true,
+			"audit:read":         true,
+		},
+		"ops": {
+			"challenge:read":    true,
+			"attachment:write":  true,
+			"announcement:read": true,
+			"submission:read":   true,
+			"instance:read":     true,
+			"instance:write":    true,
+			"audit:read":        true,
+		},
+	}
+	if rolePerms, ok := permissions[role]; ok {
+		return rolePerms[permission]
+	}
+	return false
 }
 
 func writeAuthResponse(w http.ResponseWriter, status int, result auth.AuthResult) {
@@ -626,6 +809,24 @@ func requestSourceIP(r *http.Request) string {
 		return host
 	}
 	return r.RemoteAddr
+}
+
+func extractUpload(r *http.Request) (string, string, int64, multipart.File, error) {
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		return "", "", 0, nil, fmt.Errorf("parse multipart form: %w", err)
+	}
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		return "", "", 0, nil, fmt.Errorf("missing file field: %w", err)
+	}
+	contentType := header.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = mime.TypeByExtension(filepath.Ext(header.Filename))
+		if contentType == "" {
+			contentType = "application/octet-stream"
+		}
+	}
+	return header.Filename, contentType, header.Size, file, nil
 }
 
 type ctxKey string
