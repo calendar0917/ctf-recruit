@@ -84,6 +84,32 @@ docker compose -f deploy/docker-compose.prod.yml exec -T \
 - 默认迁移不会再生成任何已知管理员口令
 - `scripts/dev-seed.sh` 只用于本地开发，不能进入生产流程
 
+## 赛前彩排
+
+彩排前至少确认：
+
+- 已构建动态题镜像：`scripts/build-web-welcome-image.sh`
+- API、数据库、Redis 和 Docker Engine 已启动
+- 数据库已完成迁移
+- 已存在可用管理员账号
+
+最小彩排执行：
+
+```bash
+BASE_URL='http://127.0.0.1:8080' tests/smoke/smoke.sh
+```
+
+本地全自动彩排：
+
+```bash
+tests/smoke/run-local.sh
+```
+
+更详细的通过标准见：
+
+- [tests/README.md](/home/calendar/code/ctf/tests/README.md)
+- [tests/rehearsal/README.md](/home/calendar/code/ctf/tests/rehearsal/README.md)
+
 ## 反向代理与 TLS
 
 当前仓库已提供：
@@ -103,7 +129,6 @@ docker compose -f deploy/docker-compose.prod.yml exec -T \
 
 - 数据库备份与恢复手册
 - 结构化日志和指标采集
-- 赛前彩排与压测流程
 - 动态题宿主机和主站流量的更严格隔离
 
 具体优先级以 [开发基线与升级路线](/home/calendar/code/ctf/docs/development-baseline.md) 为准。
