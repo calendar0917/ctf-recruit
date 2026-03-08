@@ -57,6 +57,8 @@ type AdminChallengeDraft = {
   max_renew_count: string
   memory_limit_mb: string
   cpu_limit_millicores: string
+  max_active_instances: string
+  user_cooldown_seconds: string
   env_text: string
   command_text: string
 }
@@ -260,6 +262,8 @@ function createBlankChallengeDraft(): AdminChallengeDraft {
     max_renew_count: '1',
     memory_limit_mb: '256',
     cpu_limit_millicores: '500',
+    max_active_instances: '0',
+    user_cooldown_seconds: '0',
     env_text: '',
     command_text: '',
   }
@@ -286,6 +290,8 @@ function challengeDraftFromDetail(detail: AdminChallengeDetail): AdminChallengeD
     max_renew_count: String(detail.runtime_config.max_renew_count || 0),
     memory_limit_mb: String(detail.runtime_config.memory_limit_mb || 256),
     cpu_limit_millicores: String(detail.runtime_config.cpu_limit_millicores || 500),
+    max_active_instances: String(detail.runtime_config.max_active_instances || 0),
+    user_cooldown_seconds: String(detail.runtime_config.user_cooldown_seconds || 0),
     env_text: formatEnvText(detail.runtime_config.env),
     command_text: formatCommandText(detail.runtime_config.command),
   }
@@ -321,6 +327,8 @@ function buildChallengePayload(draft: AdminChallengeDraft): AdminChallengeInput 
           max_renew_count: parseInteger(draft.max_renew_count, 0),
           memory_limit_mb: parseInteger(draft.memory_limit_mb, 256),
           cpu_limit_millicores: parseInteger(draft.cpu_limit_millicores, 500),
+          max_active_instances: parseInteger(draft.max_active_instances, 0),
+          user_cooldown_seconds: parseInteger(draft.user_cooldown_seconds, 0),
           env: parseEnvText(draft.env_text),
           command: parseCommandText(draft.command_text),
         }
@@ -1109,6 +1117,10 @@ function App(): React.JSX.Element {
       if (code === 'instance_not_found') {
         setRuntimeInstance(null)
         setRuntimeNotice({ tone: 'neutral', text: '当前没有活动实例。' })
+      } else if (code === 'instance_capacity_reached') {
+        setRuntimeNotice({ tone: 'danger', text: '当前题目实例配额已满，请稍后再试。' })
+      } else if (code === 'instance_cooldown_active') {
+        setRuntimeNotice({ tone: 'danger', text: '刚刚创建过实例，冷却中，请稍后再试。' })
       } else if (code === 'instance_renew_limit_reached') {
         setRuntimeNotice({ tone: 'danger', text: '实例已达到最大续期次数。' })
       } else if (code === 'runtime_config_missing') {
@@ -2236,6 +2248,26 @@ function App(): React.JSX.Element {
                     }
                     type="number"
                     value={adminChallengeDraft.cpu_limit_millicores}
+                  />
+                </label>
+                <label className="field">
+                  <span>题目并发上限</span>
+                  <input
+                    onChange={(event) =>
+                      setAdminChallengeDraft((current) => ({ ...current, max_active_instances: event.target.value }))
+                    }
+                    type="number"
+                    value={adminChallengeDraft.max_active_instances}
+                  />
+                </label>
+                <label className="field">
+                  <span>用户冷却秒数</span>
+                  <input
+                    onChange={(event) =>
+                      setAdminChallengeDraft((current) => ({ ...current, user_cooldown_seconds: event.target.value }))
+                    }
+                    type="number"
+                    value={adminChallengeDraft.user_cooldown_seconds}
                   />
                 </label>
                 <label className="field wide-field">

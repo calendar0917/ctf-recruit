@@ -59,6 +59,29 @@ func (s *Service) StartInstance(ctx context.Context, userID int64, challengeRef 
 		return Instance{}, false, err
 	}
 
+	if cfg.MaxActiveInstances > 0 {
+		activeCount, err := s.repo.CountActiveInstances(ctx, cfg.ID)
+		if err != nil {
+			return Instance{}, false, err
+		}
+		if activeCount >= cfg.MaxActiveInstances {
+			return Instance{}, false, ErrInstanceCapacityReached
+		}
+	}
+
+	if cfg.UserCooldown > 0 {
+		latest, err := s.repo.GetLatestInstance(ctx, userID, cfg.ID)
+		if err != nil && !errors.Is(err, ErrRepositoryNotFound) {
+			return Instance{}, false, err
+		}
+		if err == nil {
+			nextAllowedAt := latest.Instance.StartedAt.Add(cfg.UserCooldown)
+			if nextAllowedAt.After(s.now().UTC()) {
+				return Instance{}, false, ErrInstanceCooldownActive
+			}
+		}
+	}
+
 	started, err := s.manager.Start(ctx, StartRequest{
 		ChallengeID: cfg.ID,
 		UserID:      userID,

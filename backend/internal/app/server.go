@@ -722,6 +722,10 @@ func (s *Server) writeRuntimeError(w http.ResponseWriter, err error) {
 		httpx.WriteError(w, http.StatusNotFound, "instance_not_found", err.Error())
 	case errors.Is(err, runtime.ErrInstanceRenewLimitReached):
 		httpx.WriteError(w, http.StatusConflict, "instance_renew_limit_reached", err.Error())
+	case errors.Is(err, runtime.ErrInstanceCapacityReached):
+		httpx.WriteError(w, http.StatusConflict, "instance_capacity_reached", err.Error())
+	case errors.Is(err, runtime.ErrInstanceCooldownActive):
+		httpx.WriteError(w, http.StatusConflict, "instance_cooldown_active", err.Error())
 	default:
 		log.Printf("runtime error: %v", err)
 		httpx.WriteError(w, http.StatusBadGateway, "runtime_error", fmt.Sprintf("%v", err))

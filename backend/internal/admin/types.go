@@ -10,16 +10,18 @@ import (
 var ErrResourceNotFound = errors.New("resource not found")
 
 type RuntimeConfig struct {
-	Enabled         bool              `json:"enabled"`
-	ImageName       string            `json:"image_name"`
-	ExposedProtocol string            `json:"exposed_protocol"`
-	ContainerPort   int               `json:"container_port"`
-	DefaultTTL      int               `json:"default_ttl_seconds"`
-	MaxRenewCount   int               `json:"max_renew_count"`
-	MemoryLimitMB   int               `json:"memory_limit_mb"`
-	CPUMilli        int               `json:"cpu_limit_millicores"`
-	Env             map[string]string `json:"env,omitempty"`
-	Command         []string          `json:"command,omitempty"`
+	Enabled            bool              `json:"enabled"`
+	ImageName          string            `json:"image_name"`
+	ExposedProtocol    string            `json:"exposed_protocol"`
+	ContainerPort      int               `json:"container_port"`
+	DefaultTTL         int               `json:"default_ttl_seconds"`
+	MaxRenewCount      int               `json:"max_renew_count"`
+	MemoryLimitMB      int               `json:"memory_limit_mb"`
+	CPUMilli           int               `json:"cpu_limit_millicores"`
+	MaxActiveInstances int               `json:"max_active_instances"`
+	UserCooldown       int               `json:"user_cooldown_seconds"`
+	Env                map[string]string `json:"env,omitempty"`
+	Command            []string          `json:"command,omitempty"`
 }
 
 type Attachment struct {

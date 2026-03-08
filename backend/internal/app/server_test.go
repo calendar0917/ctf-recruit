@@ -61,6 +61,7 @@ func (m *testManager) ListManagedContainers(_ context.Context) ([]runtime.Manage
 type testRuntimeRepo struct {
 	challenge runtime.RuntimeConfigRecord
 	instance  *runtime.InstanceRecord
+	history   *runtime.InstanceRecord
 }
 
 type testUserRepo struct {
@@ -99,7 +100,7 @@ type testAttachmentFile struct {
 	path       string
 }
 
-func newTestServer(t *testing.T) *Server {
+func newTestServer(t *testing.T) (*Server, *testRuntimeRepo) {
 	t.Helper()
 
 	attachmentDir := t.TempDir()
@@ -227,7 +228,7 @@ func newTestServer(t *testing.T) *Server {
 	runtimeService := runtime.NewService("http://localhost:8080", manager, runtimeRepo)
 	server := NewServerForTests(cfg, adminService, authService, gameService, runtimeService)
 	server.submissionLimiter.now = func() time.Time { return now }
-	return server
+	return server, runtimeRepo
 }
 
 func (r *testRuntimeRepo) ListChallenges(context.Context) ([]runtime.ChallengeSummary, error) {
@@ -252,6 +253,7 @@ func (r *testRuntimeRepo) GetActiveInstance(_ context.Context, userID int64, cha
 func (r *testRuntimeRepo) CreateInstance(_ context.Context, runtimeConfigID int64, instance runtime.Instance) (runtime.InstanceRecord, error) {
 	record := runtime.InstanceRecord{ID: 1, RuntimeConfigID: runtimeConfigID, Instance: instance}
 	r.instance = &record
+	r.history = &record
 	return record, nil
 }
 
@@ -261,13 +263,20 @@ func (r *testRuntimeRepo) RenewInstance(_ context.Context, instanceID int64, exp
 	}
 	r.instance.Instance.RenewCount++
 	r.instance.Instance.ExpiresAt = expiresAt
+	record := *r.instance
+	r.history = &record
 	return *r.instance, nil
 }
 
-func (r *testRuntimeRepo) TerminateInstance(_ context.Context, instanceID int64, _ time.Time) error {
+func (r *testRuntimeRepo) TerminateInstance(_ context.Context, instanceID int64, terminatedAt time.Time) error {
 	if r.instance == nil || r.instance.ID != instanceID {
 		return runtime.ErrRepositoryNotFound
 	}
+	record := *r.instance
+	record.Instance.Status = "terminated"
+	t := terminatedAt.UTC()
+	record.Instance.TerminatedAt = &t
+	r.history = &record
 	r.instance = nil
 	return nil
 }
@@ -277,6 +286,20 @@ func (r *testRuntimeRepo) ListExpiredInstances(_ context.Context, now time.Time)
 		return nil, nil
 	}
 	return []runtime.InstanceRecord{*r.instance}, nil
+}
+
+func (r *testRuntimeRepo) CountActiveInstances(_ context.Context, challengeID string) (int, error) {
+	if r.instance != nil && r.instance.Instance.ChallengeID == challengeID {
+		return 1, nil
+	}
+	return 0, nil
+}
+
+func (r *testRuntimeRepo) GetLatestInstance(_ context.Context, userID int64, challengeID string) (runtime.InstanceRecord, error) {
+	if r.history == nil || r.history.Instance.UserID != userID || r.history.Instance.ChallengeID != challengeID {
+		return runtime.InstanceRecord{}, runtime.ErrRepositoryNotFound
+	}
+	return *r.history, nil
 }
 
 func (r *testRuntimeRepo) ListActiveInstances(context.Context) ([]runtime.InstanceRecord, error) {
@@ -482,7 +505,7 @@ func (r *testAdminRepo) TerminateInstance(_ context.Context, instanceID int64, t
 }
 
 func TestHealthEndpoint(t *testing.T) {
-	server := newTestServer(t)
+	server, _ := newTestServer(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
 	res := httptest.NewRecorder()
 	server.Handler().ServeHTTP(res, req)
@@ -492,7 +515,7 @@ func TestHealthEndpoint(t *testing.T) {
 }
 
 func TestProtectedInstanceEndpointRequiresBearerToken(t *testing.T) {
-	server := newTestServer(t)
+	server, _ := newTestServer(t)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/challenges/1/instances/me", nil)
 	res := httptest.NewRecorder()
 	server.Handler().ServeHTTP(res, req)
@@ -502,7 +525,7 @@ func TestProtectedInstanceEndpointRequiresBearerToken(t *testing.T) {
 }
 
 func TestRegisterThenAccessMe(t *testing.T) {
-	server := newTestServer(t)
+	server, _ := newTestServer(t)
 	token := registerTestUser(t, server)
 	meReq := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
 	meReq.Header.Set("Authorization", "Bearer "+token)
@@ -514,7 +537,7 @@ func TestRegisterThenAccessMe(t *testing.T) {
 }
 
 func TestMySubmissionsEndpoint(t *testing.T) {
-	server := newTestServer(t)
+	server, _ := newTestServer(t)
 	token := registerTestUser(t, server)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/me/submissions", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -526,7 +549,7 @@ func TestMySubmissionsEndpoint(t *testing.T) {
 }
 
 func TestMySolvesEndpoint(t *testing.T) {
-	server := newTestServer(t)
+	server, _ := newTestServer(t)
 	token := registerTestUser(t, server)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/me/solves", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -538,7 +561,7 @@ func TestMySolvesEndpoint(t *testing.T) {
 }
 
 func TestChallengeDetailEndpoint(t *testing.T) {
-	server := newTestServer(t)
+	server, _ := newTestServer(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/challenges/1", nil)
 	res := httptest.NewRecorder()
 	server.Handler().ServeHTTP(res, req)
@@ -548,7 +571,7 @@ func TestChallengeDetailEndpoint(t *testing.T) {
 }
 
 func TestChallengeAttachmentDownloadEndpoint(t *testing.T) {
-	server := newTestServer(t)
+	server, _ := newTestServer(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/challenges/1/attachments/1", nil)
 	res := httptest.NewRecorder()
 	server.Handler().ServeHTTP(res, req)
@@ -564,7 +587,7 @@ func TestChallengeAttachmentDownloadEndpoint(t *testing.T) {
 }
 
 func TestChallengeAttachmentDownloadRejectsHiddenChallenge(t *testing.T) {
-	server := newTestServer(t)
+	server, _ := newTestServer(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/challenges/2/attachments/1", nil)
 	res := httptest.NewRecorder()
 	server.Handler().ServeHTTP(res, req)
@@ -574,7 +597,7 @@ func TestChallengeAttachmentDownloadRejectsHiddenChallenge(t *testing.T) {
 }
 
 func TestSubmitFlagEndpoint(t *testing.T) {
-	server := newTestServer(t)
+	server, _ := newTestServer(t)
 	token := registerTestUser(t, server)
 	body := []byte(`{"flag":"flag{welcome}"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/challenges/1/submissions", bytes.NewReader(body))
@@ -588,7 +611,7 @@ func TestSubmitFlagEndpoint(t *testing.T) {
 }
 
 func TestSubmitFlagRateLimitEndpoint(t *testing.T) {
-	server := newTestServer(t)
+	server, _ := newTestServer(t)
 	token := registerTestUser(t, server)
 	body := []byte(`{"flag":"wrong"}`)
 	for i := 0; i < 2; i++ {
@@ -610,7 +633,7 @@ func TestSubmitFlagRateLimitEndpoint(t *testing.T) {
 }
 
 func TestRenewInstanceEndpoint(t *testing.T) {
-	server := newTestServer(t)
+	server, _ := newTestServer(t)
 	token := registerTestUser(t, server)
 	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/challenges/1/instances/me", nil)
 	createReq.Header.Set("Authorization", "Bearer "+token)
@@ -629,7 +652,7 @@ func TestRenewInstanceEndpoint(t *testing.T) {
 }
 
 func TestRenewInstanceEndpointRejectsLimitReached(t *testing.T) {
-	server := newTestServer(t)
+	server, _ := newTestServer(t)
 	token := registerTestUser(t, server)
 	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/challenges/1/instances/me", nil)
 	createReq.Header.Set("Authorization", "Bearer "+token)
@@ -648,8 +671,74 @@ func TestRenewInstanceEndpointRejectsLimitReached(t *testing.T) {
 	}
 }
 
+func TestCreateInstanceEndpointRejectsChallengeCapacity(t *testing.T) {
+	server, runtimeRepo := newTestServer(t)
+	runtimeRepo.challenge.Challenge.MaxActiveInstances = 1
+
+	firstToken := registerTestUser(t, server)
+	firstReq := httptest.NewRequest(http.MethodPost, "/api/v1/challenges/1/instances/me", nil)
+	firstReq.Header.Set("Authorization", "Bearer "+firstToken)
+	firstRes := httptest.NewRecorder()
+	server.Handler().ServeHTTP(firstRes, firstReq)
+	if firstRes.Code != http.StatusCreated {
+		t.Fatalf("expected first create 201, got %d", firstRes.Code)
+	}
+
+	secondToken := registerAnotherTestUser(t, server)
+	secondReq := httptest.NewRequest(http.MethodPost, "/api/v1/challenges/1/instances/me", nil)
+	secondReq.Header.Set("Authorization", "Bearer "+secondToken)
+	secondRes := httptest.NewRecorder()
+	server.Handler().ServeHTTP(secondRes, secondReq)
+	if secondRes.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d", secondRes.Code)
+	}
+	assertAPIErrorCode(t, secondRes.Body.Bytes(), "instance_capacity_reached")
+}
+
+func TestCreateInstanceEndpointRejectsCooldownActive(t *testing.T) {
+	server, runtimeRepo := newTestServer(t)
+	runtimeRepo.challenge.Challenge.UserCooldown = time.Hour
+
+	token := registerTestUser(t, server)
+	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/challenges/1/instances/me", nil)
+	createReq.Header.Set("Authorization", "Bearer "+token)
+	createRes := httptest.NewRecorder()
+	server.Handler().ServeHTTP(createRes, createReq)
+	if createRes.Code != http.StatusCreated {
+		t.Fatalf("expected create 201, got %d", createRes.Code)
+	}
+
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/v1/challenges/1/instances/me", nil)
+	deleteReq.Header.Set("Authorization", "Bearer "+token)
+	deleteRes := httptest.NewRecorder()
+	server.Handler().ServeHTTP(deleteRes, deleteReq)
+	if deleteRes.Code != http.StatusOK {
+		t.Fatalf("expected delete 200, got %d", deleteRes.Code)
+	}
+
+	retryReq := httptest.NewRequest(http.MethodPost, "/api/v1/challenges/1/instances/me", nil)
+	retryReq.Header.Set("Authorization", "Bearer "+token)
+	retryRes := httptest.NewRecorder()
+	server.Handler().ServeHTTP(retryRes, retryReq)
+	if retryRes.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d", retryRes.Code)
+	}
+	assertAPIErrorCode(t, retryRes.Body.Bytes(), "instance_cooldown_active")
+}
+
+func assertAPIErrorCode(t *testing.T, body []byte, want string) {
+	t.Helper()
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("decode error response: %v", err)
+	}
+	if got, _ := payload["error"].(string); got != want {
+		t.Fatalf("expected error code %q, got %q", want, got)
+	}
+}
+
 func TestScoreboardEndpoint(t *testing.T) {
-	server := newTestServer(t)
+	server, _ := newTestServer(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/scoreboard", nil)
 	res := httptest.NewRecorder()
 	server.Handler().ServeHTTP(res, req)
@@ -659,7 +748,7 @@ func TestScoreboardEndpoint(t *testing.T) {
 }
 
 func TestAdminEndpointRequiresPermission(t *testing.T) {
-	server := newTestServer(t)
+	server, _ := newTestServer(t)
 	playerToken := registerTestUser(t, server)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/challenges", nil)
 	req.Header.Set("Authorization", "Bearer "+playerToken)
@@ -671,7 +760,7 @@ func TestAdminEndpointRequiresPermission(t *testing.T) {
 }
 
 func TestOpsRoleCanAccessInstanceActionsButNotUserManagement(t *testing.T) {
-	server := newTestServer(t)
+	server, _ := newTestServer(t)
 	opsToken := issueRoleToken(t, server, "ops")
 	instanceReq := httptest.NewRequest(http.MethodGet, "/api/v1/admin/instances", nil)
 	instanceReq.Header.Set("Authorization", "Bearer "+opsToken)
@@ -690,7 +779,7 @@ func TestOpsRoleCanAccessInstanceActionsButNotUserManagement(t *testing.T) {
 }
 
 func TestAdminChallengesEndpoint(t *testing.T) {
-	server := newTestServer(t)
+	server, _ := newTestServer(t)
 	adminToken := issueAdminToken(t, server)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/challenges", nil)
 	req.Header.Set("Authorization", "Bearer "+adminToken)
@@ -702,7 +791,7 @@ func TestAdminChallengesEndpoint(t *testing.T) {
 }
 
 func TestAdminChallengeDetailEndpoint(t *testing.T) {
-	server := newTestServer(t)
+	server, _ := newTestServer(t)
 	adminToken := issueAdminToken(t, server)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/challenges/1", nil)
 	req.Header.Set("Authorization", "Bearer "+adminToken)
@@ -714,9 +803,9 @@ func TestAdminChallengeDetailEndpoint(t *testing.T) {
 }
 
 func TestAdminUpdateChallengePersistsRuntimeConfigPayload(t *testing.T) {
-	server := newTestServer(t)
+	server, _ := newTestServer(t)
 	adminToken := issueAdminToken(t, server)
-	body := []byte(`{"slug":"web-welcome","title":"Welcome Panel","category_slug":"web","description":"updated","points":100,"difficulty":"easy","flag_type":"static","flag_value":"flag{welcome}","dynamic_enabled":true,"visible":true,"sort_order":10,"runtime_config":{"enabled":true,"image_name":"ctf/web-welcome:v2","exposed_protocol":"http","container_port":8080,"default_ttl_seconds":2400,"max_renew_count":2,"memory_limit_mb":512,"cpu_limit_millicores":1000,"env":{"MODE":"prod"},"command":["/app/start"]}}`)
+	body := []byte(`{"slug":"web-welcome","title":"Welcome Panel","category_slug":"web","description":"updated","points":100,"difficulty":"easy","flag_type":"static","flag_value":"flag{welcome}","dynamic_enabled":true,"visible":true,"sort_order":10,"runtime_config":{"enabled":true,"image_name":"ctf/web-welcome:v2","exposed_protocol":"http","container_port":8080,"default_ttl_seconds":2400,"max_renew_count":2,"memory_limit_mb":512,"cpu_limit_millicores":1000,"max_active_instances":5,"user_cooldown_seconds":120,"env":{"MODE":"prod"},"command":["/app/start"]}}`)
 	req := httptest.NewRequest(http.MethodPatch, "/api/v1/admin/challenges/1", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+adminToken)
 	res := httptest.NewRecorder()
@@ -727,7 +816,7 @@ func TestAdminUpdateChallengePersistsRuntimeConfigPayload(t *testing.T) {
 }
 
 func TestAdminCreateAttachmentEndpoint(t *testing.T) {
-	server := newTestServer(t)
+	server, _ := newTestServer(t)
 	adminToken := issueAdminToken(t, server)
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
@@ -752,7 +841,7 @@ func TestAdminCreateAttachmentEndpoint(t *testing.T) {
 }
 
 func TestAdminUsersEndpoint(t *testing.T) {
-	server := newTestServer(t)
+	server, _ := newTestServer(t)
 	adminToken := issueAdminToken(t, server)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/users", nil)
 	req.Header.Set("Authorization", "Bearer "+adminToken)
@@ -764,7 +853,7 @@ func TestAdminUsersEndpoint(t *testing.T) {
 }
 
 func TestAdminUpdateUserEndpoint(t *testing.T) {
-	server := newTestServer(t)
+	server, _ := newTestServer(t)
 	adminToken := issueAdminToken(t, server)
 	body := []byte(`{"role":"ops","display_name":"Alice Ops","status":"suspended"}`)
 	req := httptest.NewRequest(http.MethodPatch, "/api/v1/admin/users/2", bytes.NewReader(body))
@@ -777,7 +866,7 @@ func TestAdminUpdateUserEndpoint(t *testing.T) {
 }
 
 func TestAdminAuditLogsEndpoint(t *testing.T) {
-	server := newTestServer(t)
+	server, _ := newTestServer(t)
 	adminToken := issueAdminToken(t, server)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/audit-logs", nil)
 	req.Header.Set("Authorization", "Bearer "+adminToken)
@@ -789,7 +878,7 @@ func TestAdminAuditLogsEndpoint(t *testing.T) {
 }
 
 func TestAdminDeleteAnnouncementEndpoint(t *testing.T) {
-	server := newTestServer(t)
+	server, _ := newTestServer(t)
 	adminToken := issueAdminToken(t, server)
 	req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/announcements/1", nil)
 	req.Header.Set("Authorization", "Bearer "+adminToken)
@@ -801,7 +890,7 @@ func TestAdminDeleteAnnouncementEndpoint(t *testing.T) {
 }
 
 func TestAdminTerminateInstanceEndpoint(t *testing.T) {
-	server := newTestServer(t)
+	server, _ := newTestServer(t)
 	adminToken := issueAdminToken(t, server)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/instances/1/terminate", nil)
 	req.Header.Set("Authorization", "Bearer "+adminToken)
@@ -810,6 +899,26 @@ func TestAdminTerminateInstanceEndpoint(t *testing.T) {
 	if res.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.Code)
 	}
+}
+
+func registerAnotherTestUser(t *testing.T, server *Server) string {
+	t.Helper()
+	registerBody := []byte(`{"username":"bob","email":"bob@example.com","password":"Password123!","display_name":"Bob"}`)
+	registerReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewReader(registerBody))
+	registerRes := httptest.NewRecorder()
+	server.Handler().ServeHTTP(registerRes, registerReq)
+	if registerRes.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", registerRes.Code)
+	}
+	var registerPayload map[string]any
+	if err := json.Unmarshal(registerRes.Body.Bytes(), &registerPayload); err != nil {
+		t.Fatalf("decode register response: %v", err)
+	}
+	token, ok := registerPayload["token"].(string)
+	if !ok || token == "" {
+		t.Fatalf("expected token in register response")
+	}
+	return token
 }
 
 func registerTestUser(t *testing.T, server *Server) string {

@@ -651,24 +651,26 @@ ORDER BY id ASC
 func (r *AdminRepository) getChallengeRuntimeConfig(ctx context.Context, challengeID int64) (admin.RuntimeConfig, error) {
 	const query = `
 SELECT enabled, image_name, exposed_protocol, container_port, default_ttl_seconds, max_renew_count, memory_limit_mb, cpu_limit_millicores,
-       COALESCE(env_json, '{}'::jsonb), COALESCE(command_json, '[]'::jsonb)
+       max_active_instances, user_cooldown_seconds, COALESCE(env_json, '{}'::jsonb), COALESCE(command_json, '[]'::jsonb)
 FROM challenge_runtime_configs
 WHERE challenge_id = $1
 LIMIT 1
 `
 
 	var (
-		cfg           admin.RuntimeConfig
-		enabled       bool
-		imageName     string
-		protocol      string
-		containerPort int
-		defaultTTL    int
-		maxRenewCount int
-		memoryLimitMB int
-		cpuLimitMilli int
-		envJSON       []byte
-		commandJSON   []byte
+		cfg                admin.RuntimeConfig
+		enabled            bool
+		imageName          string
+		protocol           string
+		containerPort      int
+		defaultTTL         int
+		maxRenewCount      int
+		memoryLimitMB      int
+		cpuLimitMilli      int
+		maxActiveInstances int
+		userCooldown       int
+		envJSON            []byte
+		commandJSON        []byte
 	)
 	if err := r.db.QueryRowContext(ctx, query, challengeID).Scan(
 		&enabled,
@@ -679,6 +681,8 @@ LIMIT 1
 		&maxRenewCount,
 		&memoryLimitMB,
 		&cpuLimitMilli,
+		&maxActiveInstances,
+		&userCooldown,
 		&envJSON,
 		&commandJSON,
 	); err != nil {
@@ -695,6 +699,8 @@ LIMIT 1
 	cfg.MaxRenewCount = maxRenewCount
 	cfg.MemoryLimitMB = memoryLimitMB
 	cfg.CPUMilli = cpuLimitMilli
+	cfg.MaxActiveInstances = maxActiveInstances
+	cfg.UserCooldown = userCooldown
 	if len(envJSON) > 0 {
 		cfg.Env = make(map[string]string)
 		if err := json.Unmarshal(envJSON, &cfg.Env); err != nil {
@@ -732,11 +738,13 @@ INSERT INTO challenge_runtime_configs (
     max_renew_count,
     memory_limit_mb,
     cpu_limit_millicores,
+    max_active_instances,
+    user_cooldown_seconds,
     env_json,
     command_json,
     enabled,
     updated_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
 ON CONFLICT (challenge_id) DO UPDATE SET
     image_name = EXCLUDED.image_name,
     exposed_protocol = EXCLUDED.exposed_protocol,
@@ -745,6 +753,8 @@ ON CONFLICT (challenge_id) DO UPDATE SET
     max_renew_count = EXCLUDED.max_renew_count,
     memory_limit_mb = EXCLUDED.memory_limit_mb,
     cpu_limit_millicores = EXCLUDED.cpu_limit_millicores,
+    max_active_instances = EXCLUDED.max_active_instances,
+    user_cooldown_seconds = EXCLUDED.user_cooldown_seconds,
     env_json = EXCLUDED.env_json,
     command_json = EXCLUDED.command_json,
     enabled = EXCLUDED.enabled,
@@ -759,6 +769,8 @@ ON CONFLICT (challenge_id) DO UPDATE SET
 		cfg.MaxRenewCount,
 		cfg.MemoryLimitMB,
 		cfg.CPUMilli,
+		cfg.MaxActiveInstances,
+		cfg.UserCooldown,
 		envJSON,
 		commandJSON,
 		cfg.Enabled,

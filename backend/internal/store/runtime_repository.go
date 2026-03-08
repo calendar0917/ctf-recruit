@@ -65,6 +65,8 @@ SELECT
     rc.max_renew_count,
     rc.memory_limit_mb,
     rc.cpu_limit_millicores,
+    rc.max_active_instances,
+    rc.user_cooldown_seconds,
     COALESCE(rc.env_json, '{}'::jsonb),
     COALESCE(rc.command_json, '[]'::jsonb)
 FROM challenges c
@@ -75,22 +77,24 @@ LIMIT 1
 `
 
 	var (
-		challengeID     int64
-		slug            string
-		title           string
-		category        string
-		points          int
-		dynamicEnabled  bool
-		runtimeConfigID sql.NullInt64
-		imageName       sql.NullString
-		exposedProtocol sql.NullString
-		containerPort   sql.NullInt32
-		defaultTTL      sql.NullInt32
-		maxRenewCount   sql.NullInt32
-		memoryLimitMB   sql.NullInt32
-		cpuLimitMilli   sql.NullInt32
-		envJSON         []byte
-		commandJSON     []byte
+		challengeID        int64
+		slug               string
+		title              string
+		category           string
+		points             int
+		dynamicEnabled     bool
+		runtimeConfigID    sql.NullInt64
+		imageName          sql.NullString
+		exposedProtocol    sql.NullString
+		containerPort      sql.NullInt32
+		defaultTTL         sql.NullInt32
+		maxRenewCount      sql.NullInt32
+		memoryLimitMB      sql.NullInt32
+		cpuLimitMilli      sql.NullInt32
+		maxActiveInstances sql.NullInt32
+		userCooldown       sql.NullInt32
+		envJSON            []byte
+		commandJSON        []byte
 	)
 
 	err := r.db.QueryRowContext(ctx, query, challengeRef).Scan(
@@ -108,6 +112,8 @@ LIMIT 1
 		&maxRenewCount,
 		&memoryLimitMB,
 		&cpuLimitMilli,
+		&maxActiveInstances,
+		&userCooldown,
 		&envJSON,
 		&commandJSON,
 	)
@@ -135,6 +141,8 @@ LIMIT 1
 		cfg.MaxRenewCount = int(maxRenewCount.Int32)
 		cfg.MemoryLimitMB = int(memoryLimitMB.Int32)
 		cfg.CPUMilli = int(cpuLimitMilli.Int32)
+		cfg.MaxActiveInstances = int(maxActiveInstances.Int32)
+		cfg.UserCooldown = time.Duration(userCooldown.Int32) * time.Second
 	}
 
 	if len(envJSON) > 0 {
@@ -320,6 +328,73 @@ WHERE id = $1
 		return runtime.ErrRepositoryNotFound
 	}
 	return nil
+}
+
+func (r *RuntimeRepository) CountActiveInstances(ctx context.Context, challengeID string) (int, error) {
+	const query = `
+SELECT COUNT(*)
+FROM challenge_instances
+WHERE challenge_id::text = $1 AND status IN ('creating', 'running')
+`
+
+	var count int
+	if err := r.db.QueryRowContext(ctx, query, challengeID).Scan(&count); err != nil {
+		return 0, fmt.Errorf("count active instances: %w", err)
+	}
+	return count, nil
+}
+
+func (r *RuntimeRepository) GetLatestInstance(ctx context.Context, userID int64, challengeID string) (runtime.InstanceRecord, error) {
+	const query = `
+SELECT
+    ci.id,
+    ci.runtime_config_id,
+    ci.challenge_id::text,
+    ci.user_id,
+    ci.status,
+    ci.host_port,
+    ci.renew_count,
+    ci.started_at,
+    ci.expires_at,
+    ci.terminated_at,
+    ci.docker_container_id,
+    ci.docker_container_name,
+    ci.host_ip
+FROM challenge_instances ci
+WHERE ci.user_id = $1 AND ci.challenge_id::text = $2
+ORDER BY ci.started_at DESC, ci.id DESC
+LIMIT 1
+`
+
+	var (
+		record     runtime.InstanceRecord
+		terminated sql.NullTime
+	)
+	if err := r.db.QueryRowContext(ctx, query, userID, challengeID).Scan(
+		&record.ID,
+		&record.RuntimeConfigID,
+		&record.Instance.ChallengeID,
+		&record.Instance.UserID,
+		&record.Instance.Status,
+		&record.Instance.HostPort,
+		&record.Instance.RenewCount,
+		&record.Instance.StartedAt,
+		&record.Instance.ExpiresAt,
+		&terminated,
+		&record.Instance.ContainerID,
+		&record.Instance.ContainerName,
+		&record.Instance.HostIP,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return runtime.InstanceRecord{}, runtime.ErrRepositoryNotFound
+		}
+		return runtime.InstanceRecord{}, fmt.Errorf("get latest instance: %w", err)
+	}
+	if terminated.Valid {
+		t := terminated.Time
+		record.Instance.TerminatedAt = &t
+	}
+	return record, nil
 }
 
 func (r *RuntimeRepository) ListActiveInstances(ctx context.Context) ([]runtime.InstanceRecord, error) {

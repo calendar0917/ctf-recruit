@@ -33,6 +33,22 @@
 - `POST /api/v1/challenges/{challengeID}/instances/me/renew`
 - `POST /api/v1/challenges/{challengeID}/submissions`
 
+### 动态实例错误语义
+
+动态实例相关接口在冲突场景下会返回 `409 Conflict`，并使用稳定错误码区分原因：
+
+- `challenge_not_dynamic`：题目不是动态题
+- `runtime_config_missing`：题目已标记为动态题，但运行配置不完整
+- `instance_not_found`：当前用户在该题下没有活动实例
+- `instance_renew_limit_reached`：实例已达到最大续期次数
+- `instance_capacity_reached`：题目已达到配置的总并发实例上限
+- `instance_cooldown_active`：用户仍处于该题实例创建冷却期内
+
+说明：
+
+- `POST /api/v1/challenges/{challengeID}/instances/me` 会先检查用户现有活动实例，再检查题目并发上限与用户冷却时间
+- 管理端题目运行配置中的 `max_active_instances` 和 `user_cooldown_seconds` 会直接影响上述接口行为
+
 ## 管理接口
 
 这些接口当前要求带有管理员权限的 Bearer Token：

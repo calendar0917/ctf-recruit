@@ -127,6 +127,8 @@ export type AdminRuntimeConfig = {
   max_renew_count: number
   memory_limit_mb: number
   cpu_limit_millicores: number
+  max_active_instances: number
+  user_cooldown_seconds: number
   env?: Record<string, string>
   command?: string[]
 }

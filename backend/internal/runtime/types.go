@@ -12,25 +12,29 @@ var (
 	ErrRuntimeConfigMissing      = errors.New("runtime config missing")
 	ErrInstanceNotFound          = errors.New("instance not found")
 	ErrInstanceRenewLimitReached = errors.New("instance renew limit reached")
+	ErrInstanceCapacityReached   = errors.New("instance capacity reached")
+	ErrInstanceCooldownActive    = errors.New("instance cooldown active")
 	ErrRepositoryNotFound        = errors.New("repository record not found")
 )
 
 type ChallengeConfig struct {
-	ID              string
-	Slug            string
-	Title           string
-	Category        string
-	Points          int
-	Dynamic         bool
-	ImageName       string
-	ExposedProtocol string
-	ContainerPort   int
-	TTL             time.Duration
-	MaxRenewCount   int
-	MemoryLimitMB   int
-	CPUMilli        int
-	Env             map[string]string
-	Command         []string
+	ID                 string
+	Slug               string
+	Title              string
+	Category           string
+	Points             int
+	Dynamic            bool
+	ImageName          string
+	ExposedProtocol    string
+	ContainerPort      int
+	TTL                time.Duration
+	MaxRenewCount      int
+	MemoryLimitMB      int
+	CPUMilli           int
+	MaxActiveInstances int
+	UserCooldown       time.Duration
+	Env                map[string]string
+	Command            []string
 }
 
 type ChallengeSummary struct {
@@ -89,6 +93,8 @@ type Repository interface {
 	TerminateInstance(context.Context, int64, time.Time) error
 	ListExpiredInstances(context.Context, time.Time) ([]InstanceRecord, error)
 	ListActiveInstances(context.Context) ([]InstanceRecord, error)
+	CountActiveInstances(context.Context, string) (int, error)
+	GetLatestInstance(context.Context, int64, string) (InstanceRecord, error)
 }
 
 type StartRequest struct {

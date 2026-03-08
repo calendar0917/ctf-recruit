@@ -66,6 +66,7 @@ func (m *fakeManager) ListManagedContainers(_ context.Context) ([]ManagedContain
 type fakeRepository struct {
 	challenge RuntimeConfigRecord
 	active    map[string]InstanceRecord
+	history   map[string]InstanceRecord
 	nextID    int64
 }
 
@@ -89,8 +90,9 @@ func newFakeRepository() *fakeRepository {
 				CPUMilli:        500,
 			},
 		},
-		active: make(map[string]InstanceRecord),
-		nextID: 1,
+		active:  make(map[string]InstanceRecord),
+		history: make(map[string]InstanceRecord),
+		nextID:  1,
 	}
 }
 
@@ -131,6 +133,7 @@ func (r *fakeRepository) CreateInstance(_ context.Context, runtimeConfigID int64
 	}
 	r.nextID++
 	r.active[key] = record
+	r.history[key] = record
 	return record, nil
 }
 
@@ -140,6 +143,7 @@ func (r *fakeRepository) RenewInstance(_ context.Context, instanceID int64, expi
 			item.Instance.RenewCount++
 			item.Instance.ExpiresAt = expiresAt
 			r.active[key] = item
+			r.history[key] = item
 			return item, nil
 		}
 	}
@@ -152,6 +156,7 @@ func (r *fakeRepository) TerminateInstance(_ context.Context, instanceID int64, 
 			item.Instance.Status = "terminated"
 			item.Instance.TerminatedAt = &terminatedAt
 			delete(r.active, key)
+			r.history[key] = item
 			return nil
 		}
 	}
@@ -166,6 +171,25 @@ func (r *fakeRepository) ListExpiredInstances(_ context.Context, now time.Time) 
 		}
 	}
 	return items, nil
+}
+
+func (r *fakeRepository) CountActiveInstances(_ context.Context, challengeID string) (int, error) {
+	count := 0
+	for _, item := range r.active {
+		if item.Instance.ChallengeID == challengeID {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (r *fakeRepository) GetLatestInstance(_ context.Context, userID int64, challengeID string) (InstanceRecord, error) {
+	key := fmt.Sprintf("%d:%s", userID, challengeID)
+	item, ok := r.history[key]
+	if !ok {
+		return InstanceRecord{}, ErrRepositoryNotFound
+	}
+	return item, nil
 }
 
 func (r *fakeRepository) ListActiveInstances(context.Context) ([]InstanceRecord, error) {
@@ -359,5 +383,42 @@ func TestReconcileStopsOrphanManagedContainers(t *testing.T) {
 	}
 	if len(manager.stoppedIDs) != 1 || manager.stoppedIDs[0] != "orphan-1" {
 		t.Fatalf("expected orphan container to be stopped, got %#v", manager.stoppedIDs)
+	}
+}
+
+func TestStartInstanceFailsWhenChallengeCapacityReached(t *testing.T) {
+	manager := &fakeManager{}
+	repo := newFakeRepository()
+	repo.challenge.Challenge.MaxActiveInstances = 1
+	service := NewService("http://localhost:8080", manager, repo)
+	service.now = func() time.Time { return time.Date(2025, time.March, 8, 9, 0, 0, 0, time.UTC) }
+
+	if _, _, err := service.StartInstance(context.Background(), 7, "1"); err != nil {
+		t.Fatalf("start first instance: %v", err)
+	}
+	if _, _, err := service.StartInstance(context.Background(), 8, "1"); err != ErrInstanceCapacityReached {
+		t.Fatalf("expected capacity error, got %v", err)
+	}
+}
+
+func TestStartInstanceFailsWhenUserCooldownActive(t *testing.T) {
+	manager := &fakeManager{}
+	repo := newFakeRepository()
+	repo.challenge.Challenge.UserCooldown = 10 * time.Minute
+	service := NewService("http://localhost:8080", manager, repo)
+	baseTime := time.Date(2025, time.March, 8, 9, 0, 0, 0, time.UTC)
+	service.now = func() time.Time { return baseTime }
+
+	instance, _, err := service.StartInstance(context.Background(), 7, "1")
+	if err != nil {
+		t.Fatalf("start first instance: %v", err)
+	}
+	if _, err := service.DeleteInstance(context.Background(), 7, "1"); err != nil {
+		t.Fatalf("delete instance: %v", err)
+	}
+
+	service.now = func() time.Time { return instance.StartedAt.Add(5 * time.Minute) }
+	if _, _, err := service.StartInstance(context.Background(), 7, "1"); err != ErrInstanceCooldownActive {
+		t.Fatalf("expected cooldown error, got %v", err)
 	}
 }
