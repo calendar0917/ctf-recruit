@@ -462,6 +462,30 @@ RETURNING id, published_at
 	return result, nil
 }
 
+func (r *AdminRepository) DeleteAnnouncement(ctx context.Context, announcementID int64) (admin.Announcement, error) {
+	const query = `
+DELETE FROM announcements
+WHERE id = $1
+RETURNING id, title, content, pinned, published, published_at
+`
+	var (
+		item        admin.Announcement
+		publishedAt sql.NullTime
+	)
+	err := r.db.QueryRowContext(ctx, query, announcementID).Scan(&item.ID, &item.Title, &item.Content, &item.Pinned, &item.Published, &publishedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return admin.Announcement{}, admin.ErrResourceNotFound
+		}
+		return admin.Announcement{}, fmt.Errorf("delete announcement: %w", err)
+	}
+	if publishedAt.Valid {
+		t := publishedAt.Time
+		item.PublishedAt = &t
+	}
+	return item, nil
+}
+
 func (r *AdminRepository) ListSubmissions(ctx context.Context) ([]admin.SubmissionRecord, error) {
 	const query = `
 SELECT s.id, c.id, c.slug, u.username, s.is_correct, s.submitted_at, s.source_ip

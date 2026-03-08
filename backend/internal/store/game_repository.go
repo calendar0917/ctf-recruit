@@ -270,10 +270,44 @@ ORDER BY score DESC, last_solve_at ASC NULLS LAST, u.id ASC
 			t := lastSolveAt.Time
 			item.LastSolveAt = &t
 		}
+		solves, err := r.listScoreboardSolves(ctx, item.UserID)
+		if err != nil {
+			return nil, err
+		}
+		item.Solves = solves
 		items = append(items, item)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate scoreboard: %w", err)
+	}
+	return items, nil
+}
+
+func (r *GameRepository) listScoreboardSolves(ctx context.Context, userID int64) ([]game.ScoreboardSolve, error) {
+	const query = `
+SELECT c.id, c.slug, c.title, cat.slug, c.difficulty, s.awarded_points, s.solved_at
+FROM solves s
+JOIN challenges c ON c.id = s.challenge_id
+JOIN categories cat ON cat.id = c.category_id
+WHERE s.user_id = $1
+ORDER BY s.solved_at ASC, s.id ASC
+`
+	rows, err := r.db.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list scoreboard solves: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]game.ScoreboardSolve, 0)
+	for rows.Next() {
+		var item game.ScoreboardSolve
+		if err := rows.Scan(&item.ChallengeID, &item.ChallengeSlug, &item.ChallengeTitle, &item.Category, &item.Difficulty, &item.AwardedPoints, &item.SolvedAt); err != nil {
+			return nil, fmt.Errorf("scan scoreboard solve: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate scoreboard solves: %w", err)
 	}
 	return items, nil
 }

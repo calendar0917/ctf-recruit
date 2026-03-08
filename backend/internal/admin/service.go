@@ -94,6 +94,18 @@ func (s *Service) CreateAnnouncement(ctx context.Context, actorUserID int64, inp
 	return announcement, nil
 }
 
+func (s *Service) DeleteAnnouncement(ctx context.Context, actorUserID int64, announcementID int64) (Announcement, error) {
+	announcement, err := s.repo.DeleteAnnouncement(ctx, announcementID)
+	if err != nil {
+		return Announcement{}, err
+	}
+	_ = s.repo.CreateAuditLog(ctx, &actorUserID, "announcement.delete", "announcement", fmt.Sprintf("%d", announcementID), map[string]any{
+		"title":     announcement.Title,
+		"published": announcement.Published,
+	})
+	return announcement, nil
+}
+
 func (s *Service) Submissions(ctx context.Context) ([]SubmissionRecord, error) {
 	return s.repo.ListSubmissions(ctx)
 }

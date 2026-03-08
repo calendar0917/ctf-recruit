@@ -106,3 +106,27 @@ func TestUserHistoryMethodsReturnRepositoryData(t *testing.T) {
 		t.Fatalf("unexpected solves: %+v", solves)
 	}
 }
+
+func TestScoreboardReturnsSolveDetailsAndRanks(t *testing.T) {
+	now := time.Date(2025, time.March, 8, 10, 0, 0, 0, time.UTC)
+	service := NewService(&fakeRepo{
+		scoreboard: []ScoreboardEntry{{
+			UserID:      7,
+			Username:    "alice",
+			DisplayName: "Alice",
+			Score:       200,
+			Solves:      []ScoreboardSolve{{ChallengeID: 2, ChallengeSlug: "cipher-note", ChallengeTitle: "Cipher Note", Category: "crypto", Difficulty: "hard", AwardedPoints: 200, SolvedAt: now}},
+		}},
+	})
+
+	items, err := service.Scoreboard(context.Background())
+	if err != nil {
+		t.Fatalf("scoreboard: %v", err)
+	}
+	if len(items) != 1 || items[0].Rank != 1 {
+		t.Fatalf("unexpected scoreboard: %+v", items)
+	}
+	if len(items[0].Solves) != 1 || items[0].Solves[0].Difficulty != "hard" {
+		t.Fatalf("expected solve details, got %+v", items[0].Solves)
+	}
+}

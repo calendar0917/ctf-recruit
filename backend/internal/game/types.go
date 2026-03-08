@@ -68,13 +68,24 @@ type SubmitResult struct {
 	SolvedAt      *time.Time `json:"solved_at,omitempty"`
 }
 
+type ScoreboardSolve struct {
+	ChallengeID    int64     `json:"challenge_id"`
+	ChallengeSlug  string    `json:"challenge_slug"`
+	ChallengeTitle string    `json:"challenge_title"`
+	Category       string    `json:"category"`
+	Difficulty     string    `json:"difficulty"`
+	AwardedPoints  int       `json:"awarded_points"`
+	SolvedAt       time.Time `json:"solved_at"`
+}
+
 type ScoreboardEntry struct {
-	Rank        int        `json:"rank"`
-	UserID      int64      `json:"user_id"`
-	Username    string     `json:"username"`
-	DisplayName string     `json:"display_name"`
-	Score       int        `json:"score"`
-	LastSolveAt *time.Time `json:"last_solve_at,omitempty"`
+	Rank        int              `json:"rank"`
+	UserID      int64            `json:"user_id"`
+	Username    string           `json:"username"`
+	DisplayName string           `json:"display_name"`
+	Score       int              `json:"score"`
+	LastSolveAt *time.Time       `json:"last_solve_at,omitempty"`
+	Solves      []ScoreboardSolve `json:"solves"`
 }
 
 type Repository interface {

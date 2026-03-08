@@ -135,7 +135,7 @@ func newTestServer(t *testing.T) *Server {
 			AwardedPoints:  100,
 			SolvedAt:       now.Add(5 * time.Minute),
 		}},
-		scoreboard:       []game.ScoreboardEntry{{UserID: 1, Username: "alice", DisplayName: "Alice", Score: 100}},
+		scoreboard: []game.ScoreboardEntry{{UserID: 1, Username: "alice", DisplayName: "Alice", Score: 100, Solves: []game.ScoreboardSolve{{ChallengeID: 1, ChallengeSlug: "web-welcome", ChallengeTitle: "Welcome Panel", Category: "web", Difficulty: "easy", AwardedPoints: 100, SolvedAt: now}}}},
 		solved:           make(map[int64]bool),
 		nextSubmissionID: 1,
 	}
@@ -389,6 +389,16 @@ func (r *testAdminRepo) CreateAnnouncement(_ context.Context, _ int64, input adm
 	announcement := admin.Announcement{ID: 2, Title: input.Title, Content: input.Content, Pinned: input.Pinned, Published: input.Published}
 	r.announcements = append(r.announcements, announcement)
 	return announcement, nil
+}
+func (r *testAdminRepo) DeleteAnnouncement(_ context.Context, announcementID int64) (admin.Announcement, error) {
+	for i := range r.announcements {
+		if r.announcements[i].ID == announcementID {
+			item := r.announcements[i]
+			r.announcements = append(r.announcements[:i], r.announcements[i+1:]...)
+			return item, nil
+		}
+	}
+	return admin.Announcement{}, admin.ErrResourceNotFound
 }
 func (r *testAdminRepo) ListSubmissions(context.Context) ([]admin.SubmissionRecord, error) {
 	return r.submissions, nil
@@ -697,6 +707,18 @@ func TestAdminAuditLogsEndpoint(t *testing.T) {
 	server := newTestServer(t)
 	adminToken := issueAdminToken(t, server)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/audit-logs", nil)
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	res := httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.Code)
+	}
+}
+
+func TestAdminDeleteAnnouncementEndpoint(t *testing.T) {
+	server := newTestServer(t)
+	adminToken := issueAdminToken(t, server)
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/announcements/1", nil)
 	req.Header.Set("Authorization", "Bearer "+adminToken)
 	res := httptest.NewRecorder()
 	server.Handler().ServeHTTP(res, req)

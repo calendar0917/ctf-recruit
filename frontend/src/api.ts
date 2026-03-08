@@ -55,6 +55,16 @@ export type PublicChallengeDetail = {
   attachments: PublicAttachment[]
 }
 
+export type ScoreboardSolve = {
+  challenge_id: number
+  challenge_slug: string
+  challenge_title: string
+  category: string
+  difficulty: string
+  awarded_points: number
+  solved_at: string
+}
+
 export type ScoreboardEntry = {
   rank: number
   user_id: number
@@ -62,6 +72,7 @@ export type ScoreboardEntry = {
   display_name: string
   score: number
   last_solve_at?: string | null
+  solves: ScoreboardSolve[]
 }
 
 export type RuntimeInstance = {
@@ -351,6 +362,9 @@ export const api = {
       },
       token,
     )
+  },
+  deleteAdminAnnouncement(token: string, announcementID: number) {
+    return request<{ announcement: AdminAnnouncement }>(`/api/v1/admin/announcements/${announcementID}`, { method: 'DELETE' }, token)
   },
   adminSubmissions(token: string) {
     return request<{ items: AdminSubmission[] }>('/api/v1/admin/submissions', undefined, token)

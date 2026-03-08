@@ -16,6 +16,7 @@ import {
   type PublicChallengeSummary,
   type RuntimeInstance,
   type ScoreboardEntry,
+  type ScoreboardSolve,
   type UserSolve,
   type UserSubmission,
 } from './api'
@@ -330,6 +331,7 @@ function App(): React.JSX.Element {
   const [announcements, setAnnouncements] = useState<PublicAnnouncement[]>([])
   const [challengeList, setChallengeList] = useState<PublicChallengeSummary[]>([])
   const [scoreboard, setScoreboard] = useState<ScoreboardEntry[]>([])
+  const [expandedRanks, setExpandedRanks] = useState<Record<number, boolean>>({})
   const [publicLoading, setPublicLoading] = useState(true)
   const [publicNotice, setPublicNotice] = useState<Notice | null>(null)
 
@@ -376,6 +378,7 @@ function App(): React.JSX.Element {
     published: false,
   })
   const [announcementSubmitting, setAnnouncementSubmitting] = useState(false)
+  const [deletingAnnouncementId, setDeletingAnnouncementId] = useState<number | null>(null)
 
   const [adminSubmissions, setAdminSubmissions] = useState<AdminSubmission[]>([])
   const [adminSubmissionsLoading, setAdminSubmissionsLoading] = useState(false)
@@ -1111,6 +1114,24 @@ function App(): React.JSX.Element {
     }
   }
 
+  async function handleDeleteAnnouncement(announcementId: number) {
+    if (!token || !canWriteAnnouncements) {
+      setAdminAnnouncementsNotice({ tone: 'neutral', text: '当前账号没有公告删除权限。' })
+      return
+    }
+    setDeletingAnnouncementId(announcementId)
+    setAdminAnnouncementsNotice(null)
+    try {
+      await api.deleteAdminAnnouncement(token, announcementId)
+      setAdminAnnouncementsNotice({ tone: 'success', text: `公告 #${announcementId} 已移除。` })
+      await Promise.all([loadAdminAnnouncements(), loadPublicData()])
+    } catch (error) {
+      setAdminAnnouncementsNotice({ tone: 'danger', text: guardedError(error, '公告删除失败。') })
+    } finally {
+      setDeletingAnnouncementId(null)
+    }
+  }
+
   async function handleTerminateInstance(instanceId: number) {
     if (!token || !canTerminateInstances) {
       setAdminInstancesNotice({ tone: 'neutral', text: '当前账号没有实例终止权限。' })
@@ -1155,73 +1176,53 @@ function App(): React.JSX.Element {
     { label: '登录状态', value: authUser ? authUser.role : 'guest', note: authUser ? authUser.username : 'anonymous' },
   ]
 
+  const focusHighlights = [
+    '题目、实例、排行榜都围绕做题决策展开，不再强调后台展示感。',
+    '管理区仍保留能力，但视觉重点退后，把主要注意力让给题目与提交。',
+    '排行榜可直接展开查看具体解题、难度与分类，方便快速判断差距。',
+  ]
+
+
   function renderBriefing(): React.JSX.Element {
     return (
       <div className="view-stack">
-        <Panel
-          eyebrow="Contest Surface"
-          title="Recruit 2025 前后端已对齐的工作台"
-          subtitle="公开区直接读取后端公告、题目和排行榜；登录后会拉取个人历史，管理员可进入真实管理接口。"
-          actions={
-            <div className="hero-stats">
+        <section className="focus-hero panel panel-hero">
+          <div className="focus-hero-grid">
+            <div className="focus-copy">
+              <p className="eyebrow">御林工作室</p>
+              <h2>招新赛工作台</h2>
+              <p className="panel-subtitle">
+                这版前端把重心放回做题过程本身。题目检索、题面阅读、判题、实例管理和排行榜都围绕选手决策展开，后台能力保留，但不再喧宾夺主。
+              </p>
+              <div className="inline-actions">
+                <button className="primary-button" onClick={() => setView('board')} type="button">
+                  去做题
+                </button>
+                <button className="ghost-button" onClick={() => setView('scoreboard')} type="button">
+                  看排行榜
+                </button>
+              </div>
+            </div>
+
+            <div className="hero-stats focus-stats">
               {briefingCards.map((item) => (
-                <div className="stat-chip" key={item.label}>
+                <div className="stat-chip focus-chip" key={item.label}>
                   <span>{item.label}</span>
                   <strong>{item.value}</strong>
                   <small>{item.note}</small>
                 </div>
               ))}
             </div>
-          }
-        >
-          <NoticeBanner notice={publicNotice} />
-          <div className="hero-copy-grid">
-            <div className="editorial-copy">
-              <p>
-                这一版前端不再依赖本地 mock。题目列表、详情、实例状态、用户历史和后台数据都直接走 `/api/v1`，界面布局也收敛成单一主导航，避免之前重复 bar 和内容拥挤的问题。
-              </p>
-              <div className="inline-actions">
-                <button className="primary-button" onClick={() => setView('board')} type="button">
-                  查看题目
-                </button>
-                <button className="ghost-button" onClick={() => setView('runtime')} type="button">
-                  打开实例中心
-                </button>
-              </div>
-            </div>
-            <div className="detail-list">
-              <div className="detail-row">
-                <span>默认管理员</span>
-                <strong>`admin@ctf.local / Admin123!`</strong>
-              </div>
-              <div className="detail-row">
-                <span>实例操作</span>
-                <strong>启动、续期、回收均接后端真实接口</strong>
-              </div>
-              <div className="detail-row">
-                <span>管理接口</span>
-                <strong>题目、公告、用户、审计、实例监控</strong>
-              </div>
-            </div>
           </div>
-        </Panel>
+        </section>
 
         <div className="two-column-layout">
-          <Panel eyebrow="Announcements" title="公告流" subtitle="读取公开公告接口，按置顶和发布时间排序。">
-            <div className="card-list">
-              {publicLoading ? <div className="empty-state">正在读取公告与题目概况…</div> : null}
-              {!publicLoading && announcements.length === 0 ? <div className="empty-state">当前还没有已发布公告。</div> : null}
-              {announcements.map((item) => (
-                <article className="entry-card" key={item.id}>
-                  <div className="entry-head">
-                    <strong>{item.title}</strong>
-                    <span>{formatDateTime(item.published_at)}</span>
-                  </div>
-                  <p>{item.content}</p>
-                  <div className="badge-row">
-                    {item.pinned ? <span className="badge badge-solid">Pinned</span> : <span className="badge">Update</span>}
-                  </div>
-                </article>
+          <Panel eyebrow="Flow" title="现在的重点" subtitle="把体验集中在题目、实例与得分反馈上。">
+            <div className="compact-list">
+              {focusHighlights.map((item) => (
+                <div className="row-card" key={item}>
+                  <strong>{item}</strong>
+                </div>
               ))}
             </div>
           </Panel>
@@ -1229,7 +1230,7 @@ function App(): React.JSX.Element {
           <Panel
             eyebrow="Access"
             title={authUser ? `已登录：${authUser.display_name || authUser.username}` : '身份入口'}
-            subtitle={authUser ? '用户信息来自 /me，登出只清理本地 Token。' : '可直接登录默认管理员，也可注册一个 player 账号测试完整流程。'}
+            subtitle={authUser ? '用户信息来自 /me，登出只清理本地 Token。' : '可直接登录默认管理员，也可注册 player 账号测试完整流程。'}
           >
             <NoticeBanner notice={authNotice} />
             {sessionLoading ? <div className="empty-state">正在恢复登录态…</div> : null}
@@ -1272,7 +1273,7 @@ function App(): React.JSX.Element {
                       />
                     </label>
                     <button className="primary-button" disabled={authBusy} type="submit">
-                      {authBusy ? '登录中…' : '进入工作台'}
+                      {authBusy ? '登录中…' : '进入比赛'}
                     </button>
                   </form>
                 ) : (
@@ -1308,7 +1309,7 @@ function App(): React.JSX.Element {
                       />
                     </label>
                     <button className="primary-button" disabled={authBusy} type="submit">
-                      {authBusy ? '注册中…' : '注册并登录'}
+                      {authBusy ? '注册中…' : '注册并进入'}
                     </button>
                   </form>
                 )}
@@ -1345,6 +1346,25 @@ function App(): React.JSX.Element {
         </div>
 
         <div className="two-column-layout">
+          <Panel eyebrow="Announcements" title="公告流" subtitle="读取公开公告接口，按置顶和发布时间排序。">
+            <div className="card-list">
+              {publicLoading ? <div className="empty-state">正在读取公告与题目概况…</div> : null}
+              {!publicLoading && announcements.length === 0 ? <div className="empty-state">当前还没有已发布公告。</div> : null}
+              {announcements.map((item) => (
+                <article className="entry-card" key={item.id}>
+                  <div className="entry-head">
+                    <strong>{item.title}</strong>
+                    <span>{formatDateTime(item.published_at)}</span>
+                  </div>
+                  <p>{item.content}</p>
+                  <div className="badge-row">
+                    {item.pinned ? <span className="badge badge-solid">Pinned</span> : <span className="badge">Update</span>}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </Panel>
+
           <Panel eyebrow="Personal Feed" title="我的历史" subtitle="登录后展示真实提交与解题记录。">
             <NoticeBanner notice={historyNotice} />
             {historyLoading ? <div className="empty-state">正在读取个人历史…</div> : null}
@@ -1394,24 +1414,6 @@ function App(): React.JSX.Element {
                 </div>
               </div>
             ) : null}
-          </Panel>
-
-          <Panel eyebrow="Board Snapshot" title="分类概况" subtitle="题目列表支持搜索、分类折叠和动态题筛选。">
-            <div className="category-summary-list">
-              {Array.from(new Set(challengeList.map((item) => item.category))).map((category) => {
-                const items = challengeList.filter((item) => item.category === category)
-                const solvedCount = items.filter((item) => solvedChallengeIds.has(item.id)).length
-                return (
-                  <div className="category-summary-card" key={category}>
-                    <div>
-                      <strong>{category}</strong>
-                      <span>{items.length} 题</span>
-                    </div>
-                    <small>{solvedCount} 题已解</small>
-                  </div>
-                )
-              })}
-            </div>
           </Panel>
         </div>
       </div>
@@ -1715,22 +1717,74 @@ function App(): React.JSX.Element {
   function renderScoreboard(): React.JSX.Element {
     return (
       <div className="two-column-layout scoreboard-layout">
-        <Panel eyebrow="Ranked Board" title="排行榜" subtitle="公开接口只统计激活的 player 用户。">
+        <Panel eyebrow="Ranked Board" title="排行榜" subtitle="展开后可直接查看每位选手已完成的题目、难度和分类。">
           <NoticeBanner notice={publicNotice} />
-          <div className="table-stack">
-            {scoreboard.map((item) => (
-              <div className="table-row" key={item.user_id}>
-                <strong>#{item.rank}</strong>
-                <span>{item.display_name || item.username}</span>
-                <span>{item.score} pts</span>
-                <small>{formatDateTime(item.last_solve_at)}</small>
-              </div>
-            ))}
+          <div className="card-list scoreboard-card-list">
+            {scoreboard.map((item) => {
+              const expanded = Boolean(expandedRanks[item.user_id])
+              return (
+                <article className={expanded ? 'entry-card scoreboard-entry expanded' : 'entry-card scoreboard-entry'} key={item.user_id}>
+                  <div className="scoreboard-topline">
+                    <div className="scoreboard-identity">
+                      <strong>#{item.rank}</strong>
+                      <div>
+                        <span>{item.display_name || item.username}</span>
+                        <small>@{item.username}</small>
+                      </div>
+                    </div>
+                    <div className="scoreboard-metrics">
+                      <div>
+                        <span>总分</span>
+                        <strong>{item.score} pts</strong>
+                      </div>
+                      <div>
+                        <span>解题数</span>
+                        <strong>{item.solves.length}</strong>
+                      </div>
+                      <div>
+                        <span>最后解题</span>
+                        <strong>{formatDateTime(item.last_solve_at)}</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="inline-actions scoreboard-actions">
+                    <button
+                      className="ghost-button"
+                      onClick={() => setExpandedRanks((current) => ({ ...current, [item.user_id]: !expanded }))}
+                      type="button"
+                    >
+                      {expanded ? '收起解题明细' : '展开解题明细'}
+                    </button>
+                  </div>
+
+                  {expanded ? (
+                    <div className="scoreboard-solve-list">
+                      {item.solves.map((solve: ScoreboardSolve) => (
+                        <div className="scoreboard-solve-row" key={`${item.user_id}-${solve.challenge_id}-${solve.solved_at}`}>
+                          <div>
+                            <strong>{solve.challenge_title}</strong>
+                            <span>{solve.challenge_slug}</span>
+                          </div>
+                          <div className="badge-row wrap-actions">
+                            <span className="badge">{solve.category}</span>
+                            <span className={`badge difficulty-${solve.difficulty}`}>{solve.difficulty}</span>
+                            <span className="badge">{solve.awarded_points} pts</span>
+                            <span className="badge">{formatDateTime(solve.solved_at)}</span>
+                          </div>
+                        </div>
+                      ))}
+                      {item.solves.length === 0 ? <div className="empty-state small">当前还没有解题记录。</div> : null}
+                    </div>
+                  ) : null}
+                </article>
+              )
+            })}
             {scoreboard.length === 0 ? <div className="empty-state">当前还没有公开排行。</div> : null}
           </div>
         </Panel>
 
-        <Panel eyebrow="My Position" title="个人摘要" subtitle="登录后可以用真实数据校验前后端是否一致。">
+        <Panel eyebrow="My Position" title="个人摘要" subtitle="登录后可以直接比对自己的解题节奏与榜单差距。">
           {!authUser ? <div className="empty-state">登录后展示你的积分、解题数和最近解题记录。</div> : null}
           {authUser ? (
             <>
@@ -1752,6 +1806,7 @@ function App(): React.JSX.Element {
                 {mySolves.slice(0, 8).map((item) => (
                   <div className="row-card" key={`rank-solve-${item.id}`}>
                     <strong>{item.challenge_title}</strong>
+                    <span>{item.category}</span>
                     <span>{item.awarded_points} pts</span>
                     <span>{formatDateTime(item.solved_at)}</span>
                   </div>
@@ -2065,65 +2120,86 @@ function App(): React.JSX.Element {
   function renderAdminAnnouncements(): React.JSX.Element {
     return (
       <div className="two-column-layout admin-column-layout">
-        <Panel eyebrow="Announcement Feed" title="公告列表" subtitle="后台数据包含已发布与草稿状态。">
+        <Panel eyebrow="Studio Bulletin Cabinet" title="公告陈列柜" subtitle="过去的公告现在可以直接下架，不再只是只读陈列。">
           <NoticeBanner notice={adminAnnouncementsNotice} />
           {adminAnnouncementsLoading ? <div className="empty-state">正在读取后台公告…</div> : null}
-          <div className="card-list">
-            {adminAnnouncements.map((item) => (
-              <article className="entry-card" key={item.id}>
+          <div className="card-list archive-notice-list">
+            {adminAnnouncements.map((item, index) => (
+              <article className={index === 0 ? 'entry-card archive-entry featured-entry' : 'entry-card archive-entry'} key={item.id}>
                 <div className="entry-head">
                   <strong>{item.title}</strong>
                   <span>{formatDateTime(item.published_at)}</span>
                 </div>
                 <p>{item.content}</p>
-                <div className="badge-row">
-                  {item.pinned ? <span className="badge badge-solid">Pinned</span> : null}
+                <div className="badge-row wrap-actions">
+                  {item.pinned ? <span className="badge badge-solid">置顶</span> : <span className="badge">普通</span>}
                   <span className="badge">{item.published ? 'Published' : 'Draft'}</span>
+                  <span className="badge">编号 #{item.id}</span>
                 </div>
+                {canWriteAnnouncements ? (
+                  <div className="entry-toolbar">
+                    <button
+                      className="ghost-button danger-button"
+                      disabled={deletingAnnouncementId === item.id}
+                      onClick={() => void handleDeleteAnnouncement(item.id)}
+                      type="button"
+                    >
+                      {deletingAnnouncementId === item.id ? '移除中…' : '删除公告'}
+                    </button>
+                  </div>
+                ) : null}
               </article>
             ))}
             {adminAnnouncements.length === 0 && !adminAnnouncementsLoading ? <div className="empty-state">当前没有后台公告。</div> : null}
           </div>
         </Panel>
 
-        <Panel eyebrow="Compose" title="发布公告" subtitle={canWriteAnnouncements ? '表单直接提交到后台创建接口。' : '当前账号没有公告写权限，仅可查看列表。'}>
+        <Panel eyebrow="Compose Notice" title="发布公告" subtitle={canWriteAnnouncements ? '表单直接提交到后台创建接口。' : '当前账号没有公告写权限，仅可查看列表。'}>
           {canWriteAnnouncements ? (
-            <form className="form-grid single-column" onSubmit={handleCreateAnnouncement}>
-              <label className="field">
-                <span>标题</span>
-                <input
-                  onChange={(event) => setAnnouncementDraft((current) => ({ ...current, title: event.target.value }))}
-                  value={announcementDraft.title}
-                />
-              </label>
-              <label className="field">
-                <span>内容</span>
-                <textarea
-                  onChange={(event) => setAnnouncementDraft((current) => ({ ...current, content: event.target.value }))}
-                  rows={8}
-                  value={announcementDraft.content}
-                />
-              </label>
-              <label className="toggle-field">
-                <input
-                  checked={announcementDraft.pinned}
-                  onChange={(event) => setAnnouncementDraft((current) => ({ ...current, pinned: event.target.checked }))}
-                  type="checkbox"
-                />
-                <span>置顶</span>
-              </label>
-              <label className="toggle-field">
-                <input
-                  checked={announcementDraft.published}
-                  onChange={(event) => setAnnouncementDraft((current) => ({ ...current, published: event.target.checked }))}
-                  type="checkbox"
-                />
-                <span>立即发布</span>
-              </label>
-              <button className="primary-button" disabled={announcementSubmitting} type="submit">
-                {announcementSubmitting ? '提交中…' : '写入公告'}
-              </button>
-            </form>
+            <div className="notice-composer-stack">
+              <div className="composer-intro">
+                <span>公告编辑</span>
+                <p>用于发布赛事实况、提醒和流程说明，支持置顶和立即发布。</p>
+              </div>
+              <form className="form-grid single-column" onSubmit={handleCreateAnnouncement}>
+                <label className="field">
+                  <span>标题</span>
+                  <input
+                    onChange={(event) => setAnnouncementDraft((current) => ({ ...current, title: event.target.value }))}
+                    value={announcementDraft.title}
+                  />
+                </label>
+                <label className="field">
+                  <span>内容</span>
+                  <textarea
+                    onChange={(event) => setAnnouncementDraft((current) => ({ ...current, content: event.target.value }))}
+                    rows={8}
+                    value={announcementDraft.content}
+                  />
+                </label>
+                <div className="toggle-row-grid">
+                  <label className="toggle-field">
+                    <input
+                      checked={announcementDraft.pinned}
+                      onChange={(event) => setAnnouncementDraft((current) => ({ ...current, pinned: event.target.checked }))}
+                      type="checkbox"
+                    />
+                    <span>置顶</span>
+                  </label>
+                  <label className="toggle-field">
+                    <input
+                      checked={announcementDraft.published}
+                      onChange={(event) => setAnnouncementDraft((current) => ({ ...current, published: event.target.checked }))}
+                      type="checkbox"
+                    />
+                    <span>立即发布</span>
+                  </label>
+                </div>
+                <button className="primary-button" disabled={announcementSubmitting} type="submit">
+                  {announcementSubmitting ? '提交中…' : '写入公告'}
+                </button>
+              </form>
+            </div>
           ) : (
             <div className="empty-state">当前账号没有公告写权限。</div>
           )}
@@ -2345,8 +2421,8 @@ function App(): React.JSX.Element {
         <div className="brand-block">
           <div className="brand-mark">CTF</div>
           <div>
-            <p className="eyebrow">Recruit Platform</p>
-            <h1>Contest Workspace</h1>
+            <p className="eyebrow">御林工作室</p>
+            <h1>招新赛工作台</h1>
           </div>
         </div>
 

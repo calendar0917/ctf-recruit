@@ -52,6 +52,9 @@ func (r *fakeRepo) ListAnnouncements(context.Context) ([]Announcement, error) {
 func (r *fakeRepo) CreateAnnouncement(context.Context, int64, CreateAnnouncementInput) (Announcement, error) {
 	return Announcement{ID: 2, Title: "new"}, nil
 }
+func (r *fakeRepo) DeleteAnnouncement(context.Context, int64) (Announcement, error) {
+	return Announcement{ID: 1, Title: "hello", Published: true}, nil
+}
 func (r *fakeRepo) ListSubmissions(context.Context) ([]SubmissionRecord, error) {
 	return []SubmissionRecord{{ID: 1}}, nil
 }
@@ -134,5 +137,20 @@ func TestTerminateInstance(t *testing.T) {
 	}
 	if len(repo.auditLogs) != 1 || repo.auditLogs[0].Action != "instance.terminate" {
 		t.Fatalf("expected terminate audit log, got %+v", repo.auditLogs)
+	}
+}
+
+func TestDeleteAnnouncement(t *testing.T) {
+	repo := &fakeRepo{}
+	service := NewService(repo, t.TempDir())
+	announcement, err := service.DeleteAnnouncement(context.Background(), 2, 1)
+	if err != nil {
+		t.Fatalf("delete announcement: %v", err)
+	}
+	if announcement.ID != 1 {
+		t.Fatalf("unexpected announcement: %+v", announcement)
+	}
+	if len(repo.auditLogs) != 1 || repo.auditLogs[0].Action != "announcement.delete" {
+		t.Fatalf("expected delete audit log, got %+v", repo.auditLogs)
 	}
 }

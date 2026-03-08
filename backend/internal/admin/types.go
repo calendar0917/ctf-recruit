@@ -156,6 +156,7 @@ type Repository interface {
 	CreateAuditLog(context.Context, *int64, string, string, string, map[string]any) error
 	ListAnnouncements(context.Context) ([]Announcement, error)
 	CreateAnnouncement(context.Context, int64, CreateAnnouncementInput) (Announcement, error)
+	DeleteAnnouncement(context.Context, int64) (Announcement, error)
 	ListSubmissions(context.Context) ([]SubmissionRecord, error)
 	ListInstances(context.Context) ([]InstanceRecord, error)
 	TerminateInstance(context.Context, int64, time.Time) (InstanceRecord, error)

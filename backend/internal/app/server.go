@@ -105,6 +105,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/admin/challenges/{challengeID}/attachments", s.requirePermission("attachment:write", http.HandlerFunc(s.handleAdminCreateAttachment)))
 	mux.Handle("GET /api/v1/admin/announcements", s.requirePermission("announcement:read", http.HandlerFunc(s.handleAdminAnnouncements)))
 	mux.Handle("POST /api/v1/admin/announcements", s.requirePermission("announcement:write", http.HandlerFunc(s.handleAdminCreateAnnouncement)))
+	mux.Handle("DELETE /api/v1/admin/announcements/{announcementID}", s.requirePermission("announcement:write", http.HandlerFunc(s.handleAdminDeleteAnnouncement)))
 	mux.Handle("GET /api/v1/admin/submissions", s.requirePermission("submission:read", http.HandlerFunc(s.handleAdminSubmissions)))
 	mux.Handle("GET /api/v1/admin/instances", s.requirePermission("instance:read", http.HandlerFunc(s.handleAdminInstances)))
 	mux.Handle("POST /api/v1/admin/instances/{instanceID}/terminate", s.requirePermission("instance:write", http.HandlerFunc(s.handleAdminTerminateInstance)))
@@ -573,6 +574,30 @@ func (s *Server) handleAdminCreateAnnouncement(w http.ResponseWriter, r *http.Re
 		return
 	}
 	httpx.WriteJSON(w, http.StatusCreated, map[string]any{"announcement": announcement})
+}
+
+func (s *Server) handleAdminDeleteAnnouncement(w http.ResponseWriter, r *http.Request) {
+	actorUserID, ok := userIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
+		return
+	}
+	announcementID, err := strconv.ParseInt(r.PathValue("announcementID"), 10, 64)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_announcement_id", "announcement id must be numeric")
+		return
+	}
+	announcement, err := s.admin.DeleteAnnouncement(r.Context(), actorUserID, announcementID)
+	if err != nil {
+		if errors.Is(err, admin.ErrResourceNotFound) {
+			httpx.WriteError(w, http.StatusNotFound, "announcement_not_found", err.Error())
+			return
+		}
+		log.Printf("delete admin announcement: %v", err)
+		httpx.WriteError(w, http.StatusBadGateway, "delete_failed", "failed to delete announcement")
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"announcement": announcement})
 }
 
 func (s *Server) handleAdminSubmissions(w http.ResponseWriter, r *http.Request) {
