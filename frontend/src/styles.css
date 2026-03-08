@@ -2075,3 +2075,114 @@ code {
     padding: 14px 16px;
   }
 }
+
+code {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: break-spaces;
+}
+
+.admin-challenge-editor {
+  gap: 18px;
+}
+
+.admin-editor-overview-grid,
+.admin-quick-edit-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.admin-editor-overview-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.admin-editor-overview-card {
+  min-width: 0;
+}
+
+.admin-quick-edit-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.admin-summary-field {
+  margin-top: -2px;
+}
+
+.admin-challenge-detail-grid {
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+}
+
+.admin-judge-card,
+.code-safe-row,
+.code-safe-row code,
+.admin-judge-card .detail-list-row,
+.admin-judge-card .detail-list,
+.admin-judge-card small {
+  min-width: 0;
+}
+
+.code-safe-row code {
+  display: block;
+  width: 100%;
+}
+
+@media (max-width: 1120px) {
+  .admin-editor-overview-grid,
+  .admin-quick-edit-grid,
+  .admin-challenge-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.admin-challenge-workbench {
+  gap: 20px;
+}
+
+.admin-workbench-layout,
+.admin-workbench-status,
+.admin-workbench-main,
+.admin-workbench-form,
+.admin-workbench-side,
+.admin-workbench-side-actions {
+  display: grid;
+  gap: 16px;
+}
+
+.admin-workbench-layout {
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.8fr);
+  align-items: start;
+}
+
+.admin-workbench-status {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-workbench-side {
+  align-content: start;
+}
+
+.admin-workbench-side-actions {
+  grid-template-columns: 1fr;
+}
+
+.admin-quick-edit-grid-tight {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-quick-edit-grid-tight .full-span {
+  grid-column: 1 / -1;
+}
+
+.admin-challenge-detail-grid {
+  grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.22fr);
+}
+
+@media (max-width: 1120px) {
+  .admin-workbench-layout,
+  .admin-workbench-status,
+  .admin-quick-edit-grid-tight,
+  .admin-challenge-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}

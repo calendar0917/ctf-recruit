@@ -1673,7 +1673,7 @@ function AdminChallengesSection(props: { selectedChallengeId: number; onSelectCh
         </article>
 
         <div className="admin-section-stack">
-          <section className="panel admin-form-panel" key={`challenge-${selectedChallenge.id}`}>
+          <section className="panel admin-form-panel admin-challenge-workbench" key={`challenge-${selectedChallenge.id}`}>
             <div className="panel-head compact-head">
               <div>
                 <p className="section-kicker">Challenge Editor</p>
@@ -1686,83 +1686,102 @@ function AdminChallengesSection(props: { selectedChallengeId: number; onSelectCh
               </div>
             </div>
 
-            <div className="admin-selection-banner">
-              <div className="detail-list-row">
-                <span>维护责任</span>
-                <small>
-                  {selectedChallenge.owner} / 最近由 {selectedChallenge.updatedBy} 更新
-                </small>
-              </div>
-              <div className="detail-list-row">
-                <span>提交反馈</span>
-                <small>
-                  {selectedChallenge.solveCount} solve / {selectedChallenge.wrongCount} wrong / 解出率 {solveRate}%
-                </small>
-              </div>
-            </div>
+            <div className="admin-workbench-layout">
+              <div className="admin-workbench-main">
+                <div className="admin-workbench-status">
+                  <div className="detail-list-row">
+                    <span>维护责任</span>
+                    <small>
+                      {selectedChallenge.owner} / 最近由 {selectedChallenge.updatedBy} 更新
+                    </small>
+                  </div>
+                  <div className="detail-list-row">
+                    <span>提交反馈</span>
+                    <small>
+                      {selectedChallenge.solveCount} solve / {selectedChallenge.wrongCount} wrong / 解出率 {solveRate}%
+                    </small>
+                  </div>
+                </div>
 
-            <div className="admin-form-grid">
-              <label className="form-field">
-                <span>题目标题</span>
-                <input defaultValue={selectedChallenge.title} type="text" />
-              </label>
-              <label className="form-field">
-                <span>题目标识</span>
-                <input defaultValue={selectedChallenge.slug} type="text" />
-              </label>
-              <label className="form-field">
-                <span>分类</span>
-                <select defaultValue={selectedChallenge.category}>
-                  <option>Web</option>
-                  <option>Misc</option>
-                  <option>Crypto</option>
-                </select>
-              </label>
-              <label className="form-field">
-                <span>难度</span>
-                <select defaultValue={selectedChallenge.difficulty}>
-                  <option>Easy</option>
-                  <option>Normal</option>
-                  <option>Hard</option>
-                </select>
-              </label>
-              <label className="form-field">
-                <span>分值</span>
-                <input defaultValue={selectedChallenge.points} type="number" />
-              </label>
-              <label className="form-field">
-                <span>维护人</span>
-                <input defaultValue={selectedChallenge.owner} type="text" />
-              </label>
-              <label className="form-field toggle-field">
-                <span>发布状态</span>
-                <button className="ghost-button slim" type="button">
-                  {releaseMeta.label}
-                </button>
-              </label>
-              <label className="form-field toggle-field">
-                <span>运行健康</span>
-                <button className="ghost-button slim" type="button">
-                  {runtimeMeta.label}
-                </button>
-              </label>
-              <label className="form-field full-span">
-                <span>题目摘要</span>
-                <textarea defaultValue={selectedChallenge.summary} rows={4} />
-              </label>
-            </div>
+                <div className="admin-workbench-form">
+                  <div className="admin-quick-edit-grid admin-quick-edit-grid-tight">
+                    <label className="form-field full-span">
+                      <span>题目标题</span>
+                      <input defaultValue={selectedChallenge.title} type="text" />
+                    </label>
+                    <label className="form-field full-span">
+                      <span>题目标识</span>
+                      <input defaultValue={selectedChallenge.slug} type="text" />
+                    </label>
+                    <label className="form-field">
+                      <span>分类</span>
+                      <select defaultValue={selectedChallenge.category}>
+                        <option>Web</option>
+                        <option>Misc</option>
+                        <option>Crypto</option>
+                      </select>
+                    </label>
+                    <label className="form-field">
+                      <span>难度</span>
+                      <select defaultValue={selectedChallenge.difficulty}>
+                        <option>Easy</option>
+                        <option>Normal</option>
+                        <option>Hard</option>
+                      </select>
+                    </label>
+                    <label className="form-field">
+                      <span>分值</span>
+                      <input defaultValue={selectedChallenge.points} type="number" />
+                    </label>
+                    <label className="form-field">
+                      <span>维护人</span>
+                      <input defaultValue={selectedChallenge.owner} type="text" />
+                    </label>
+                    <label className="form-field full-span">
+                      <span>题目摘要</span>
+                      <textarea defaultValue={selectedChallenge.summary} rows={4} />
+                    </label>
+                  </div>
+                </div>
+              </div>
 
-            <div className="admin-form-actions">
-              <button className="ghost-button" type="button">
-                保存草稿
-              </button>
-              <button className="primary-button" type="button">
-                发布更新
-              </button>
+              <aside className="admin-workbench-side">
+                <article className="admin-detail-card admin-judge-card">
+                  <div className="admin-detail-head">
+                    <strong>Flag 与判题</strong>
+                    <button className="ghost-button slim" type="button">
+                      更新校验
+                    </button>
+                  </div>
+                  <div className="detail-list">
+                    <div className="detail-list-row stacked code-safe-row">
+                      <span>当前 Flag</span>
+                      <code>{selectedChallenge.flag}</code>
+                    </div>
+                    <div className="detail-list-row">
+                      <span>判题模式</span>
+                      <small>{selectedChallenge.judgeMode}</small>
+                    </div>
+                    <div className="detail-list-row stacked">
+                      <span>重试策略</span>
+                      <small>{selectedChallenge.retryPolicy}</small>
+                    </div>
+                  </div>
+                </article>
+
+                <div className="admin-workbench-side-actions">
+                  <button className="ghost-button" type="button">
+                    保存草稿
+                  </button>
+                  <button className="primary-button" type="button">
+                    发布更新
+                  </button>
+                </div>
+              </aside>
             </div>
           </section>
 
-          <section className="admin-detail-grid">
+          <section className="admin-detail-grid admin-challenge-detail-grid">
             <article className="admin-detail-card">
               <div className="admin-detail-head">
                 <strong>附件管理</strong>
@@ -1783,29 +1802,6 @@ function AdminChallengesSection(props: { selectedChallengeId: number; onSelectCh
               </div>
             </article>
 
-            <article className="admin-detail-card">
-              <div className="admin-detail-head">
-                <strong>Flag 与判题</strong>
-                <button className="ghost-button slim" type="button">
-                  更新校验
-                </button>
-              </div>
-              <div className="detail-list">
-                <div className="detail-list-row stacked">
-                  <span>当前 Flag</span>
-                  <code>{selectedChallenge.flag}</code>
-                </div>
-                <div className="detail-list-row">
-                  <span>判题模式</span>
-                  <small>{selectedChallenge.judgeMode}</small>
-                </div>
-                <div className="detail-list-row stacked">
-                  <span>重试策略</span>
-                  <small>{selectedChallenge.retryPolicy}</small>
-                </div>
-              </div>
-            </article>
-
             <article className="admin-detail-card full-span-card">
               <div className="admin-detail-head">
                 <strong>运行配置</strong>
@@ -1814,7 +1810,7 @@ function AdminChallengesSection(props: { selectedChallengeId: number; onSelectCh
                 </button>
               </div>
               <div className="runtime-config-grid">
-                <div className="detail-list-row stacked">
+                <div className="detail-list-row stacked code-safe-row">
                   <span>镜像</span>
                   <code>{selectedChallenge.runtimeImage}</code>
                 </div>
