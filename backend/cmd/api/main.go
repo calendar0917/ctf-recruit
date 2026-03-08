@@ -15,7 +15,15 @@ import (
 
 func main() {
 	cfg := config.Load()
-	server := app.NewServer(cfg)
+	server, err := app.NewServer(cfg)
+	if err != nil {
+		log.Fatalf("create server: %v", err)
+	}
+	defer func() {
+		if err := server.Close(); err != nil {
+			log.Printf("close server resources: %v", err)
+		}
+	}()
 
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,

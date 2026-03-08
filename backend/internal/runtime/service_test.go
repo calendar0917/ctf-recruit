@@ -27,9 +27,102 @@ func (m *fakeManager) Stop(_ context.Context, _ string) error {
 	return nil
 }
 
+type fakeRepository struct {
+	challenge RuntimeConfigRecord
+	active    map[string]InstanceRecord
+	nextID    int64
+}
+
+func newFakeRepository() *fakeRepository {
+	return &fakeRepository{
+		challenge: RuntimeConfigRecord{
+			ID: 101,
+			Challenge: ChallengeConfig{
+				ID:              "1",
+				Slug:            "web-welcome",
+				Title:           "Welcome Panel",
+				Category:        "web",
+				Points:          100,
+				Dynamic:         true,
+				ImageName:       "ctf/web-welcome:dev",
+				ExposedProtocol: "http",
+				ContainerPort:   80,
+				TTL:             30 * time.Minute,
+				MemoryLimitMB:   256,
+				CPUMilli:        500,
+			},
+		},
+		active: make(map[string]InstanceRecord),
+		nextID: 1,
+	}
+}
+
+func (r *fakeRepository) ListChallenges(context.Context) ([]ChallengeSummary, error) {
+	cfg := r.challenge.Challenge
+	return []ChallengeSummary{{
+		ID:       cfg.ID,
+		Slug:     cfg.Slug,
+		Title:    cfg.Title,
+		Category: cfg.Category,
+		Points:   cfg.Points,
+		Dynamic:  cfg.Dynamic,
+	}}, nil
+}
+
+func (r *fakeRepository) GetChallengeConfig(_ context.Context, challengeRef string) (RuntimeConfigRecord, error) {
+	if challengeRef == r.challenge.Challenge.ID || challengeRef == r.challenge.Challenge.Slug {
+		return r.challenge, nil
+	}
+	return RuntimeConfigRecord{}, ErrRepositoryNotFound
+}
+
+func (r *fakeRepository) GetActiveInstance(_ context.Context, userID int64, challengeID string) (InstanceRecord, error) {
+	key := fmt.Sprintf("%d:%s", userID, challengeID)
+	item, ok := r.active[key]
+	if !ok {
+		return InstanceRecord{}, ErrRepositoryNotFound
+	}
+	return item, nil
+}
+
+func (r *fakeRepository) CreateInstance(_ context.Context, runtimeConfigID int64, instance Instance) (InstanceRecord, error) {
+	key := fmt.Sprintf("%d:%s", instance.UserID, instance.ChallengeID)
+	record := InstanceRecord{
+		ID:              r.nextID,
+		RuntimeConfigID: runtimeConfigID,
+		Instance:        instance,
+	}
+	r.nextID++
+	r.active[key] = record
+	return record, nil
+}
+
+func (r *fakeRepository) TerminateInstance(_ context.Context, instanceID int64, terminatedAt time.Time) error {
+	for key, item := range r.active {
+		if item.ID == instanceID {
+			item.Instance.Status = "terminated"
+			item.Instance.TerminatedAt = &terminatedAt
+			delete(r.active, key)
+			return nil
+		}
+	}
+	return ErrRepositoryNotFound
+}
+
+func (r *fakeRepository) ListExpiredInstances(_ context.Context, now time.Time) ([]InstanceRecord, error) {
+	items := make([]InstanceRecord, 0)
+	for _, item := range r.active {
+		if !item.Instance.ExpiresAt.After(now) {
+			items = append(items, item)
+		}
+	}
+	return items, nil
+}
+
 func TestStartInstanceIsIdempotentPerUserAndChallenge(t *testing.T) {
 	manager := &fakeManager{}
-	service := NewService("http://localhost:8080", manager)
+	repo := newFakeRepository()
+	service := NewService("http://localhost:8080", manager, repo)
 
 	first, created, err := service.StartInstance(context.Background(), 42, "1")
 	if err != nil {
@@ -56,7 +149,8 @@ func TestStartInstanceIsIdempotentPerUserAndChallenge(t *testing.T) {
 
 func TestSweepExpiredStopsContainers(t *testing.T) {
 	manager := &fakeManager{}
-	service := NewService("http://localhost:8080", manager)
+	repo := newFakeRepository()
+	service := NewService("http://localhost:8080", manager, repo)
 	baseTime := time.Date(2025, time.March, 8, 9, 0, 0, 0, time.UTC)
 	service.now = func() time.Time { return baseTime }
 
@@ -79,7 +173,7 @@ func TestSweepExpiredStopsContainers(t *testing.T) {
 	if manager.stopCalls != 1 {
 		t.Fatalf("expected one runtime stop call, got %d", manager.stopCalls)
 	}
-	if _, err := service.GetInstance(7, "1"); err != ErrInstanceNotFound {
+	if _, err := service.GetInstance(context.Background(), 7, "1"); err != ErrInstanceNotFound {
 		t.Fatalf("expected instance to be removed after sweep, got %v", err)
 	}
 }

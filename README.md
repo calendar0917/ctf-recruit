@@ -14,12 +14,13 @@
 
 ## 当前状态
 
-仓库已经具备首批工程基线：
+仓库已经具备以下开发基线：
 
 - 产品范围、需求、架构和路线文档
-- 动态实例设计草案
+- 动态实例设计文档
 - 数据模型与 API 草案
 - 后端最小可运行骨架
+- 动态实例数据库驱动版基础闭环
 - 前端基础骨架
 - Docker Compose 开发环境草案
 - 动态题目模板示例
@@ -58,7 +59,7 @@ make backend-run
 后端测试：
 
 ```bash
-make backend-test
+cd backend && GOCACHE=/tmp/ctf-go-build GOMODCACHE=/tmp/ctf-go-mod go test ./...
 ```
 
 启动开发依赖：
@@ -67,16 +68,23 @@ make backend-test
 docker compose -f deploy/docker-compose.yml up postgres redis api
 ```
 
+应用数据库迁移：
+
+```bash
+DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/ctf?sslmode=disable' ./scripts/apply-migrations.sh
+```
+
 说明：
 
 - `frontend/` 已经建立基础骨架，但当前还没有执行依赖安装
-- `api` 服务已经预留动态实例管理接口和后台清理任务入口
-- 动态实例当前先按 `每个用户在每道题最多一个运行中实例` 设计
+- 动态实例运行配置已从数据库读取
+- 动态实例记录已落库到 `challenge_instances`
+- 当前实例接口仍使用 `X-User-ID` 请求头模拟登录用户
 
 ## 近期开发顺序
 
-1. 完成数据库迁移与数据访问层
-2. 完成认证、用户、题目和公告基础 API
-3. 接入动态实例管理的真实 Docker 实现
+1. 完成注册登录和 JWT 鉴权
+2. 完成用户、题目和公告基础 API
+3. 补充实例恢复、管理端实例查询和强制终止
 4. 完成前端页面和管理后台基础视图
 5. 打通 Flag 提交、排行榜和实例监控

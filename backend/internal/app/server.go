@@ -2,7 +2,9 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -11,19 +13,42 @@ import (
 	"ctf/backend/internal/config"
 	"ctf/backend/internal/httpx"
 	"ctf/backend/internal/runtime"
+	"ctf/backend/internal/store"
 )
 
 type Server struct {
 	cfg     config.Config
 	runtime *runtime.Service
+	db      *sql.DB
 }
 
-func NewServer(cfg config.Config) *Server {
+func NewServer(cfg config.Config) (*Server, error) {
+	db, err := store.Open(cfg.DatabaseURL)
+	if err != nil {
+		return nil, err
+	}
+
+	repo := store.NewRuntimeRepository(db)
 	manager := runtime.NewDockerManager(cfg.DockerSocketPath)
 	return &Server{
 		cfg:     cfg,
-		runtime: runtime.NewService(cfg.PublicBaseURL, manager),
+		runtime: runtime.NewService(cfg.PublicBaseURL, manager, repo),
+		db:      db,
+	}, nil
+}
+
+func NewServerWithRuntime(cfg config.Config, runtimeService *runtime.Service) *Server {
+	return &Server{
+		cfg:     cfg,
+		runtime: runtimeService,
 	}
+}
+
+func (s *Server) Close() error {
+	if s.db != nil {
+		return s.db.Close()
+	}
+	return nil
 }
 
 func (s *Server) Handler() http.Handler {
@@ -75,17 +100,32 @@ func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) handleReady(w http.ResponseWriter, _ *http.Request) {
+	ready := s.db != nil
+	if s.db != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		ready = s.db.PingContext(ctx) == nil
+	}
+
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"status":                  "ready",
 		"database_url_configured": s.cfg.DatabaseURL != "",
+		"database_connected":      ready,
 		"docker_socket_path":      s.cfg.DockerSocketPath,
 		"dynamic_runtime_enabled": true,
 	})
 }
 
-func (s *Server) handleChallenges(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleChallenges(w http.ResponseWriter, r *http.Request) {
+	items, err := s.runtime.Challenges(r.Context())
+	if err != nil {
+		log.Printf("list challenges: %v", err)
+		httpx.WriteError(w, http.StatusBadGateway, "repository_error", "failed to load challenges")
+		return
+	}
+
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
-		"items": s.runtime.Challenges(),
+		"items": items,
 	})
 }
 
@@ -122,7 +162,7 @@ func (s *Server) handleGetInstance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	instance, err := s.runtime.GetInstance(userID, r.PathValue("challengeID"))
+	instance, err := s.runtime.GetInstance(r.Context(), userID, r.PathValue("challengeID"))
 	if err != nil {
 		s.writeRuntimeError(w, err)
 		return
@@ -151,11 +191,13 @@ func (s *Server) writeRuntimeError(w http.ResponseWriter, err error) {
 		httpx.WriteError(w, http.StatusNotFound, "challenge_not_found", err.Error())
 	case errors.Is(err, runtime.ErrChallengeNotDynamic):
 		httpx.WriteError(w, http.StatusConflict, "challenge_not_dynamic", err.Error())
+	case errors.Is(err, runtime.ErrRuntimeConfigMissing):
+		httpx.WriteError(w, http.StatusConflict, "runtime_config_missing", err.Error())
 	case errors.Is(err, runtime.ErrInstanceNotFound):
 		httpx.WriteError(w, http.StatusNotFound, "instance_not_found", err.Error())
 	default:
 		log.Printf("runtime error: %v", err)
-		httpx.WriteError(w, http.StatusBadGateway, "runtime_error", err.Error())
+		httpx.WriteError(w, http.StatusBadGateway, "runtime_error", fmt.Sprintf("%v", err))
 	}
 }
 

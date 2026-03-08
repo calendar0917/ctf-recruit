@@ -7,9 +7,11 @@ import (
 )
 
 var (
-	ErrChallengeNotFound   = errors.New("challenge not found")
-	ErrChallengeNotDynamic = errors.New("challenge is not dynamic")
-	ErrInstanceNotFound    = errors.New("instance not found")
+	ErrChallengeNotFound    = errors.New("challenge not found")
+	ErrChallengeNotDynamic  = errors.New("challenge is not dynamic")
+	ErrRuntimeConfigMissing = errors.New("runtime config missing")
+	ErrInstanceNotFound     = errors.New("instance not found")
+	ErrRepositoryNotFound   = errors.New("repository record not found")
 )
 
 type ChallengeConfig struct {
@@ -50,6 +52,26 @@ type Instance struct {
 	ContainerID   string     `json:"-"`
 	ContainerName string     `json:"-"`
 	HostIP        string     `json:"-"`
+}
+
+type RuntimeConfigRecord struct {
+	ID        int64
+	Challenge ChallengeConfig
+}
+
+type InstanceRecord struct {
+	ID              int64
+	RuntimeConfigID int64
+	Instance        Instance
+}
+
+type Repository interface {
+	ListChallenges(context.Context) ([]ChallengeSummary, error)
+	GetChallengeConfig(context.Context, string) (RuntimeConfigRecord, error)
+	GetActiveInstance(context.Context, int64, string) (InstanceRecord, error)
+	CreateInstance(context.Context, int64, Instance) (InstanceRecord, error)
+	TerminateInstance(context.Context, int64, time.Time) error
+	ListExpiredInstances(context.Context, time.Time) ([]InstanceRecord, error)
 }
 
 type StartRequest struct {

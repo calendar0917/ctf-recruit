@@ -2,94 +2,61 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
-	"sort"
-	"strings"
 	"sync"
 	"time"
 )
 
 type Service struct {
 	manager       Manager
-	store         *MemoryStore
-	configs       map[string]ChallengeConfig
-	aliases       map[string]string
+	repo          Repository
 	publicBaseURL string
 	now           func() time.Time
 	mu            sync.Mutex
 }
 
-func NewService(publicBaseURL string, manager Manager) *Service {
-	service := &Service{
+func NewService(publicBaseURL string, manager Manager, repo Repository) *Service {
+	return &Service{
 		manager:       manager,
-		store:         NewMemoryStore(),
-		configs:       make(map[string]ChallengeConfig),
-		aliases:       make(map[string]string),
+		repo:          repo,
 		publicBaseURL: publicBaseURL,
 		now:           time.Now,
 	}
-
-	for _, cfg := range DefaultChallengeConfigs() {
-		service.configs[cfg.ID] = cfg
-		service.aliases[cfg.Slug] = cfg.ID
-	}
-
-	return service
 }
 
-func DefaultChallengeConfigs() []ChallengeConfig {
-	return []ChallengeConfig{
-		{
-			ID:              "1",
-			Slug:            "web-welcome",
-			Title:           "Welcome Panel",
-			Category:        "web",
-			Points:          100,
-			Dynamic:         true,
-			ImageName:       "ctf/web-welcome:dev",
-			ExposedProtocol: "http",
-			ContainerPort:   80,
-			TTL:             30 * time.Minute,
-			MemoryLimitMB:   256,
-			CPUMilli:        500,
-		},
-	}
-}
-
-func (s *Service) Challenges() []ChallengeSummary {
-	items := make([]ChallengeSummary, 0, len(s.configs))
-	for _, cfg := range s.configs {
-		items = append(items, ChallengeSummary{
-			ID:       cfg.ID,
-			Slug:     cfg.Slug,
-			Title:    cfg.Title,
-			Category: cfg.Category,
-			Points:   cfg.Points,
-			Dynamic:  cfg.Dynamic,
-		})
-	}
-
-	sort.Slice(items, func(i, j int) bool {
-		return items[i].ID < items[j].ID
-	})
-	return items
+func (s *Service) Challenges(ctx context.Context) ([]ChallengeSummary, error) {
+	return s.repo.ListChallenges(ctx)
 }
 
 func (s *Service) StartInstance(ctx context.Context, userID int64, challengeRef string) (Instance, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	cfg, ok := s.lookupChallenge(challengeRef)
-	if !ok {
-		return Instance{}, false, ErrChallengeNotFound
+	record, err := s.repo.GetChallengeConfig(ctx, challengeRef)
+	if err != nil {
+		if errors.Is(err, ErrRepositoryNotFound) {
+			return Instance{}, false, ErrChallengeNotFound
+		}
+		return Instance{}, false, err
 	}
+
+	cfg := record.Challenge
 	if !cfg.Dynamic {
 		return Instance{}, false, ErrChallengeNotDynamic
 	}
+	if record.ID == 0 || cfg.ImageName == "" || cfg.ContainerPort == 0 {
+		return Instance{}, false, ErrRuntimeConfigMissing
+	}
 
-	if existing, ok := s.store.GetActive(userID, cfg.ID); ok {
-		return existing, false, nil
+	existing, err := s.repo.GetActiveInstance(ctx, userID, cfg.ID)
+	if err == nil {
+		existing.Instance.AccessURL = buildAccessURL(cfg.ExposedProtocol, s.publicBaseURL, existing.Instance.HostPort)
+		return existing.Instance, false, nil
+	}
+	if !errors.Is(err, ErrRepositoryNotFound) {
+		return Instance{}, false, err
 	}
 
 	started, err := s.manager.Start(ctx, StartRequest{
@@ -114,60 +81,104 @@ func (s *Service) StartInstance(ctx context.Context, userID int64, challengeRef 
 		ContainerName: started.ContainerName,
 		HostIP:        started.HostIP,
 	}
-	s.store.Save(instance)
 
-	return instance, true, nil
+	saved, err := s.repo.CreateInstance(ctx, record.ID, instance)
+	if err != nil {
+		_ = s.manager.Stop(context.Background(), started.ContainerID)
+
+		if existing, lookupErr := s.repo.GetActiveInstance(ctx, userID, cfg.ID); lookupErr == nil {
+			existing.Instance.AccessURL = buildAccessURL(cfg.ExposedProtocol, s.publicBaseURL, existing.Instance.HostPort)
+			return existing.Instance, false, nil
+		}
+		return Instance{}, false, err
+	}
+
+	saved.Instance.AccessURL = buildAccessURL(cfg.ExposedProtocol, s.publicBaseURL, saved.Instance.HostPort)
+	return saved.Instance, true, nil
 }
 
-func (s *Service) GetInstance(userID int64, challengeRef string) (Instance, error) {
-	cfg, ok := s.lookupChallenge(challengeRef)
-	if !ok {
-		return Instance{}, ErrChallengeNotFound
+func (s *Service) GetInstance(ctx context.Context, userID int64, challengeRef string) (Instance, error) {
+	record, err := s.repo.GetChallengeConfig(ctx, challengeRef)
+	if err != nil {
+		if errors.Is(err, ErrRepositoryNotFound) {
+			return Instance{}, ErrChallengeNotFound
+		}
+		return Instance{}, err
 	}
 
-	instance, ok := s.store.GetActive(userID, cfg.ID)
-	if !ok {
-		return Instance{}, ErrInstanceNotFound
+	cfg := record.Challenge
+	if !cfg.Dynamic {
+		return Instance{}, ErrChallengeNotDynamic
 	}
-	return instance, nil
+
+	instanceRecord, err := s.repo.GetActiveInstance(ctx, userID, cfg.ID)
+	if err != nil {
+		if errors.Is(err, ErrRepositoryNotFound) {
+			return Instance{}, ErrInstanceNotFound
+		}
+		return Instance{}, err
+	}
+	instanceRecord.Instance.AccessURL = buildAccessURL(cfg.ExposedProtocol, s.publicBaseURL, instanceRecord.Instance.HostPort)
+	return instanceRecord.Instance, nil
 }
 
 func (s *Service) DeleteInstance(ctx context.Context, userID int64, challengeRef string) (Instance, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	cfg, ok := s.lookupChallenge(challengeRef)
-	if !ok {
-		return Instance{}, ErrChallengeNotFound
+	record, err := s.repo.GetChallengeConfig(ctx, challengeRef)
+	if err != nil {
+		if errors.Is(err, ErrRepositoryNotFound) {
+			return Instance{}, ErrChallengeNotFound
+		}
+		return Instance{}, err
 	}
 
-	instance, ok := s.store.GetActive(userID, cfg.ID)
-	if !ok {
-		return Instance{}, ErrInstanceNotFound
+	cfg := record.Challenge
+	if !cfg.Dynamic {
+		return Instance{}, ErrChallengeNotDynamic
 	}
 
-	if err := s.manager.Stop(ctx, instance.ContainerID); err != nil {
+	instanceRecord, err := s.repo.GetActiveInstance(ctx, userID, cfg.ID)
+	if err != nil {
+		if errors.Is(err, ErrRepositoryNotFound) {
+			return Instance{}, ErrInstanceNotFound
+		}
+		return Instance{}, err
+	}
+
+	if err := s.manager.Stop(ctx, instanceRecord.Instance.ContainerID); err != nil {
 		return Instance{}, err
 	}
 
 	now := s.now().UTC()
-	instance.Status = "terminated"
-	instance.TerminatedAt = &now
-	s.store.Delete(userID, cfg.ID)
-	return instance, nil
+	if err := s.repo.TerminateInstance(ctx, instanceRecord.ID, now); err != nil {
+		return Instance{}, err
+	}
+
+	instanceRecord.Instance.Status = "terminated"
+	instanceRecord.Instance.TerminatedAt = &now
+	instanceRecord.Instance.AccessURL = buildAccessURL(cfg.ExposedProtocol, s.publicBaseURL, instanceRecord.Instance.HostPort)
+	return instanceRecord.Instance, nil
 }
 
 func (s *Service) SweepExpired(ctx context.Context) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	expired := s.store.ListExpired(s.now().UTC())
+	expired, err := s.repo.ListExpiredInstances(ctx, s.now().UTC())
+	if err != nil {
+		return 0, err
+	}
+
 	terminated := 0
-	for _, instance := range expired {
-		if err := s.manager.Stop(ctx, instance.ContainerID); err != nil {
+	for _, item := range expired {
+		if err := s.manager.Stop(ctx, item.Instance.ContainerID); err != nil {
 			return terminated, err
 		}
-		s.store.Delete(instance.UserID, instance.ChallengeID)
+		if err := s.repo.TerminateInstance(ctx, item.ID, s.now().UTC()); err != nil {
+			return terminated, err
+		}
 		terminated++
 	}
 	return terminated, nil
@@ -187,17 +198,4 @@ func buildAccessURL(protocol, publicBaseURL string, hostPort int) string {
 	}
 
 	return fmt.Sprintf("%s://%s:%d", scheme, hostname, hostPort)
-}
-
-func (s *Service) lookupChallenge(challengeRef string) (ChallengeConfig, bool) {
-	if cfg, ok := s.configs[challengeRef]; ok {
-		return cfg, true
-	}
-
-	if canonicalID, ok := s.aliases[strings.ToLower(challengeRef)]; ok {
-		cfg, exists := s.configs[canonicalID]
-		return cfg, exists
-	}
-
-	return ChallengeConfig{}, false
 }
