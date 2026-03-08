@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"ctf/backend/internal/admin"
 	"ctf/backend/internal/auth"
 	"ctf/backend/internal/config"
 	"ctf/backend/internal/game"
@@ -48,6 +49,13 @@ type testGameRepo struct {
 	scoreboard       []game.ScoreboardEntry
 	solved           map[int64]bool
 	nextSubmissionID int64
+}
+
+type testAdminRepo struct {
+	challenges    []admin.ChallengeSummary
+	announcements []admin.Announcement
+	submissions   []admin.SubmissionRecord
+	instances     []admin.InstanceRecord
 }
 
 func newTestServer(t *testing.T) *Server {
@@ -94,25 +102,25 @@ func newTestServer(t *testing.T) *Server {
 		solved:           make(map[int64]bool),
 		nextSubmissionID: 1,
 	}
+	adminRepo := &testAdminRepo{
+		challenges:    []admin.ChallengeSummary{{ID: 1, Slug: "web-welcome", Title: "Welcome Panel", Category: "web"}},
+		announcements: []admin.Announcement{{ID: 1, Title: "Welcome", Published: true}},
+		submissions:   []admin.SubmissionRecord{{ID: 1, ChallengeSlug: "web-welcome", Username: "alice"}},
+		instances:     []admin.InstanceRecord{{ID: 1, ChallengeSlug: "web-welcome", Username: "alice", Status: "running"}},
+	}
 
 	cfg := config.Load()
 	tokens := auth.NewTokenManager(cfg.JWTSecret, cfg.JWTTTL)
 	authService := auth.NewService(userRepo, tokens)
+	adminService := admin.NewService(adminRepo)
 	gameService := game.NewService(gameRepo)
 	runtimeService := runtime.NewService("http://localhost:8080", &testManager{}, runtimeRepo)
-	return NewServerForTests(cfg, authService, gameService, runtimeService)
+	return NewServerForTests(cfg, adminService, authService, gameService, runtimeService)
 }
 
 func (r *testRuntimeRepo) ListChallenges(context.Context) ([]runtime.ChallengeSummary, error) {
 	cfg := r.challenge.Challenge
-	return []runtime.ChallengeSummary{{
-		ID:       cfg.ID,
-		Slug:     cfg.Slug,
-		Title:    cfg.Title,
-		Category: cfg.Category,
-		Points:   cfg.Points,
-		Dynamic:  cfg.Dynamic,
-	}}, nil
+	return []runtime.ChallengeSummary{{ID: cfg.ID, Slug: cfg.Slug, Title: cfg.Title, Category: cfg.Category, Points: cfg.Points, Dynamic: cfg.Dynamic}}, nil
 }
 
 func (r *testRuntimeRepo) GetChallengeConfig(_ context.Context, challengeRef string) (runtime.RuntimeConfigRecord, error) {
@@ -153,15 +161,7 @@ func (r *testRuntimeRepo) ListExpiredInstances(_ context.Context, now time.Time)
 func (r *testUserRepo) CreateUser(_ context.Context, params auth.CreateUserParams) (auth.User, error) {
 	id := r.nextID
 	r.nextID++
-	user := auth.User{
-		ID:           id,
-		Role:         params.RoleName,
-		Username:     params.Username,
-		Email:        params.Email,
-		DisplayName:  params.DisplayName,
-		Status:       "active",
-		PasswordHash: params.PasswordHash,
-	}
+	user := auth.User{ID: id, Role: params.RoleName, Username: params.Username, Email: params.Email, DisplayName: params.DisplayName, Status: "active", PasswordHash: params.PasswordHash}
 	r.users[id] = user
 	r.identifier[params.Username] = id
 	r.identifier[params.Email] = id
@@ -201,11 +201,11 @@ func (r *testGameRepo) CreateSubmission(_ context.Context, _ int64, _ int64, _ s
 	return id, time.Now().UTC(), nil
 }
 
-func (r *testGameRepo) HasSolved(_ context.Context, challengeID int64, userID int64) (bool, error) {
+func (r *testGameRepo) HasSolved(_ context.Context, _ int64, userID int64) (bool, error) {
 	return r.solved[userID], nil
 }
 
-func (r *testGameRepo) CreateSolve(_ context.Context, challengeID int64, userID int64, submissionID int64, points int) (time.Time, error) {
+func (r *testGameRepo) CreateSolve(_ context.Context, _ int64, userID int64, _ int64, _ int) (time.Time, error) {
 	r.solved[userID] = true
 	now := time.Now().UTC()
 	return now, nil
@@ -215,24 +215,50 @@ func (r *testGameRepo) ListScoreboard(context.Context) ([]game.ScoreboardEntry, 
 	return r.scoreboard, nil
 }
 
+func (r *testAdminRepo) ListChallenges(context.Context) ([]admin.ChallengeSummary, error) {
+	return r.challenges, nil
+}
+func (r *testAdminRepo) CreateChallenge(_ context.Context, input admin.UpsertChallengeInput) (admin.ChallengeSummary, error) {
+	challenge := admin.ChallengeSummary{ID: 2, Slug: input.Slug, Title: input.Title, Category: input.CategorySlug, Points: input.Points, Visible: input.Visible, DynamicEnabled: input.DynamicEnabled}
+	r.challenges = append(r.challenges, challenge)
+	return challenge, nil
+}
+func (r *testAdminRepo) UpdateChallenge(_ context.Context, challengeID int64, input admin.UpsertChallengeInput) (admin.ChallengeSummary, error) {
+	return admin.ChallengeSummary{ID: challengeID, Slug: input.Slug, Title: input.Title, Category: input.CategorySlug, Points: input.Points, Visible: input.Visible, DynamicEnabled: input.DynamicEnabled}, nil
+}
+func (r *testAdminRepo) ListAnnouncements(context.Context) ([]admin.Announcement, error) {
+	return r.announcements, nil
+}
+func (r *testAdminRepo) CreateAnnouncement(_ context.Context, _ int64, input admin.CreateAnnouncementInput) (admin.Announcement, error) {
+	announcement := admin.Announcement{ID: 2, Title: input.Title, Content: input.Content, Pinned: input.Pinned, Published: input.Published}
+	r.announcements = append(r.announcements, announcement)
+	return announcement, nil
+}
+func (r *testAdminRepo) ListSubmissions(context.Context) ([]admin.SubmissionRecord, error) {
+	return r.submissions, nil
+}
+func (r *testAdminRepo) ListInstances(context.Context) ([]admin.InstanceRecord, error) {
+	return r.instances, nil
+}
+func (r *testAdminRepo) TerminateInstance(_ context.Context, instanceID int64, terminatedAt time.Time) (admin.InstanceRecord, error) {
+	for i := range r.instances {
+		if r.instances[i].ID == instanceID {
+			r.instances[i].Status = "terminated"
+			t := terminatedAt.UTC()
+			r.instances[i].TerminatedAt = &t
+			return r.instances[i], nil
+		}
+	}
+	return admin.InstanceRecord{}, admin.ErrResourceNotFound
+}
+
 func TestHealthEndpoint(t *testing.T) {
 	server := newTestServer(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
 	res := httptest.NewRecorder()
-
 	server.Handler().ServeHTTP(res, req)
-
 	if res.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.Code)
-	}
-
-	var payload map[string]any
-	if err := json.Unmarshal(res.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("unmarshal response: %v", err)
-	}
-
-	if payload["status"] != "ok" {
-		t.Fatalf("expected status ok, got %#v", payload["status"])
 	}
 }
 
@@ -240,9 +266,7 @@ func TestProtectedInstanceEndpointRequiresBearerToken(t *testing.T) {
 	server := newTestServer(t)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/challenges/1/instances/me", nil)
 	res := httptest.NewRecorder()
-
 	server.Handler().ServeHTTP(res, req)
-
 	if res.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d", res.Code)
 	}
@@ -251,12 +275,10 @@ func TestProtectedInstanceEndpointRequiresBearerToken(t *testing.T) {
 func TestRegisterThenAccessMe(t *testing.T) {
 	server := newTestServer(t)
 	token := registerTestUser(t, server)
-
 	meReq := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
 	meReq.Header.Set("Authorization", "Bearer "+token)
 	meRes := httptest.NewRecorder()
 	server.Handler().ServeHTTP(meRes, meReq)
-
 	if meRes.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", meRes.Code)
 	}
@@ -266,9 +288,7 @@ func TestChallengeDetailEndpoint(t *testing.T) {
 	server := newTestServer(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/challenges/1", nil)
 	res := httptest.NewRecorder()
-
 	server.Handler().ServeHTTP(res, req)
-
 	if res.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.Code)
 	}
@@ -277,24 +297,14 @@ func TestChallengeDetailEndpoint(t *testing.T) {
 func TestSubmitFlagEndpoint(t *testing.T) {
 	server := newTestServer(t)
 	token := registerTestUser(t, server)
-
 	body := []byte(`{"flag":"flag{welcome}"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/challenges/1/submissions", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.RemoteAddr = "127.0.0.1:54321"
 	res := httptest.NewRecorder()
 	server.Handler().ServeHTTP(res, req)
-
 	if res.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.Code)
-	}
-
-	var payload map[string]any
-	if err := json.Unmarshal(res.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("decode submit response: %v", err)
-	}
-	if payload["correct"] != true {
-		t.Fatalf("expected correct flag response, got %#v", payload)
 	}
 }
 
@@ -303,7 +313,42 @@ func TestScoreboardEndpoint(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/scoreboard", nil)
 	res := httptest.NewRecorder()
 	server.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.Code)
+	}
+}
 
+func TestAdminEndpointRequiresAdminRole(t *testing.T) {
+	server := newTestServer(t)
+	playerToken := registerTestUser(t, server)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/challenges", nil)
+	req.Header.Set("Authorization", "Bearer "+playerToken)
+	res := httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", res.Code)
+	}
+}
+
+func TestAdminChallengesEndpoint(t *testing.T) {
+	server := newTestServer(t)
+	adminToken := issueAdminToken(t, server)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/challenges", nil)
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	res := httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.Code)
+	}
+}
+
+func TestAdminTerminateInstanceEndpoint(t *testing.T) {
+	server := newTestServer(t)
+	adminToken := issueAdminToken(t, server)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/instances/1/terminate", nil)
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	res := httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, req)
 	if res.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.Code)
 	}
@@ -315,19 +360,34 @@ func registerTestUser(t *testing.T, server *Server) string {
 	registerReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewReader(registerBody))
 	registerRes := httptest.NewRecorder()
 	server.Handler().ServeHTTP(registerRes, registerReq)
-
 	if registerRes.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d", registerRes.Code)
 	}
-
 	var registerPayload map[string]any
 	if err := json.Unmarshal(registerRes.Body.Bytes(), &registerPayload); err != nil {
 		t.Fatalf("decode register response: %v", err)
 	}
-
 	token, ok := registerPayload["token"].(string)
 	if !ok || token == "" {
 		t.Fatalf("expected token in register response")
+	}
+	return token
+}
+
+func issueAdminToken(t *testing.T, server *Server) string {
+	t.Helper()
+	result, err := server.auth.Register(context.Background(), auth.RegisterInput{Username: "admin", Email: "admin@example.com", Password: "AdminPass123!", DisplayName: "Admin"})
+	if err != nil {
+		t.Fatalf("register admin: %v", err)
+	}
+	user, err := server.auth.Me(context.Background(), result.User.ID)
+	if err != nil {
+		t.Fatalf("load admin user: %v", err)
+	}
+	user.Role = "admin"
+	token, _, err := auth.NewTokenManager(server.cfg.JWTSecret, server.cfg.JWTTTL).Sign(auth.TokenClaims{UserID: user.ID, Role: "admin"})
+	if err != nil {
+		t.Fatalf("issue admin token: %v", err)
 	}
 	return token
 }

@@ -36,18 +36,16 @@
 
 ## 管理接口
 
-- `GET /admin/users`
-- `PATCH /admin/users/{userID}`
+这些接口当前要求管理员角色的 Bearer Token：
+
 - `GET /admin/challenges`
 - `POST /admin/challenges`
 - `PATCH /admin/challenges/{challengeID}`
-- `POST /admin/challenges/{challengeID}/attachments`
-- `PUT /admin/challenges/{challengeID}/runtime-config`
-- `GET /admin/instances`
-- `POST /admin/instances/{instanceID}/terminate`
-- `GET /admin/submissions`
 - `GET /admin/announcements`
 - `POST /admin/announcements`
+- `GET /admin/submissions`
+- `GET /admin/instances`
+- `POST /admin/instances/{instanceID}/terminate`
 
 ## 当前约定
 
@@ -58,3 +56,4 @@
 - `GET /challenges/{challengeID}` 返回题目详情与附件元数据
 - `POST /challenges/{challengeID}/submissions` 返回提交结果、是否首次解题和得分
 - 动态实例接口返回实例状态、访问地址和过期时间
+- 管理接口当前已覆盖题目、公告、提交记录和实例监控的基础读取能力
