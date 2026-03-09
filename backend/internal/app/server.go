@@ -119,6 +119,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/admin/challenges", s.requirePermission("challenge:write", http.HandlerFunc(s.handleAdminCreateChallenge)))
 	mux.Handle("GET /api/v1/admin/challenges/{challengeID}", s.requirePermission("challenge:read", http.HandlerFunc(s.handleAdminChallengeDetail)))
 	mux.Handle("PATCH /api/v1/admin/challenges/{challengeID}", s.requirePermission("challenge:write", http.HandlerFunc(s.handleAdminUpdateChallenge)))
+	mux.Handle("GET /api/v1/admin/challenges/{challengeID}/authors", s.requirePermission("challenge:read", http.HandlerFunc(s.handleAdminChallengeAuthors)))
+	mux.Handle("PUT /api/v1/admin/challenges/{challengeID}/authors", s.requirePermission("challenge:write", http.HandlerFunc(s.handleAdminUpdateChallengeAuthors)))
 	mux.Handle("POST /api/v1/admin/challenges/{challengeID}/attachments", s.requirePermission("attachment:write", http.HandlerFunc(s.handleAdminCreateAttachment)))
 	mux.Handle("GET /api/v1/admin/announcements", s.requirePermission("announcement:read", http.HandlerFunc(s.handleAdminAnnouncements)))
 	mux.Handle("POST /api/v1/admin/announcements", s.requirePermission("announcement:write", http.HandlerFunc(s.handleAdminCreateAnnouncement)))
@@ -693,6 +695,80 @@ func (s *Server) handleAdminUpdateChallenge(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"challenge": challenge})
+}
+
+func (s *Server) handleAdminChallengeAuthors(w http.ResponseWriter, r *http.Request) {
+	challengeID, err := strconv.ParseInt(r.PathValue("challengeID"), 10, 64)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_challenge_id", "challenge id must be numeric")
+		return
+	}
+	actor, ok := adminActorFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
+		return
+	}
+	authors, err := s.admin.ChallengeAuthors(r.Context(), actor, challengeID)
+	if err != nil {
+		if errors.Is(err, admin.ErrResourceNotFound) {
+			httpx.WriteError(w, http.StatusNotFound, "challenge_not_found", err.Error())
+			return
+		}
+		logError("admin.challenge.authors.list.failed", map[string]any{"error": err.Error()})
+		httpx.WriteError(w, http.StatusBadGateway, "repository_error", "failed to load challenge authors")
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": authors})
+}
+
+func (s *Server) handleAdminUpdateChallengeAuthors(w http.ResponseWriter, r *http.Request) {
+	actorUserID, ok := userIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
+		return
+	}
+	allowed, err := enforceRateLimit(r.Context(), s.limiters.AdminWrite, adminRateLimitKey("challenge_authors_update", r, actorUserID))
+	if err != nil {
+		s.metrics.Inc("ctf_rate_limit_errors_total", map[string]string{"scope": "admin_write"})
+		logError("rate_limit.admin_write.error", map[string]any{"action": "challenge_authors_update", "error": err.Error()})
+		httpx.WriteError(w, http.StatusBadGateway, "rate_limit_error", "failed to enforce rate limit")
+		return
+	}
+	if !allowed {
+		s.metrics.Inc("ctf_rate_limit_hits_total", map[string]string{"scope": "admin_write"})
+		httpx.WriteError(w, http.StatusTooManyRequests, "admin_rate_limited", "too many admin write requests, please try again later")
+		return
+	}
+	challengeID, err := strconv.ParseInt(r.PathValue("challengeID"), 10, 64)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_challenge_id", "challenge id must be numeric")
+		return
+	}
+	actor, ok := adminActorFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
+		return
+	}
+	var input admin.UpdateChallengeAuthorsInput
+	if err := decodeJSON(r, &input); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	authors, err := s.admin.UpdateChallengeAuthors(r.Context(), actor, challengeID, input)
+	if err != nil {
+		if errors.Is(err, admin.ErrResourceNotFound) {
+			httpx.WriteError(w, http.StatusNotFound, "challenge_not_found", err.Error())
+			return
+		}
+		if actor.Role != "admin" {
+			httpx.WriteError(w, http.StatusForbidden, "forbidden", "only admin can manage challenge authors")
+			return
+		}
+		logError("admin.challenge.authors.update.failed", map[string]any{"error": err.Error()})
+		httpx.WriteError(w, http.StatusBadRequest, "update_failed", err.Error())
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": authors})
 }
 
 func (s *Server) handleAdminCreateAttachment(w http.ResponseWriter, r *http.Request) {

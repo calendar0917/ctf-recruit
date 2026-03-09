@@ -8,6 +8,7 @@ import {
   type AdminContestInput,
   type ContestInfo,
   type ContestPhase,
+  type AdminChallengeAuthor,
   type AdminChallengeInput,
   type AdminChallengeSummary,
   type AdminInstance,
@@ -446,6 +447,8 @@ function App(): React.JSX.Element {
   const [adminChallengeDetailLoading, setAdminChallengeDetailLoading] = useState(false)
   const [adminChallengeNotice, setAdminChallengeNotice] = useState<Notice | null>(null)
   const [adminChallengeSubmitting, setAdminChallengeSubmitting] = useState(false)
+  const [adminChallengeAuthorIDs, setAdminChallengeAuthorIDs] = useState<number[]>([])
+  const [adminChallengeAuthorSubmitting, setAdminChallengeAuthorSubmitting] = useState(false)
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null)
   const [attachmentUploading, setAttachmentUploading] = useState(false)
 
@@ -483,6 +486,7 @@ function App(): React.JSX.Element {
 
   const canAccessAdmin = authUser?.role === 'admin' || authUser?.role === 'ops' || authUser?.role === 'author'
   const canWriteChallenges = authUser?.role === 'admin' || authUser?.role === 'author'
+  const canManageChallengeAuthors = authUser?.role === 'admin'
   const canWriteAnnouncements = authUser?.role === 'admin'
   const canUploadAttachments = authUser?.role === 'admin' || authUser?.role === 'ops' || authUser?.role === 'author'
   const canManageUsers = authUser?.role === 'admin'
@@ -635,6 +639,7 @@ function App(): React.JSX.Element {
         const response = await api.adminChallenge(token, challengeId)
         setAdminChallengeDetail(response.challenge)
         setAdminChallengeDraft(challengeDraftFromDetail(response.challenge))
+        setAdminChallengeAuthorIDs(response.challenge.authors.map((item) => item.user_id))
       } catch (error) {
         setAdminChallengeDetail(null)
         setAdminChallengeNotice({ tone: 'danger', text: guardedError(error, '题目详情加载失败。') })
@@ -951,6 +956,9 @@ function App(): React.JSX.Element {
     }
     if (adminSection === 'challenges') {
       void loadAdminChallenges()
+      if (canManageChallengeAuthors) {
+        void loadAdminUsers()
+      }
     }
     if (adminSection === 'announcements') {
       void loadAdminAnnouncements()
@@ -968,6 +976,7 @@ function App(): React.JSX.Element {
   }, [
     adminSection,
     canAccessAdmin,
+    canManageChallengeAuthors,
     canManageUsers,
     loadAdminAnnouncements,
     loadAdminContest,
@@ -987,6 +996,7 @@ function App(): React.JSX.Element {
     if (selectedAdminChallenge === 'new') {
       setAdminChallengeDetail(null)
       setAdminChallengeDraft(createBlankChallengeDraft())
+      setAdminChallengeAuthorIDs([])
       return
     }
     if (typeof selectedAdminChallenge !== 'number') {
@@ -1250,6 +1260,30 @@ function App(): React.JSX.Element {
       }
     } finally {
       setAdminChallengeSubmitting(false)
+    }
+  }
+
+  async function handleSaveChallengeAuthors() {
+    if (!token || !canManageChallengeAuthors || typeof selectedAdminChallenge !== 'number') {
+      setAdminChallengeNotice({ tone: 'neutral', text: '当前账号没有负责人管理权限，或尚未选中题目。' })
+      return
+    }
+    setAdminChallengeAuthorSubmitting(true)
+    setAdminChallengeNotice(null)
+    try {
+      const response = await api.updateAdminChallengeAuthors(token, selectedAdminChallenge, adminChallengeAuthorIDs)
+      setAdminChallengeDetail((current) => (current ? { ...current, authors: response.items } : current))
+      setAdminChallengeNotice({ tone: 'success', text: '题目负责人已更新。' })
+      await loadAdminChallengeDetail(selectedAdminChallenge)
+    } catch (error) {
+      const code = readErrorCode(error)
+      if (code === 'admin_rate_limited') {
+        setAdminChallengeNotice({ tone: 'danger', text: '后台写操作过于频繁，请稍后再试。' })
+      } else {
+        setAdminChallengeNotice({ tone: 'danger', text: guardedError(error, '题目负责人更新失败。') })
+      }
+    } finally {
+      setAdminChallengeAuthorSubmitting(false)
     }
   }
 
@@ -2527,6 +2561,62 @@ function App(): React.JSX.Element {
                 </div>
               </form>
             ) : null}
+          </Panel>
+
+          <Panel eyebrow="Ownership" title="负责人" subtitle={canManageChallengeAuthors ? '管理员可以直接调整题目负责人，author 只读。' : '当前账号只能查看负责人。'}>
+            <div className="attachment-manager">
+              <div className="detail-list compact-list">
+                {(adminChallengeDetail?.authors ?? []).map((author) => (
+                  <label className="detail-row" key={author.user_id}>
+                    <span>
+                      {author.display_name || author.username} · @{author.username}
+                    </span>
+                    <strong>
+                      {author.role} · {author.email}
+                    </strong>
+                  </label>
+                ))}
+                {(adminChallengeDetail?.authors ?? []).length === 0 ? <div className="empty-state small">当前题目还没有负责人。</div> : null}
+              </div>
+              {canManageChallengeAuthors ? (
+                <div className="detail-list compact-list">
+                  {adminUsers
+                    .filter((user) => user.role === 'author' || user.role === 'admin')
+                    .map((user) => (
+                      <label className="detail-row" key={`author-candidate-${user.id}`}>
+                        <span>{user.display_name || user.username}</span>
+                        <strong>
+                          <input
+                            checked={adminChallengeAuthorIDs.includes(user.id)}
+                            onChange={(event) =>
+                              setAdminChallengeAuthorIDs((current) =>
+                                event.target.checked
+                                  ? current.includes(user.id)
+                                    ? current
+                                    : [...current, user.id]
+                                  : current.filter((item) => item !== user.id),
+                              )
+                            }
+                            type="checkbox"
+                          />
+                        </strong>
+                      </label>
+                    ))}
+                </div>
+              ) : null}
+              {canManageChallengeAuthors ? (
+                <div className="inline-actions wrap-actions">
+                  <button
+                    className="ghost-button"
+                    disabled={adminChallengeAuthorSubmitting || typeof selectedAdminChallenge !== 'number'}
+                    onClick={() => void handleSaveChallengeAuthors()}
+                    type="button"
+                  >
+                    {adminChallengeAuthorSubmitting ? '保存中…' : '保存负责人'}
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </Panel>
 
           <Panel eyebrow="Attachments" title="附件管理" subtitle="上传后立即可在公开详情页通过下载接口访问。">

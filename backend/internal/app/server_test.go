@@ -194,6 +194,7 @@ func newTestServer(t *testing.T) (*Server, *testRuntimeRepo) {
 		},
 		ownedChallengeIDs: map[int64]map[int64]bool{
 			1: {1: true},
+			4: {1: true},
 		},
 		challengeDetails: map[int64]admin.ChallengeDetail{
 			1: {
@@ -209,6 +210,7 @@ func newTestServer(t *testing.T) (*Server, *testRuntimeRepo) {
 				Visible:        true,
 				DynamicEnabled: true,
 				SortOrder:      10,
+				Authors:        []admin.ChallengeAuthor{{UserID: 4, Username: "author", Email: "author@example.com", DisplayName: "Author", Role: "author"}},
 				Attachments:    []admin.Attachment{{ID: 1, Filename: "statement.pdf", ContentType: "application/pdf", SizeBytes: 14}},
 				RuntimeConfig: admin.RuntimeConfig{
 					Enabled:         true,
@@ -244,6 +246,7 @@ func newTestServer(t *testing.T) (*Server, *testRuntimeRepo) {
 			{ID: 1, Role: "admin", Username: "root", Email: "root@example.com", DisplayName: "Root", Status: "active", CreatedAt: now},
 			{ID: 2, Role: "player", Username: "alice", Email: "alice@example.com", DisplayName: "Alice", Status: "active", CreatedAt: now},
 			{ID: 3, Role: "ops", Username: "ops", Email: "ops@example.com", DisplayName: "Ops", Status: "active", CreatedAt: now},
+			{ID: 4, Role: "author", Username: "author", Email: "author@example.com", DisplayName: "Author", Status: "active", CreatedAt: now},
 		},
 		auditLogs:     []admin.AuditLogRecord{{ID: 1, Action: "challenge.update", ResourceType: "challenge", ResourceID: "1", CreatedAt: now}},
 		announcements: []admin.Announcement{{ID: 1, Title: "Welcome", Published: true}},
@@ -505,6 +508,39 @@ func (r *testAdminRepo) CreateChallenge(_ context.Context, actor admin.Actor, in
 	}
 	return challenge, nil
 }
+func (r *testAdminRepo) ListChallengeAuthors(_ context.Context, actor admin.Actor, challengeID int64) ([]admin.ChallengeAuthor, error) {
+	if actor.Role == "author" && !r.ownedChallengeIDs[actor.UserID][challengeID] {
+		return nil, admin.ErrResourceNotFound
+	}
+	detail, ok := r.challengeDetails[challengeID]
+	if !ok {
+		return nil, admin.ErrResourceNotFound
+	}
+	return append([]admin.ChallengeAuthor(nil), detail.Authors...), nil
+}
+
+func (r *testAdminRepo) UpdateChallengeAuthors(_ context.Context, actor admin.Actor, challengeID int64, userIDs []int64) ([]admin.ChallengeAuthor, error) {
+	if actor.Role != "admin" {
+		return nil, admin.ErrResourceNotFound
+	}
+	detail, ok := r.challengeDetails[challengeID]
+	if !ok {
+		return nil, admin.ErrResourceNotFound
+	}
+	authors := make([]admin.ChallengeAuthor, 0, len(userIDs))
+	for _, userID := range userIDs {
+		for _, user := range r.users {
+			if user.ID == userID {
+				authors = append(authors, admin.ChallengeAuthor{UserID: user.ID, Username: user.Username, Email: user.Email, DisplayName: user.DisplayName, Role: user.Role})
+				break
+			}
+		}
+	}
+	detail.Authors = authors
+	r.challengeDetails[challengeID] = detail
+	return authors, nil
+}
+
 func (r *testAdminRepo) UpdateChallenge(_ context.Context, actor admin.Actor, challengeID int64, input admin.UpsertChallengeInput) (admin.ChallengeSummary, error) {
 	if actor.Role == "author" && !r.ownedChallengeIDs[actor.UserID][challengeID] {
 		return admin.ChallengeSummary{}, admin.ErrResourceNotFound
@@ -1187,6 +1223,50 @@ func TestAdminWriteRateLimitEndpoint(t *testing.T) {
 		t.Fatalf("expected 429, got %d", secondRes.Code)
 	}
 	assertAPIErrorCode(t, secondRes.Body.Bytes(), "admin_rate_limited")
+}
+
+func TestAdminChallengeAuthorsEndpoint(t *testing.T) {
+	server, _ := newTestServer(t)
+	adminToken := issueAdminToken(t, server)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/challenges/1/authors", nil)
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	res := httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.Code)
+	}
+	if !strings.Contains(res.Body.String(), "author@example.com") {
+		t.Fatalf("expected author payload, got %s", res.Body.String())
+	}
+}
+
+func TestAdminUpdateChallengeAuthorsEndpoint(t *testing.T) {
+	server, _ := newTestServer(t)
+	adminToken := issueAdminToken(t, server)
+	body := []byte(`{"user_ids":[1,4]}`)
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/challenges/1/authors", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	res := httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.Code)
+	}
+	if !strings.Contains(res.Body.String(), "root@example.com") {
+		t.Fatalf("expected updated author payload, got %s", res.Body.String())
+	}
+}
+
+func TestAuthorRoleCannotUpdateChallengeAuthors(t *testing.T) {
+	server, _ := newTestServer(t)
+	authorToken := issueRoleToken(t, server, "author")
+	body := []byte(`{"user_ids":[4]}`)
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/challenges/1/authors", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+authorToken)
+	res := httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", res.Code)
+	}
 }
 
 func TestAdminCreateAttachmentEndpoint(t *testing.T) {

@@ -43,6 +43,14 @@ type Attachment struct {
 	SizeBytes   int64  `json:"size_bytes"`
 }
 
+type ChallengeAuthor struct {
+	UserID      int64  `json:"user_id"`
+	Username    string `json:"username"`
+	Email       string `json:"email"`
+	DisplayName string `json:"display_name"`
+	Role        string `json:"role"`
+}
+
 type ChallengeSummary struct {
 	ID             int64  `json:"id"`
 	Slug           string `json:"slug"`
@@ -54,20 +62,21 @@ type ChallengeSummary struct {
 }
 
 type ChallengeDetail struct {
-	ID             int64         `json:"id"`
-	Slug           string        `json:"slug"`
-	Title          string        `json:"title"`
-	Category       string        `json:"category"`
-	Description    string        `json:"description"`
-	Points         int           `json:"points"`
-	Difficulty     string        `json:"difficulty"`
-	FlagType       string        `json:"flag_type"`
-	FlagValue      string        `json:"flag_value"`
-	Visible        bool          `json:"visible"`
-	DynamicEnabled bool          `json:"dynamic_enabled"`
-	SortOrder      int           `json:"sort_order"`
-	Attachments    []Attachment  `json:"attachments"`
-	RuntimeConfig  RuntimeConfig `json:"runtime_config"`
+	ID             int64             `json:"id"`
+	Slug           string            `json:"slug"`
+	Title          string            `json:"title"`
+	Category       string            `json:"category"`
+	Description    string            `json:"description"`
+	Points         int               `json:"points"`
+	Difficulty     string            `json:"difficulty"`
+	FlagType       string            `json:"flag_type"`
+	FlagValue      string            `json:"flag_value"`
+	Visible        bool              `json:"visible"`
+	DynamicEnabled bool              `json:"dynamic_enabled"`
+	SortOrder      int               `json:"sort_order"`
+	Authors        []ChallengeAuthor `json:"authors"`
+	Attachments    []Attachment      `json:"attachments"`
+	RuntimeConfig  RuntimeConfig     `json:"runtime_config"`
 }
 
 type UpsertChallengeInput struct {
@@ -83,6 +92,10 @@ type UpsertChallengeInput struct {
 	Visible        bool           `json:"visible"`
 	SortOrder      int            `json:"sort_order"`
 	RuntimeConfig  *RuntimeConfig `json:"runtime_config,omitempty"`
+}
+
+type UpdateChallengeAuthorsInput struct {
+	UserIDs []int64 `json:"user_ids"`
 }
 
 type CreateAttachmentInput struct {
@@ -166,6 +179,8 @@ type Repository interface {
 	GetChallenge(context.Context, Actor, int64) (ChallengeDetail, error)
 	CreateChallenge(context.Context, Actor, UpsertChallengeInput) (ChallengeSummary, error)
 	UpdateChallenge(context.Context, Actor, int64, UpsertChallengeInput) (ChallengeSummary, error)
+	ListChallengeAuthors(context.Context, Actor, int64) ([]ChallengeAuthor, error)
+	UpdateChallengeAuthors(context.Context, Actor, int64, []int64) ([]ChallengeAuthor, error)
 	CreateAttachment(context.Context, Actor, int64, string, string, string, int64) (Attachment, error)
 	GetAttachment(context.Context, int64, int64) (Attachment, string, error)
 	ListUsers(context.Context) ([]UserRecord, error)

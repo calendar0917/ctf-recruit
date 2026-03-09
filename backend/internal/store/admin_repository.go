@@ -96,6 +96,12 @@ LIMIT 1
 		return admin.ChallengeDetail{}, fmt.Errorf("get admin challenge: %w", err)
 	}
 
+	authors, err := r.listChallengeAuthors(ctx, challengeID)
+	if err != nil {
+		return admin.ChallengeDetail{}, err
+	}
+	detail.Authors = authors
+
 	attachments, err := r.listChallengeAttachments(ctx, challengeID)
 	if err != nil {
 		return admin.ChallengeDetail{}, err
@@ -178,6 +184,50 @@ RETURNING id
 		Visible:        input.Visible,
 		DynamicEnabled: input.DynamicEnabled,
 	}, nil
+}
+
+func (r *AdminRepository) ListChallengeAuthors(ctx context.Context, actor admin.Actor, challengeID int64) ([]admin.ChallengeAuthor, error) {
+	if actor.RestrictToOwnedChallenges() {
+		allowed, err := challengeOwnedByUser(ctx, r.db, challengeID, actor.UserID)
+		if err != nil {
+			return nil, err
+		}
+		if !allowed {
+			return nil, admin.ErrResourceNotFound
+		}
+	}
+	return r.listChallengeAuthors(ctx, challengeID)
+}
+
+func (r *AdminRepository) UpdateChallengeAuthors(ctx context.Context, actor admin.Actor, challengeID int64, userIDs []int64) ([]admin.ChallengeAuthor, error) {
+	if actor.Role != "admin" {
+		return nil, admin.ErrResourceNotFound
+	}
+	if exists, err := challengeExists(ctx, r.db, challengeID); err != nil {
+		return nil, err
+	} else if !exists {
+		return nil, admin.ErrResourceNotFound
+	}
+	for _, userID := range userIDs {
+		if err := ensureChallengeAuthorCandidate(ctx, r.db, userID); err != nil {
+			return nil, err
+		}
+	}
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin update challenge authors tx: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+	if err := SetChallengeAuthors(ctx, tx, challengeID, userIDs); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit update challenge authors: %w", err)
+	}
+	return r.listChallengeAuthors(ctx, challengeID)
 }
 
 func (r *AdminRepository) UpdateChallenge(ctx context.Context, actor admin.Actor, challengeID int64, input admin.UpsertChallengeInput) (admin.ChallengeSummary, error) {
@@ -670,6 +720,35 @@ RETURNING ci.id, c.id, c.slug, u.username, ci.status, ci.host_port, ci.expires_a
 	return item, nil
 }
 
+func (r *AdminRepository) listChallengeAuthors(ctx context.Context, challengeID int64) ([]admin.ChallengeAuthor, error) {
+	const query = `
+SELECT u.id, u.username, u.email, u.display_name, role.name
+FROM challenge_authors ca
+JOIN users u ON u.id = ca.user_id
+JOIN roles role ON role.id = u.role_id
+WHERE ca.challenge_id = $1
+ORDER BY ca.created_at ASC, u.id ASC
+`
+	rows, err := r.db.QueryContext(ctx, query, challengeID)
+	if err != nil {
+		return nil, fmt.Errorf("list challenge authors: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]admin.ChallengeAuthor, 0)
+	for rows.Next() {
+		var item admin.ChallengeAuthor
+		if err := rows.Scan(&item.UserID, &item.Username, &item.Email, &item.DisplayName, &item.Role); err != nil {
+			return nil, fmt.Errorf("scan challenge author: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate challenge authors: %w", err)
+	}
+	return items, nil
+}
+
 func (r *AdminRepository) listChallengeAttachments(ctx context.Context, challengeID int64) ([]admin.Attachment, error) {
 	const query = `
 SELECT id, filename, content_type, size_bytes
@@ -858,6 +937,43 @@ LIMIT 1
 		return false, fmt.Errorf("check challenge ownership: %w", err)
 	}
 	return true, nil
+}
+
+func challengeExists(ctx context.Context, queryer interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, challengeID int64) (bool, error) {
+	const query = `SELECT 1 FROM challenges WHERE id = $1 LIMIT 1`
+	var found int
+	if err := queryer.QueryRowContext(ctx, query, challengeID).Scan(&found); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, fmt.Errorf("check challenge exists: %w", err)
+	}
+	return true, nil
+}
+
+func ensureChallengeAuthorCandidate(ctx context.Context, queryer interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, userID int64) error {
+	const query = `
+SELECT role.name
+FROM users u
+JOIN roles role ON role.id = u.role_id
+WHERE u.id = $1
+LIMIT 1
+`
+	var role string
+	if err := queryer.QueryRowContext(ctx, query, userID).Scan(&role); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return admin.ErrResourceNotFound
+		}
+		return fmt.Errorf("load challenge author candidate: %w", err)
+	}
+	if role != "author" && role != "admin" {
+		return fmt.Errorf("user %d must have author or admin role", userID)
+	}
+	return nil
 }
 
 func ResolveUserIDByAuthorRef(ctx context.Context, db *sql.DB, value string) (int64, error) {

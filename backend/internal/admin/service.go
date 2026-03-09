@@ -54,6 +54,34 @@ func (s *Service) UpdateChallenge(ctx context.Context, actor Actor, challengeID 
 	return s.repo.UpdateChallenge(ctx, actor, challengeID, input)
 }
 
+func (s *Service) ChallengeAuthors(ctx context.Context, actor Actor, challengeID int64) ([]ChallengeAuthor, error) {
+	return s.repo.ListChallengeAuthors(ctx, actor, challengeID)
+}
+
+func (s *Service) UpdateChallengeAuthors(ctx context.Context, actor Actor, challengeID int64, input UpdateChallengeAuthorsInput) ([]ChallengeAuthor, error) {
+	userIDs := make([]int64, 0, len(input.UserIDs))
+	seen := make(map[int64]struct{}, len(input.UserIDs))
+	for _, userID := range input.UserIDs {
+		if userID <= 0 {
+			continue
+		}
+		if _, ok := seen[userID]; ok {
+			continue
+		}
+		seen[userID] = struct{}{}
+		userIDs = append(userIDs, userID)
+	}
+	authors, err := s.repo.UpdateChallengeAuthors(ctx, actor, challengeID, userIDs)
+	if err != nil {
+		return nil, err
+	}
+	_ = s.repo.CreateAuditLog(ctx, &actor.UserID, "challenge.authors.update", "challenge", fmt.Sprintf("%d", challengeID), map[string]any{
+		"challenge_id": challengeID,
+		"user_ids":     userIDs,
+	})
+	return authors, nil
+}
+
 func (s *Service) CreateAttachment(ctx context.Context, actor Actor, challengeID int64, input CreateAttachmentInput) (Attachment, error) {
 	storagePath, err := s.writeAttachmentFile(challengeID, input.Filename, input.Body)
 	if err != nil {

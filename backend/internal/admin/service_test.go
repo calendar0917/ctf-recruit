@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -20,6 +22,7 @@ type fakeRepo struct {
 	createdChallengeActor Actor
 	updatedChallengeInput UpsertChallengeInput
 	updatedChallengeActor Actor
+	updatedAuthorUserIDs  []int64
 	attachmentActor       Actor
 }
 
@@ -54,6 +57,19 @@ func (r *fakeRepo) UpdateChallenge(_ context.Context, actor Actor, _ int64, inpu
 	r.updatedChallengeActor = actor
 	r.updatedChallengeInput = input
 	return ChallengeSummary{ID: 1, Slug: input.Slug}, nil
+}
+
+func (r *fakeRepo) ListChallengeAuthors(context.Context, Actor, int64) ([]ChallengeAuthor, error) {
+	return []ChallengeAuthor{{UserID: 7, Username: "author", Role: "author"}}, nil
+}
+
+func (r *fakeRepo) UpdateChallengeAuthors(_ context.Context, _ Actor, _ int64, userIDs []int64) ([]ChallengeAuthor, error) {
+	r.updatedAuthorUserIDs = append([]int64(nil), userIDs...)
+	items := make([]ChallengeAuthor, 0, len(userIDs))
+	for _, userID := range userIDs {
+		items = append(items, ChallengeAuthor{UserID: userID, Username: fmt.Sprintf("user-%d", userID), Role: "author"})
+	}
+	return items, nil
 }
 
 func (r *fakeRepo) CreateAttachment(_ context.Context, actor Actor, _ int64, filename, _, contentType string, sizeBytes int64) (Attachment, error) {
@@ -174,6 +190,25 @@ func TestCreateChallengeRejectsInvalidRegexFlagType(t *testing.T) {
 	})
 	if !errors.Is(err, ErrInvalidChallengeInput) {
 		t.Fatalf("expected invalid challenge input, got %v", err)
+	}
+}
+
+func TestUpdateChallengeAuthorsDeduplicatesAndAudits(t *testing.T) {
+	repo := &fakeRepo{}
+	service := NewService(repo, t.TempDir())
+	actor := Actor{UserID: 1, Role: "admin"}
+	authors, err := service.UpdateChallengeAuthors(context.Background(), actor, 5, UpdateChallengeAuthorsInput{UserIDs: []int64{7, 7, 8, 0}})
+	if err != nil {
+		t.Fatalf("update challenge authors: %v", err)
+	}
+	if !reflect.DeepEqual(repo.updatedAuthorUserIDs, []int64{7, 8}) {
+		t.Fatalf("unexpected author ids: %+v", repo.updatedAuthorUserIDs)
+	}
+	if len(authors) != 2 {
+		t.Fatalf("expected 2 authors, got %+v", authors)
+	}
+	if len(repo.auditLogs) != 1 || repo.auditLogs[0].Action != "challenge.authors.update" {
+		t.Fatalf("expected challenge authors audit log, got %+v", repo.auditLogs)
 	}
 }
 

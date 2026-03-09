@@ -170,6 +170,14 @@ export type AdminAttachment = {
   size_bytes: number
 }
 
+export type AdminChallengeAuthor = {
+  user_id: number
+  username: string
+  email: string
+  display_name: string
+  role: string
+}
+
 export type AdminChallengeSummary = {
   id: number
   slug: string
@@ -193,6 +201,7 @@ export type AdminChallengeDetail = {
   visible: boolean
   dynamic_enabled: boolean
   sort_order: number
+  authors: AdminChallengeAuthor[]
   attachments: AdminAttachment[]
   runtime_config: AdminRuntimeConfig
 }
@@ -372,6 +381,19 @@ export const api = {
   },
   adminChallenge(token: string, challengeID: number) {
     return request<{ challenge: AdminChallengeDetail }>(`/api/v1/admin/challenges/${challengeID}`, undefined, token)
+  },
+  adminChallengeAuthors(token: string, challengeID: number) {
+    return request<{ items: AdminChallengeAuthor[] }>(`/api/v1/admin/challenges/${challengeID}/authors`, undefined, token)
+  },
+  updateAdminChallengeAuthors(token: string, challengeID: number, userIDs: number[]) {
+    return request<{ items: AdminChallengeAuthor[] }>(
+      `/api/v1/admin/challenges/${challengeID}/authors`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ user_ids: userIDs }),
+      },
+      token,
+    )
   },
   createAdminChallenge(token: string, payload: AdminChallengeInput) {
     return request<{ challenge: AdminChallengeSummary }>(
