@@ -5,6 +5,9 @@ import {
   type AdminAnnouncement,
   type AdminAuditLog,
   type AdminChallengeDetail,
+  type AdminContestInput,
+  type ContestInfo,
+  type ContestPhase,
   type AdminChallengeInput,
   type AdminChallengeSummary,
   type AdminInstance,
@@ -26,7 +29,7 @@ const studioMarkUrl = new URL('./assets/yulin-long.svg', import.meta.url).href
 
 type View = 'briefing' | 'board' | 'runtime' | 'scoreboard' | 'admin'
 type AuthMode = 'login' | 'register'
-type AdminSection = 'challenges' | 'announcements' | 'traffic' | 'users' | 'audit'
+type AdminSection = 'contest' | 'challenges' | 'announcements' | 'traffic' | 'users' | 'audit'
 type NoticeTone = 'neutral' | 'success' | 'danger'
 
 type Notice = {
@@ -359,6 +362,21 @@ function Panel(props: {
   )
 }
 
+function formatContestStatus(value?: string | null): string {
+  if (value === 'upcoming') return '未开始'
+  if (value === 'running') return '进行中'
+  if (value === 'frozen') return '冻结中'
+  if (value === 'ended') return '已结束'
+  return '准备中'
+}
+
+function buildContestNotice(phase: ContestPhase | null): Notice | null {
+  if (!phase) return null
+  if (phase.status === 'running') return { tone: 'success', text: phase.message }
+  if (phase.status === 'draft' || phase.status === 'upcoming') return { tone: 'neutral', text: phase.message }
+  return { tone: 'danger', text: phase.message }
+}
+
 function NoticeBanner({ notice }: { notice: Notice | null }): React.JSX.Element | null {
   if (!notice) {
     return null
@@ -382,6 +400,8 @@ function App(): React.JSX.Element {
     password: '',
   })
 
+  const [contestInfo, setContestInfo] = useState<ContestInfo | null>(null)
+  const [contestPhase, setContestPhase] = useState<ContestPhase | null>(null)
   const [announcements, setAnnouncements] = useState<PublicAnnouncement[]>([])
   const [challengeList, setChallengeList] = useState<PublicChallengeSummary[]>([])
   const [scoreboard, setScoreboard] = useState<ScoreboardEntry[]>([])
@@ -411,7 +431,11 @@ function App(): React.JSX.Element {
   const [runtimeLoading, setRuntimeLoading] = useState(false)
   const [runtimeNotice, setRuntimeNotice] = useState<Notice | null>(null)
 
-  const [adminSection, setAdminSection] = useState<AdminSection>('challenges')
+  const [adminSection, setAdminSection] = useState<AdminSection>('contest')
+  const [adminContestNotice, setAdminContestNotice] = useState<Notice | null>(null)
+  const [adminContestLoading, setAdminContestLoading] = useState(false)
+  const [adminContestSubmitting, setAdminContestSubmitting] = useState(false)
+  const [adminContestDraft, setAdminContestDraft] = useState<AdminContestInput>({ status: 'draft', starts_at: '', ends_at: '' })
   const [adminChallenges, setAdminChallenges] = useState<AdminChallengeSummary[]>([])
   const [adminChallengesLoading, setAdminChallengesLoading] = useState(false)
   const [adminChallengesNotice, setAdminChallengesNotice] = useState<Notice | null>(null)
@@ -485,6 +509,12 @@ function App(): React.JSX.Element {
     [clearSession],
   )
 
+  const loadContestState = useCallback(async () => {
+    const response = await api.contest()
+    setContestInfo(response.contest)
+    setContestPhase(response.phase)
+  }, [])
+
   const loadScoreboard = useCallback(async () => {
     const response = await api.scoreboard()
     setScoreboard(response.items)
@@ -494,20 +524,56 @@ function App(): React.JSX.Element {
     setPublicLoading(true)
     setPublicNotice(null)
     try {
-      const [announcementResponse, challengeResponse, scoreboardResponse] = await Promise.all([
-        api.announcements(),
-        api.challenges(),
-        api.scoreboard(),
-      ])
-      setAnnouncements(announcementResponse.items)
-      setChallengeList(challengeResponse.items)
-      setScoreboard(scoreboardResponse.items)
+      const contestResponse = await api.contest()
+      setContestInfo(contestResponse.contest)
+      setContestPhase(contestResponse.phase)
+
+      const tasks: Promise<unknown>[] = []
+      if (contestResponse.phase.announcement_visible) {
+        tasks.push(api.announcements().then((response) => setAnnouncements(response.items)))
+      } else {
+        setAnnouncements([])
+      }
+      if (contestResponse.phase.challenge_list_visible) {
+        tasks.push(api.challenges().then((response) => setChallengeList(response.items)))
+      } else {
+        setChallengeList([])
+        setChallengeDetail(null)
+      }
+      if (contestResponse.phase.scoreboard_visible) {
+        tasks.push(api.scoreboard().then((response) => setScoreboard(response.items)))
+      } else {
+        setScoreboard([])
+      }
+      await Promise.all(tasks)
     } catch (error) {
       setPublicNotice({ tone: 'danger', text: describeError(error, '公开数据加载失败。') })
     } finally {
       setPublicLoading(false)
     }
   }, [])
+
+  const loadAdminContest = useCallback(async () => {
+    if (!token) {
+      return
+    }
+    setAdminContestLoading(true)
+    setAdminContestNotice(null)
+    try {
+      const response = await api.adminContest(token)
+      setContestInfo(response.contest)
+      setContestPhase(response.phase)
+      setAdminContestDraft({
+        status: response.contest.status,
+        starts_at: response.contest.starts_at ?? '',
+        ends_at: response.contest.ends_at ?? '',
+      })
+    } catch (error) {
+      setAdminContestNotice({ tone: 'danger', text: guardedError(error, '比赛状态加载失败。') })
+    } finally {
+      setAdminContestLoading(false)
+    }
+  }, [guardedError, token])
 
   const loadPersonalData = useCallback(async () => {
     if (!token) {
@@ -842,6 +908,7 @@ function App(): React.JSX.Element {
     if (!canAccessAdmin) {
       return sections
     }
+    sections.push({ id: 'contest', label: '比赛', note: 'Lifecycle' })
     sections.push({ id: 'challenges', label: '题目', note: 'Catalog' })
     sections.push({ id: 'announcements', label: '公告', note: 'Broadcast' })
     sections.push({ id: 'traffic', label: '流量', note: 'Ops Feed' })
@@ -874,6 +941,9 @@ function App(): React.JSX.Element {
     if (!(canAccessAdmin && token && view === 'admin')) {
       return
     }
+    if (adminSection === 'contest') {
+      void loadAdminContest()
+    }
     if (adminSection === 'challenges') {
       void loadAdminChallenges()
     }
@@ -895,6 +965,7 @@ function App(): React.JSX.Element {
     canAccessAdmin,
     canManageUsers,
     loadAdminAnnouncements,
+    loadAdminContest,
     loadAdminAuditLogs,
     loadAdminChallenges,
     loadAdminInstances,
@@ -1301,6 +1372,7 @@ function App(): React.JSX.Element {
   }
 
   const briefingCards = [
+    { label: '比赛阶段', value: formatContestStatus(contestInfo?.status), note: contestInfo?.slug ?? 'single contest' },
     { label: '公开题目', value: String(challengeList.length), note: '当前开放' },
     { label: '已发布公告', value: String(announcements.length), note: '最新赛务' },
     { label: '当前身份', value: authUser ? authUser.role : 'guest', note: authUser ? authUser.username : '游客状态' },
@@ -1311,10 +1383,99 @@ function App(): React.JSX.Element {
   const recentSubmissionPreview = mySubmissions.slice(0, 3)
   const publicRoleLabel = authUser ? '选手入口' : '游客入口'
   const managementRoleLabel = canAccessAdmin ? '管理员入口' : '管理入口'
+  const contestNotice = buildContestNotice(contestPhase)
+
+  async function handleSaveContest(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!token || !canAccessAdmin || authUser?.role !== 'admin') {
+      setAdminContestNotice({ tone: 'neutral', text: '当前账号没有比赛配置写权限。' })
+      return
+    }
+    setAdminContestSubmitting(true)
+    setAdminContestNotice(null)
+    try {
+      await api.updateAdminContest(token, adminContestDraft)
+      setAdminContestNotice({ tone: 'success', text: '比赛状态已更新。' })
+      await Promise.all([loadAdminContest(), loadPublicData()])
+    } catch (error) {
+      const code = readErrorCode(error)
+      if (code === 'admin_rate_limited') {
+        setAdminContestNotice({ tone: 'danger', text: '后台写操作过于频繁，请稍后再试。' })
+      } else {
+        setAdminContestNotice({ tone: 'danger', text: guardedError(error, '比赛状态更新失败。') })
+      }
+    } finally {
+      setAdminContestSubmitting(false)
+    }
+  }
+
+  function renderAdminContest(): React.JSX.Element {
+    const canWriteContest = authUser?.role === 'admin'
+    return (
+      <div className="two-column-layout admin-column-layout">
+        <Panel eyebrow="Contest State" title={contestInfo?.title ?? '比赛状态'} subtitle="第一版生命周期控制采用单场比赛手动切换。">
+          <NoticeBanner notice={adminContestNotice ?? contestNotice} />
+          {adminContestLoading ? <div className="empty-state">正在读取比赛状态…</div> : null}
+          {!adminContestLoading && contestInfo ? (
+            <div className="detail-list compact-list">
+              <div className="detail-row">
+                <span>当前阶段</span>
+                <strong>{formatContestStatus(contestInfo.status)}</strong>
+              </div>
+              <div className="detail-row">
+                <span>开始时间</span>
+                <strong>{formatDateTime(contestInfo.starts_at)}</strong>
+              </div>
+              <div className="detail-row">
+                <span>结束时间</span>
+                <strong>{formatDateTime(contestInfo.ends_at)}</strong>
+              </div>
+              <div className="detail-row">
+                <span>公开说明</span>
+                <strong>{contestPhase?.message ?? '未配置'}</strong>
+              </div>
+            </div>
+          ) : null}
+        </Panel>
+
+        <Panel eyebrow="Lifecycle Editor" title="阶段编辑" subtitle="用于控制公开内容、提交和动态实例的开放窗口。">
+          {!canWriteContest ? <div className="empty-state">当前账号只有只读权限。</div> : null}
+          {canWriteContest ? (
+            <form className="form-grid" onSubmit={handleSaveContest}>
+              <label className="field">
+                <span>状态</span>
+                <select value={adminContestDraft.status} onChange={(event) => setAdminContestDraft((current) => ({ ...current, status: event.target.value }))}>
+                  <option value="draft">draft</option>
+                  <option value="upcoming">upcoming</option>
+                  <option value="running">running</option>
+                  <option value="frozen">frozen</option>
+                  <option value="ended">ended</option>
+                </select>
+              </label>
+              <label className="field">
+                <span>开始时间 RFC3339</span>
+                <input value={adminContestDraft.starts_at} onChange={(event) => setAdminContestDraft((current) => ({ ...current, starts_at: event.target.value }))} placeholder="2026-03-09T09:00:00Z" />
+              </label>
+              <label className="field">
+                <span>结束时间 RFC3339</span>
+                <input value={adminContestDraft.ends_at} onChange={(event) => setAdminContestDraft((current) => ({ ...current, ends_at: event.target.value }))} placeholder="2026-03-09T15:00:00Z" />
+              </label>
+              <div className="form-footer wide-field">
+                <button className="primary-button" disabled={adminContestSubmitting} type="submit">
+                  {adminContestSubmitting ? '保存中…' : '保存比赛状态'}
+                </button>
+              </div>
+            </form>
+          ) : null}
+        </Panel>
+      </div>
+    )
+  }
 
   function renderBriefing(): React.JSX.Element {
     return (
       <div className="view-stack briefing-view">
+        <NoticeBanner notice={contestNotice} />
         <section className="focus-hero panel panel-hero page-enter page-enter-1">
           <div className="focus-hero-grid">
             <div className="focus-copy">
@@ -1583,6 +1744,7 @@ function App(): React.JSX.Element {
 
     return (
       <div className="challenge-desk board-view">
+          <NoticeBanner notice={contestNotice ?? publicNotice} />
           <Panel eyebrow="题目列表" title="题目" subtitle="按分类折叠，支持标题、分类检索和难度筛选。" className="rail-panel challenge-rail-panel">
             <div className="board-list-toolbar">
               <label className="field compact-field board-search-field">
@@ -1827,6 +1989,7 @@ function App(): React.JSX.Element {
   function renderRuntime(): React.JSX.Element {
     return (
       <div className="workspace-grid page-enter page-enter-1">
+        <NoticeBanner notice={contestNotice} />
         <Panel eyebrow="动态题目" title="动态题" subtitle="只显示公开的动态题。" className="rail-panel">
           <div className="challenge-card-list">
             {dynamicChallenges.map((item) => (
@@ -1954,6 +2117,7 @@ function App(): React.JSX.Element {
   function renderScoreboard(): React.JSX.Element {
     return (
       <div className="two-column-layout scoreboard-layout page-enter page-enter-1">
+        <NoticeBanner notice={contestNotice ?? publicNotice} />
         <Panel eyebrow="排行榜" title="公开排行榜" subtitle="展开后可直接查看每位选手已完成的题目、难度和分类。">
           <NoticeBanner notice={publicNotice} />
           <div className="card-list scoreboard-card-list">
@@ -2663,6 +2827,7 @@ function App(): React.JSX.Element {
           </div>
         </Panel>
 
+        {adminSection === 'contest' ? renderAdminContest() : null}
         {adminSection === 'challenges' ? renderAdminChallenges() : null}
         {adminSection === 'announcements' ? renderAdminAnnouncements() : null}
         {adminSection === 'traffic' ? renderAdminTraffic() : null}

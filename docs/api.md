@@ -9,6 +9,7 @@
 - `GET /api/v1/health`
 - `GET /api/v1/ready`
 - `GET /api/v1/metrics`
+- `GET /api/v1/contest`
 - `POST /api/v1/auth/register`
 - `POST /api/v1/auth/login`
 - `GET /api/v1/announcements`
@@ -65,10 +66,26 @@
 - `POST /api/v1/challenges/{challengeID}/instances/me` 会先检查用户现有活动实例，再检查题目并发上限与用户冷却时间
 - 管理端题目运行配置中的 `max_active_instances` 和 `user_cooldown_seconds` 会直接影响上述接口行为
 
+### 比赛生命周期接口
+
+- `GET /api/v1/contest` 返回当前单场比赛信息和阶段判定
+- 当比赛处于 `draft` 或 `upcoming` 时，公开题目、题目详情、附件、排行榜会按阶段规则关闭
+- 当比赛处于 `frozen` 或 `ended` 时，Flag 提交与动态实例创建/续期/查询会按阶段规则关闭
+
+阶段限制错误码：
+
+- `contest_not_public`
+- `scoreboard_not_public`
+- `submission_closed`
+- `runtime_closed`
+- `registration_closed`
+
 ## 管理接口
 
 这些接口当前要求带有管理员权限的 Bearer Token：
 
+- `GET /api/v1/admin/contest`
+- `PATCH /api/v1/admin/contest`
 - `GET /api/v1/admin/challenges`
 - `POST /api/v1/admin/challenges`
 - `GET /api/v1/admin/challenges/{challengeID}`
@@ -97,6 +114,5 @@
 
 ## 后续计划中但尚未完成的能力
 
-- 比赛生命周期控制接口
 - 更细粒度的权限模型
 - 与 `flag_type` 对应的更丰富判题接口语义

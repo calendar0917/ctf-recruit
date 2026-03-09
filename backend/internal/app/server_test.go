@@ -16,6 +16,7 @@ import (
 	"ctf/backend/internal/admin"
 	"ctf/backend/internal/auth"
 	"ctf/backend/internal/config"
+	"ctf/backend/internal/contest"
 	"ctf/backend/internal/game"
 	"ctf/backend/internal/runtime"
 )
@@ -69,6 +70,10 @@ type testUserRepo struct {
 	users      map[int64]auth.User
 	identifier map[string]int64
 	nextID     int64
+}
+
+type testContestRepo struct {
+	current contest.Contest
 }
 
 type testGameRepo struct {
@@ -135,6 +140,9 @@ func newTestServer(t *testing.T) (*Server, *testRuntimeRepo) {
 	attachmentPath := filepath.Join(attachmentDir, "statement.pdf")
 	if err := os.WriteFile(attachmentPath, []byte("statement-data"), 0o644); err != nil {
 		t.Fatalf("write attachment fixture: %v", err)
+	}
+	contestRepo := &testContestRepo{
+		current: contest.Contest{ID: 1, Slug: "recruit-2025", Title: "Recruit 2025", Description: "demo contest", Status: contest.StatusRunning},
 	}
 	gameRepo := &testGameRepo{
 		announcements: []game.Announcement{{ID: 1, Title: "Welcome", Content: "Hello", Pinned: true}},
@@ -232,9 +240,10 @@ func newTestServer(t *testing.T) (*Server, *testRuntimeRepo) {
 	tokens := auth.NewTokenManager(cfg.JWTSecret, cfg.JWTTTL)
 	authService := auth.NewService(userRepo, tokens)
 	adminService := admin.NewServiceWithManager(adminRepo, cfg.AttachmentStorageDir, manager)
+	contestService := contest.NewService(contestRepo)
 	gameService := game.NewService(gameRepo)
 	runtimeService := runtime.NewService("http://localhost:8080", manager, runtimeRepo)
-	server := NewServerForTests(cfg, adminService, authService, gameService, runtimeService)
+	server := NewServerForTests(cfg, adminService, authService, contestService, gameService, runtimeService)
 	if limiter, ok := server.limiters.Submission.(*memoryRateLimiter); ok {
 		limiter.now = func() time.Time { return now }
 	}
@@ -248,6 +257,15 @@ func newTestServer(t *testing.T) (*Server, *testRuntimeRepo) {
 		limiter.now = func() time.Time { return now }
 	}
 	return server, runtimeRepo
+}
+
+func (r *testContestRepo) Current(context.Context) (contest.Contest, error) {
+	return r.current, nil
+}
+
+func (r *testContestRepo) Update(_ context.Context, input contest.UpdateInput) (contest.Contest, error) {
+	r.current.Status = contest.NormalizeStatus(input.Status)
+	return r.current, nil
 }
 
 func (r *testRuntimeRepo) ListChallenges(context.Context) ([]runtime.ChallengeSummary, error) {
@@ -552,6 +570,29 @@ func TestMetricsEndpoint(t *testing.T) {
 	if !strings.Contains(body, "ctf_http_health_requests_total") {
 		t.Fatalf("expected health counter in metrics, got %q", body)
 	}
+}
+
+func loginAsPlayer(t *testing.T, server *Server) string {
+	t.Helper()
+	registerTestUser(t, server)
+	body := []byte(`{"identifier":"alice@example.com","password":"Password123!"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body))
+	req.RemoteAddr = "127.0.0.1:54321"
+	res := httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected login 200, got %d: %s", res.Code, res.Body.String())
+	}
+	var payload struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(res.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode login response: %v", err)
+	}
+	if payload.Token == "" {
+		t.Fatalf("expected token in login response")
+	}
+	return payload.Token
 }
 
 func TestProtectedInstanceEndpointRequiresBearerToken(t *testing.T) {
@@ -1067,4 +1108,65 @@ func issueRoleToken(t *testing.T, server *Server, role string) string {
 
 func issueAdminToken(t *testing.T, server *Server) string {
 	return issueRoleToken(t, server, "admin")
+}
+
+func TestContestEndpoint(t *testing.T) {
+	server, _ := newTestServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/contest", nil)
+	res := httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.Code)
+	}
+	if !strings.Contains(res.Body.String(), `"status":"running"`) {
+		t.Fatalf("expected running contest in response, got %s", res.Body.String())
+	}
+}
+
+func TestChallengesBlockedWhenContestDraft(t *testing.T) {
+	server, _ := newTestServer(t)
+	server.contest = contest.NewService(&testContestRepo{current: contest.Contest{ID: 1, Slug: "recruit-2025", Status: contest.StatusDraft}})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/challenges", nil)
+	res := httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", res.Code)
+	}
+	if !strings.Contains(res.Body.String(), `"error":"contest_not_public"`) {
+		t.Fatalf("expected contest_not_public, got %s", res.Body.String())
+	}
+}
+
+func TestSubmissionBlockedWhenContestFrozen(t *testing.T) {
+	server, _ := newTestServer(t)
+	server.contest = contest.NewService(&testContestRepo{current: contest.Contest{ID: 1, Slug: "recruit-2025", Status: contest.StatusFrozen}})
+	token := loginAsPlayer(t, server)
+	body := bytes.NewBufferString(`{"flag":"flag{welcome}"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/challenges/1/submissions", body)
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	res := httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", res.Code)
+	}
+	if !strings.Contains(res.Body.String(), `"error":"submission_closed"`) {
+		t.Fatalf("expected submission_closed, got %s", res.Body.String())
+	}
+}
+
+func TestRuntimeBlockedWhenContestFrozen(t *testing.T) {
+	server, _ := newTestServer(t)
+	server.contest = contest.NewService(&testContestRepo{current: contest.Contest{ID: 1, Slug: "recruit-2025", Status: contest.StatusFrozen}})
+	token := loginAsPlayer(t, server)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/challenges/1/instances/me", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	res := httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", res.Code)
+	}
+	if !strings.Contains(res.Body.String(), `"error":"runtime_closed"`) {
+		t.Fatalf("expected runtime_closed, got %s", res.Body.String())
+	}
 }

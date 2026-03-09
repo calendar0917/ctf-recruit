@@ -20,6 +20,7 @@ import (
 	"ctf/backend/internal/admin"
 	"ctf/backend/internal/auth"
 	"ctf/backend/internal/config"
+	"ctf/backend/internal/contest"
 	"ctf/backend/internal/game"
 	"ctf/backend/internal/httpx"
 	"ctf/backend/internal/runtime"
@@ -30,6 +31,7 @@ type Server struct {
 	cfg      config.Config
 	admin    *admin.Service
 	auth     *auth.Service
+	contest  *contest.Service
 	game     *game.Service
 	runtime  *runtime.Service
 	limiters AppLimiters
@@ -49,6 +51,7 @@ func NewServer(cfg config.Config) (*Server, error) {
 
 	userRepo := store.NewUserRepository(db)
 	adminRepo := store.NewAdminRepository(db)
+	contestRepo := store.NewContestRepository(db)
 	gameRepo := store.NewGameRepository(db)
 	runtimeRepo := store.NewRuntimeRepository(db)
 	tokens := auth.NewTokenManager(cfg.JWTSecret, cfg.JWTTTL)
@@ -60,6 +63,7 @@ func NewServer(cfg config.Config) (*Server, error) {
 		cfg:      cfg,
 		admin:    admin.NewServiceWithManager(adminRepo, cfg.AttachmentStorageDir, manager),
 		auth:     auth.NewService(userRepo, tokens),
+		contest:  contest.NewService(contestRepo),
 		game:     game.NewService(gameRepo),
 		runtime:  runtime.NewService(cfg.PublicBaseURL, manager, runtimeRepo),
 		limiters: limiters,
@@ -68,11 +72,12 @@ func NewServer(cfg config.Config) (*Server, error) {
 	}, nil
 }
 
-func NewServerForTests(cfg config.Config, adminService *admin.Service, authService *auth.Service, gameService *game.Service, runtimeService *runtime.Service) *Server {
+func NewServerForTests(cfg config.Config, adminService *admin.Service, authService *auth.Service, contestService *contest.Service, gameService *game.Service, runtimeService *runtime.Service) *Server {
 	return &Server{
 		cfg:      cfg,
 		admin:    adminService,
 		auth:     authService,
+		contest:  contestService,
 		game:     gameService,
 		runtime:  runtimeService,
 		limiters: newAppLimiters(cfg),
@@ -92,6 +97,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/health", s.handleHealth)
 	mux.HandleFunc("GET /api/v1/ready", s.handleReady)
 	mux.Handle("GET /api/v1/metrics", s.metrics)
+	mux.HandleFunc("GET /api/v1/contest", s.handleContest)
 	mux.HandleFunc("POST /api/v1/auth/register", s.handleRegister)
 	mux.HandleFunc("POST /api/v1/auth/login", s.handleLogin)
 	mux.Handle("GET /api/v1/me", s.authenticated(http.HandlerFunc(s.handleMe)))
@@ -107,6 +113,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("DELETE /api/v1/challenges/{challengeID}/instances/me", s.authenticated(http.HandlerFunc(s.handleDeleteInstance)))
 	mux.Handle("POST /api/v1/challenges/{challengeID}/instances/me/renew", s.authenticated(http.HandlerFunc(s.handleRenewInstance)))
 	mux.Handle("POST /api/v1/challenges/{challengeID}/submissions", s.authenticated(http.HandlerFunc(s.handleSubmitFlag)))
+	mux.Handle("GET /api/v1/admin/contest", s.requirePermission("contest:read", http.HandlerFunc(s.handleAdminContest)))
+	mux.Handle("PATCH /api/v1/admin/contest", s.requirePermission("contest:write", http.HandlerFunc(s.handleAdminUpdateContest)))
 	mux.Handle("GET /api/v1/admin/challenges", s.requirePermission("challenge:read", http.HandlerFunc(s.handleAdminChallenges)))
 	mux.Handle("POST /api/v1/admin/challenges", s.requirePermission("challenge:write", http.HandlerFunc(s.handleAdminCreateChallenge)))
 	mux.Handle("GET /api/v1/admin/challenges/{challengeID}", s.requirePermission("challenge:read", http.HandlerFunc(s.handleAdminChallengeDetail)))
@@ -173,6 +181,17 @@ func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "api"})
 }
 
+func (s *Server) handleContest(w http.ResponseWriter, r *http.Request) {
+	current, err := s.contest.Current(r.Context())
+	if err != nil {
+		logError("contest.current.failed", map[string]any{"error": err.Error()})
+		httpx.WriteError(w, http.StatusBadGateway, "repository_error", "failed to load contest")
+		return
+	}
+	phase := contest.BuildPhase(current)
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"contest": current, "phase": phase})
+}
+
 func (s *Server) handleReady(w http.ResponseWriter, _ *http.Request) {
 	s.metrics.Inc("ctf_http_ready_requests_total", nil)
 	ready := s.db != nil
@@ -203,6 +222,11 @@ func (s *Server) handleReady(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
+	phase, ok := s.requireContestPhase(w, r, contestRequirement{registrationAllowed: true})
+	if !ok {
+		return
+	}
+	_ = phase
 	var input auth.RegisterInput
 	if err := decodeJSON(r, &input); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_json", err.Error())
@@ -317,6 +341,9 @@ func (s *Server) handleMeSolves(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAnnouncements(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireContestPhase(w, r, contestRequirement{announcementsVisible: true}); !ok {
+		return
+	}
 	items, err := s.game.Announcements(r.Context())
 	if err != nil {
 		logError("announcements.list.failed", map[string]any{"error": err.Error()})
@@ -333,6 +360,9 @@ func (s *Server) handleAnnouncements(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleChallenges(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireContestPhase(w, r, contestRequirement{challengeListVisible: true}); !ok {
+		return
+	}
 	items, err := s.runtime.Challenges(r.Context())
 	if err != nil {
 		logError("challenges.list.failed", map[string]any{"error": err.Error()})
@@ -343,6 +373,9 @@ func (s *Server) handleChallenges(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleChallengeDetail(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireContestPhase(w, r, contestRequirement{challengeDetailVisible: true}); !ok {
+		return
+	}
 	challenge, err := s.game.Challenge(r.Context(), r.PathValue("challengeID"))
 	if err != nil {
 		if errors.Is(err, game.ErrChallengeNotFound) {
@@ -357,6 +390,9 @@ func (s *Server) handleChallengeDetail(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleChallengeAttachmentDownload(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireContestPhase(w, r, contestRequirement{attachmentVisible: true}); !ok {
+		return
+	}
 	attachmentID, err := strconv.ParseInt(r.PathValue("attachmentID"), 10, 64)
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_attachment_id", "attachment id must be numeric")
@@ -397,6 +433,9 @@ func (s *Server) handleChallengeAttachmentDownload(w http.ResponseWriter, r *htt
 }
 
 func (s *Server) handleScoreboard(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireContestPhase(w, r, contestRequirement{scoreboardVisible: true}); !ok {
+		return
+	}
 	items, err := s.game.Scoreboard(r.Context())
 	if err != nil {
 		logError("scoreboard.load.failed", map[string]any{"error": err.Error()})
@@ -407,6 +446,9 @@ func (s *Server) handleScoreboard(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCreateInstance(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireContestPhase(w, r, contestRequirement{runtimeAllowed: true}); !ok {
+		return
+	}
 	userID, ok := userIDFromContext(r.Context())
 	if !ok {
 		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
@@ -425,6 +467,9 @@ func (s *Server) handleCreateInstance(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetInstance(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireContestPhase(w, r, contestRequirement{runtimeAllowed: true}); !ok {
+		return
+	}
 	userID, ok := userIDFromContext(r.Context())
 	if !ok {
 		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
@@ -439,6 +484,9 @@ func (s *Server) handleGetInstance(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeleteInstance(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireContestPhase(w, r, contestRequirement{runtimeAllowed: true}); !ok {
+		return
+	}
 	userID, ok := userIDFromContext(r.Context())
 	if !ok {
 		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
@@ -453,6 +501,9 @@ func (s *Server) handleDeleteInstance(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRenewInstance(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireContestPhase(w, r, contestRequirement{runtimeAllowed: true}); !ok {
+		return
+	}
 	userID, ok := userIDFromContext(r.Context())
 	if !ok {
 		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
@@ -467,6 +518,9 @@ func (s *Server) handleRenewInstance(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSubmitFlag(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireContestPhase(w, r, contestRequirement{submissionAllowed: true}); !ok {
+		return
+	}
 	userID, ok := userIDFromContext(r.Context())
 	if !ok {
 		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
@@ -654,6 +708,50 @@ func (s *Server) handleAdminCreateAttachment(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	httpx.WriteJSON(w, http.StatusCreated, map[string]any{"attachment": attachment})
+}
+
+func (s *Server) handleAdminContest(w http.ResponseWriter, r *http.Request) {
+	current, err := s.contest.Current(r.Context())
+	if err != nil {
+		logError("admin.contest.load.failed", map[string]any{"error": err.Error()})
+		httpx.WriteError(w, http.StatusBadGateway, "repository_error", "failed to load contest")
+		return
+	}
+	phase := contest.BuildPhase(current)
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"contest": current, "phase": phase})
+}
+
+func (s *Server) handleAdminUpdateContest(w http.ResponseWriter, r *http.Request) {
+	actorUserID, ok := userIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
+		return
+	}
+	allowed, err := enforceRateLimit(r.Context(), s.limiters.AdminWrite, adminRateLimitKey("contest_update", r, actorUserID))
+	if err != nil {
+		s.metrics.Inc("ctf_rate_limit_errors_total", map[string]string{"scope": "admin_write"})
+		logError("rate_limit.admin_write.error", map[string]any{"action": "contest_update", "error": err.Error()})
+		httpx.WriteError(w, http.StatusBadGateway, "rate_limit_error", "failed to enforce rate limit")
+		return
+	}
+	if !allowed {
+		s.metrics.Inc("ctf_rate_limit_hits_total", map[string]string{"scope": "admin_write"})
+		httpx.WriteError(w, http.StatusTooManyRequests, "admin_rate_limited", "too many admin write requests, please try again later")
+		return
+	}
+	var input contest.UpdateInput
+	if err := decodeJSON(r, &input); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	updated, err := s.contest.Update(r.Context(), input)
+	if err != nil {
+		logError("admin.contest.update.failed", map[string]any{"error": err.Error()})
+		httpx.WriteError(w, http.StatusBadRequest, "update_failed", err.Error())
+		return
+	}
+	phase := contest.BuildPhase(updated)
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"contest": updated, "phase": phase})
 }
 
 func (s *Server) handleAdminAnnouncements(w http.ResponseWriter, r *http.Request) {
@@ -910,12 +1008,67 @@ func (s *Server) requirePermission(permission string, next http.Handler) http.Ha
 	}))
 }
 
+type contestRequirement struct {
+	announcementsVisible  bool
+	challengeListVisible  bool
+	challengeDetailVisible bool
+	attachmentVisible     bool
+	scoreboardVisible     bool
+	submissionAllowed     bool
+	runtimeAllowed        bool
+	registrationAllowed   bool
+}
+
+func (s *Server) requireContestPhase(w http.ResponseWriter, r *http.Request, requirement contestRequirement) (contest.Phase, bool) {
+	phase, err := s.contest.Phase(r.Context())
+	if err != nil {
+		logError("contest.phase.failed", map[string]any{"error": err.Error()})
+		httpx.WriteError(w, http.StatusBadGateway, "repository_error", "failed to load contest state")
+		return contest.Phase{}, false
+	}
+	if requirement.announcementsVisible && !phase.AnnouncementVisible {
+		httpx.WriteError(w, http.StatusForbidden, "contest_not_public", phase.Message)
+		return contest.Phase{}, false
+	}
+	if requirement.challengeListVisible && !phase.ChallengeListVisible {
+		httpx.WriteError(w, http.StatusForbidden, "contest_not_public", phase.Message)
+		return contest.Phase{}, false
+	}
+	if requirement.challengeDetailVisible && !phase.ChallengeDetailVisible {
+		httpx.WriteError(w, http.StatusForbidden, "contest_not_public", phase.Message)
+		return contest.Phase{}, false
+	}
+	if requirement.attachmentVisible && !phase.AttachmentVisible {
+		httpx.WriteError(w, http.StatusForbidden, "contest_not_public", phase.Message)
+		return contest.Phase{}, false
+	}
+	if requirement.scoreboardVisible && !phase.ScoreboardVisible {
+		httpx.WriteError(w, http.StatusForbidden, "scoreboard_not_public", phase.Message)
+		return contest.Phase{}, false
+	}
+	if requirement.submissionAllowed && !phase.SubmissionAllowed {
+		httpx.WriteError(w, http.StatusForbidden, "submission_closed", phase.Message)
+		return contest.Phase{}, false
+	}
+	if requirement.runtimeAllowed && !phase.RuntimeAllowed {
+		httpx.WriteError(w, http.StatusForbidden, "runtime_closed", phase.Message)
+		return contest.Phase{}, false
+	}
+	if requirement.registrationAllowed && !phase.RegistrationAllowed {
+		httpx.WriteError(w, http.StatusForbidden, "registration_closed", phase.Message)
+		return contest.Phase{}, false
+	}
+	return phase, true
+}
+
 func hasPermission(role, permission string) bool {
 	permissions := map[string]map[string]bool{
 		"admin": {
 			"challenge:read":     true,
 			"challenge:write":    true,
 			"attachment:write":   true,
+			"contest:read":       true,
+			"contest:write":      true,
 			"announcement:read":  true,
 			"announcement:write": true,
 			"submission:read":    true,
@@ -926,6 +1079,7 @@ func hasPermission(role, permission string) bool {
 			"audit:read":         true,
 		},
 		"ops": {
+			"contest:read":      true,
 			"challenge:read":    true,
 			"attachment:write":  true,
 			"announcement:read": true,

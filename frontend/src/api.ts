@@ -27,6 +27,36 @@ export type PublicAnnouncement = {
   published_at?: string | null
 }
 
+export type ContestInfo = {
+  id: number
+  slug: string
+  title: string
+  description: string
+  status: string
+  starts_at?: string | null
+  ends_at?: string | null
+}
+
+export type ContestPhase = {
+  status: string
+  announcement_visible: boolean
+  challenge_list_visible: boolean
+  challenge_detail_visible: boolean
+  attachment_visible: boolean
+  scoreboard_visible: boolean
+  submission_allowed: boolean
+  runtime_allowed: boolean
+  registration_allowed: boolean
+  starts_at?: string | null
+  ends_at?: string | null
+  message: string
+}
+
+export type ContestResponse = {
+  contest: ContestInfo
+  phase: ContestPhase
+}
+
 export type PublicChallengeSummary = {
   id: string
   slug: string
@@ -234,6 +264,12 @@ export type AdminAuditLog = {
   created_at: string
 }
 
+export type AdminContestInput = {
+  status: string
+  starts_at: string
+  ends_at: string
+}
+
 async function request<T>(path: string, init?: RequestInit, token?: string): Promise<T> {
   const headers = new Headers(init?.headers)
   if (!headers.has('Content-Type') && init?.body && !(init.body instanceof FormData)) {
@@ -260,6 +296,9 @@ async function request<T>(path: string, init?: RequestInit, token?: string): Pro
 }
 
 export const api = {
+  contest() {
+    return request<ContestResponse>('/api/v1/contest')
+  },
   register(input: { username: string; email: string; password: string; display_name: string }) {
     return request<AuthResponse>('/api/v1/auth/register', {
       method: 'POST',
@@ -314,6 +353,19 @@ export const api = {
   },
   mySolves(token: string) {
     return request<{ items: UserSolve[] }>('/api/v1/me/solves', undefined, token)
+  },
+  adminContest(token: string) {
+    return request<ContestResponse>('/api/v1/admin/contest', undefined, token)
+  },
+  updateAdminContest(token: string, payload: AdminContestInput) {
+    return request<ContestResponse>(
+      '/api/v1/admin/contest',
+      {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      },
+      token,
+    )
   },
   adminChallenges(token: string) {
     return request<{ items: AdminChallengeSummary[] }>('/api/v1/admin/challenges', undefined, token)
