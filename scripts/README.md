@@ -39,5 +39,6 @@ scripts/import-challenges.sh --contest recruit-2025 --path challenges/templates/
 说明：
 
 - 默认同步题目基础信息、`challenge_attachments` 和 `challenge_runtime_configs`
+- 推荐在模板中显式设置 `meta.status`；旧模板中的 `meta.visible` 仍会兼容映射到 `published` 或 `draft`
 - 不负责构建镜像，也不负责上传公告或富文本题面资源
 - 若 `slug` 已存在，会按模板内容覆盖更新对应题目配置与附件记录

@@ -5,6 +5,7 @@ meta:
   points: 100
   difficulty: easy
   dynamic: true
+  status: published
   visible: true
   sort_order: 10
 

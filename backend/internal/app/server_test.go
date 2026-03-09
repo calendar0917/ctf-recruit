@@ -1200,6 +1200,20 @@ func TestAdminCreateChallengeRejectsInvalidFlagType(t *testing.T) {
 	assertAPIErrorCode(t, res.Body.Bytes(), "invalid_challenge_input")
 }
 
+func TestAdminCreateChallengeRejectsInvalidStatus(t *testing.T) {
+	server, _ := newTestServer(t)
+	adminToken := issueAdminToken(t, server)
+	body := []byte(`{"slug":"status-demo","title":"Status Demo","category_slug":"web","description":"demo","points":100,"difficulty":"easy","flag_type":"static","flag_value":"flag{demo}","dynamic_enabled":false,"status":"launching","sort_order":10}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/challenges", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	res := httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", res.Code)
+	}
+	assertAPIErrorCode(t, res.Body.Bytes(), "invalid_challenge_input")
+}
+
 func TestAdminUpdateChallengeRejectsInvalidRegexFlagType(t *testing.T) {
 	server, _ := newTestServer(t)
 	adminToken := issueAdminToken(t, server)

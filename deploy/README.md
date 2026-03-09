@@ -93,6 +93,7 @@ docker compose -f deploy/docker-compose.prod.yml exec -T \
 
 - `bootstrap-admin` 是一次性初始化入口，不应在日常运维流程中反复执行
 - `import-challenges` 会幂等同步 `challenge.yaml` 中的题目元数据和 runtime 配置
+- 建议模板显式维护 `meta.status`，生产导入时只会对 `published` 题目开放公开访问与动态实例能力
 - 导入流程不负责构建题目镜像；赛前仍需先构建并推送镜像
 - 默认迁移不会再生成任何已知管理员口令
 - `scripts/dev-seed.sh` 只用于本地开发，不能进入生产流程
