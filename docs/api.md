@@ -82,7 +82,7 @@
 
 ## 管理接口
 
-这些接口当前要求带有管理员权限的 Bearer Token：
+这些接口当前要求带有后台权限的 Bearer Token：
 
 - `GET /api/v1/admin/contest`
 - `PATCH /api/v1/admin/contest`
@@ -112,6 +112,7 @@
 - 当前 `flag_type` 已支持 `static`、`case_insensitive`、`regex` 三种判题策略
 - 动态实例接口返回实例状态、访问地址和过期时间
 - 管理接口当前已覆盖题目、附件、公告、提交记录、实例、用户和审计日志的基础能力
+- `author` 角色在 `GET/POST/PATCH /api/v1/admin/challenges` 与 `POST /api/v1/admin/challenges/{challengeID}/attachments` 上会被限制为仅操作自己负责的题目，未归属题目统一返回 `404 challenge_not_found`
 
 ## 后续计划中但尚未完成的能力
 

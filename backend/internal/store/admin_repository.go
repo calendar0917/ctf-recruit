@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"ctf/backend/internal/admin"
@@ -19,14 +20,23 @@ func NewAdminRepository(db *sql.DB) *AdminRepository {
 	return &AdminRepository{db: db}
 }
 
-func (r *AdminRepository) ListChallenges(ctx context.Context) ([]admin.ChallengeSummary, error) {
-	const query = `
+func (r *AdminRepository) ListChallenges(ctx context.Context, actor admin.Actor) ([]admin.ChallengeSummary, error) {
+	query := `
 SELECT c.id, c.slug, c.title, cat.slug, c.points, c.visible, c.dynamic_enabled
 FROM challenges c
 JOIN categories cat ON cat.id = c.category_id
-ORDER BY cat.sort_order ASC, c.sort_order ASC, c.id ASC
 `
-	rows, err := r.db.QueryContext(ctx, query)
+	args := make([]any, 0, 1)
+	if actor.RestrictToOwnedChallenges() {
+		query += `
+JOIN challenge_authors ca ON ca.challenge_id = c.id
+WHERE ca.user_id = $1
+`
+		args = append(args, actor.UserID)
+	}
+	query += "ORDER BY cat.sort_order ASC, c.sort_order ASC, c.id ASC"
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list admin challenges: %w", err)
 	}
@@ -46,17 +56,27 @@ ORDER BY cat.sort_order ASC, c.sort_order ASC, c.id ASC
 	return items, nil
 }
 
-func (r *AdminRepository) GetChallenge(ctx context.Context, challengeID int64) (admin.ChallengeDetail, error) {
-	const challengeQuery = `
+func (r *AdminRepository) GetChallenge(ctx context.Context, actor admin.Actor, challengeID int64) (admin.ChallengeDetail, error) {
+	challengeQuery := `
 SELECT c.id, c.slug, c.title, cat.slug, c.description, c.points, c.difficulty, c.flag_type, c.flag_value, c.visible, c.dynamic_enabled, c.sort_order
 FROM challenges c
 JOIN categories cat ON cat.id = c.category_id
-WHERE c.id = $1
+`
+	args := []any{challengeID}
+	if actor.RestrictToOwnedChallenges() {
+		challengeQuery += `JOIN challenge_authors ca ON ca.challenge_id = c.id
+WHERE c.id = $1 AND ca.user_id = $2
 LIMIT 1
 `
+		args = append(args, actor.UserID)
+	} else {
+		challengeQuery += `WHERE c.id = $1
+LIMIT 1
+`
+	}
 
 	var detail admin.ChallengeDetail
-	if err := r.db.QueryRowContext(ctx, challengeQuery, challengeID).Scan(
+	if err := r.db.QueryRowContext(ctx, challengeQuery, args...).Scan(
 		&detail.ID,
 		&detail.Slug,
 		&detail.Title,
@@ -90,7 +110,7 @@ LIMIT 1
 	return detail, nil
 }
 
-func (r *AdminRepository) CreateChallenge(ctx context.Context, input admin.UpsertChallengeInput) (admin.ChallengeSummary, error) {
+func (r *AdminRepository) CreateChallenge(ctx context.Context, actor admin.Actor, input admin.UpsertChallengeInput) (admin.ChallengeSummary, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return admin.ChallengeSummary{}, fmt.Errorf("begin create challenge tx: %w", err)
@@ -137,6 +157,11 @@ RETURNING id
 		return admin.ChallengeSummary{}, fmt.Errorf("create challenge: %w", err)
 	}
 
+	if actor.RestrictToOwnedChallenges() {
+		if err := bindChallengeAuthor(ctx, tx, id, actor.UserID); err != nil {
+			return admin.ChallengeSummary{}, err
+		}
+	}
 	if err := upsertChallengeRuntimeConfig(ctx, tx, id, input.RuntimeConfig); err != nil {
 		return admin.ChallengeSummary{}, err
 	}
@@ -155,7 +180,7 @@ RETURNING id
 	}, nil
 }
 
-func (r *AdminRepository) UpdateChallenge(ctx context.Context, challengeID int64, input admin.UpsertChallengeInput) (admin.ChallengeSummary, error) {
+func (r *AdminRepository) UpdateChallenge(ctx context.Context, actor admin.Actor, challengeID int64, input admin.UpsertChallengeInput) (admin.ChallengeSummary, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return admin.ChallengeSummary{}, fmt.Errorf("begin update challenge tx: %w", err)
@@ -164,7 +189,7 @@ func (r *AdminRepository) UpdateChallenge(ctx context.Context, challengeID int64
 		_ = tx.Rollback()
 	}()
 
-	const query = `
+	query := `
 UPDATE challenges c
 SET
     category_id = cat.id,
@@ -180,11 +205,8 @@ SET
     sort_order = $11,
     updated_at = NOW()
 FROM categories cat
-WHERE c.id = $1 AND cat.slug = $12
-RETURNING c.id
 `
-	var id int64
-	err = tx.QueryRowContext(ctx, query,
+	args := []any{
 		challengeID,
 		input.Slug,
 		input.Title,
@@ -197,7 +219,24 @@ RETURNING c.id
 		input.Visible,
 		input.SortOrder,
 		input.CategorySlug,
-	).Scan(&id)
+	}
+	if actor.RestrictToOwnedChallenges() {
+		query += `
+WHERE c.id = $1 AND cat.slug = $12 AND EXISTS (
+    SELECT 1 FROM challenge_authors ca WHERE ca.challenge_id = c.id AND ca.user_id = $13
+)
+RETURNING c.id
+`
+		args = append(args, actor.UserID)
+	} else {
+		query += `
+WHERE c.id = $1 AND cat.slug = $12
+RETURNING c.id
+`
+	}
+
+	var id int64
+	err = tx.QueryRowContext(ctx, query, args...).Scan(&id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return admin.ChallengeSummary{}, admin.ErrResourceNotFound
@@ -223,7 +262,17 @@ RETURNING c.id
 	}, nil
 }
 
-func (r *AdminRepository) CreateAttachment(ctx context.Context, challengeID int64, filename, storagePath, contentType string, sizeBytes int64) (admin.Attachment, error) {
+func (r *AdminRepository) CreateAttachment(ctx context.Context, actor admin.Actor, challengeID int64, filename, storagePath, contentType string, sizeBytes int64) (admin.Attachment, error) {
+	if actor.RestrictToOwnedChallenges() {
+		allowed, err := challengeOwnedByUser(ctx, r.db, challengeID, actor.UserID)
+		if err != nil {
+			return admin.Attachment{}, err
+		}
+		if !allowed {
+			return admin.Attachment{}, admin.ErrResourceNotFound
+		}
+	}
+
 	const query = `
 INSERT INTO challenge_attachments (challenge_id, filename, storage_path, content_type, size_bytes)
 VALUES ($1, $2, $3, $4, $5)
@@ -776,6 +825,71 @@ ON CONFLICT (challenge_id) DO UPDATE SET
 		cfg.Enabled,
 	); err != nil {
 		return fmt.Errorf("upsert runtime config: %w", err)
+	}
+	return nil
+}
+
+func bindChallengeAuthor(ctx context.Context, tx *sql.Tx, challengeID, userID int64) error {
+	const query = `
+INSERT INTO challenge_authors (challenge_id, user_id)
+VALUES ($1, $2)
+ON CONFLICT (challenge_id, user_id) DO NOTHING
+`
+	if _, err := tx.ExecContext(ctx, query, challengeID, userID); err != nil {
+		return fmt.Errorf("bind challenge author: %w", err)
+	}
+	return nil
+}
+
+func challengeOwnedByUser(ctx context.Context, queryer interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, challengeID, userID int64) (bool, error) {
+	const query = `
+SELECT 1
+FROM challenge_authors
+WHERE challenge_id = $1 AND user_id = $2
+LIMIT 1
+`
+	var found int
+	if err := queryer.QueryRowContext(ctx, query, challengeID, userID).Scan(&found); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, fmt.Errorf("check challenge ownership: %w", err)
+	}
+	return true, nil
+}
+
+func ResolveUserIDByAuthorRef(ctx context.Context, db *sql.DB, value string) (int64, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, admin.ErrResourceNotFound
+	}
+	const query = `
+SELECT id
+FROM users
+WHERE username = $1 OR email = $1
+ORDER BY id ASC
+LIMIT 1
+`
+	var userID int64
+	if err := db.QueryRowContext(ctx, query, value).Scan(&userID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, admin.ErrResourceNotFound
+		}
+		return 0, fmt.Errorf("resolve challenge author %q: %w", value, err)
+	}
+	return userID, nil
+}
+
+func SetChallengeAuthors(ctx context.Context, tx *sql.Tx, challengeID int64, userIDs []int64) error {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM challenge_authors WHERE challenge_id = $1`, challengeID); err != nil {
+		return fmt.Errorf("clear challenge authors: %w", err)
+	}
+	for _, userID := range userIDs {
+		if err := bindChallengeAuthor(ctx, tx, challengeID, userID); err != nil {
+			return err
+		}
 	}
 	return nil
 }

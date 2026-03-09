@@ -28,43 +28,43 @@ func NewServiceWithManager(repo Repository, attachmentStorageDir string, manager
 	return &Service{repo: repo, manager: manager, now: time.Now, attachmentStorageDir: attachmentStorageDir}
 }
 
-func (s *Service) Challenges(ctx context.Context) ([]ChallengeSummary, error) {
-	return s.repo.ListChallenges(ctx)
+func (s *Service) Challenges(ctx context.Context, actor Actor) ([]ChallengeSummary, error) {
+	return s.repo.ListChallenges(ctx, actor)
 }
 
-func (s *Service) Challenge(ctx context.Context, challengeID int64) (ChallengeDetail, error) {
-	return s.repo.GetChallenge(ctx, challengeID)
+func (s *Service) Challenge(ctx context.Context, actor Actor, challengeID int64) (ChallengeDetail, error) {
+	return s.repo.GetChallenge(ctx, actor, challengeID)
 }
 
-func (s *Service) CreateChallenge(ctx context.Context, input UpsertChallengeInput) (ChallengeSummary, error) {
+func (s *Service) CreateChallenge(ctx context.Context, actor Actor, input UpsertChallengeInput) (ChallengeSummary, error) {
 	normalized, err := game.ValidateFlagTypeConfig(input.FlagType, input.FlagValue)
 	if err != nil {
 		return ChallengeSummary{}, fmt.Errorf("%w: %v", ErrInvalidChallengeInput, err)
 	}
 	input.FlagType = normalized
-	return s.repo.CreateChallenge(ctx, input)
+	return s.repo.CreateChallenge(ctx, actor, input)
 }
 
-func (s *Service) UpdateChallenge(ctx context.Context, challengeID int64, input UpsertChallengeInput) (ChallengeSummary, error) {
+func (s *Service) UpdateChallenge(ctx context.Context, actor Actor, challengeID int64, input UpsertChallengeInput) (ChallengeSummary, error) {
 	normalized, err := game.ValidateFlagTypeConfig(input.FlagType, input.FlagValue)
 	if err != nil {
 		return ChallengeSummary{}, fmt.Errorf("%w: %v", ErrInvalidChallengeInput, err)
 	}
 	input.FlagType = normalized
-	return s.repo.UpdateChallenge(ctx, challengeID, input)
+	return s.repo.UpdateChallenge(ctx, actor, challengeID, input)
 }
 
-func (s *Service) CreateAttachment(ctx context.Context, actorUserID int64, challengeID int64, input CreateAttachmentInput) (Attachment, error) {
+func (s *Service) CreateAttachment(ctx context.Context, actor Actor, challengeID int64, input CreateAttachmentInput) (Attachment, error) {
 	storagePath, err := s.writeAttachmentFile(challengeID, input.Filename, input.Body)
 	if err != nil {
 		return Attachment{}, err
 	}
-	attachment, err := s.repo.CreateAttachment(ctx, challengeID, input.Filename, storagePath, input.ContentType, input.SizeBytes)
+	attachment, err := s.repo.CreateAttachment(ctx, actor, challengeID, input.Filename, storagePath, input.ContentType, input.SizeBytes)
 	if err != nil {
 		_ = os.Remove(storagePath)
 		return Attachment{}, err
 	}
-	_ = s.repo.CreateAuditLog(ctx, &actorUserID, "attachment.create", "challenge_attachment", fmt.Sprintf("%d", attachment.ID), map[string]any{
+	_ = s.repo.CreateAuditLog(ctx, &actor.UserID, "attachment.create", "challenge_attachment", fmt.Sprintf("%d", attachment.ID), map[string]any{
 		"challenge_id": challengeID,
 		"filename":     attachment.Filename,
 	})

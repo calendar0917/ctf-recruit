@@ -12,6 +12,15 @@ var (
 	ErrInvalidChallengeInput = errors.New("invalid challenge input")
 )
 
+type Actor struct {
+	UserID int64
+	Role   string
+}
+
+func (a Actor) RestrictToOwnedChallenges() bool {
+	return a.Role == "author"
+}
+
 type RuntimeConfig struct {
 	Enabled            bool              `json:"enabled"`
 	ImageName          string            `json:"image_name"`
@@ -153,11 +162,11 @@ type InstanceManager interface {
 }
 
 type Repository interface {
-	ListChallenges(context.Context) ([]ChallengeSummary, error)
-	GetChallenge(context.Context, int64) (ChallengeDetail, error)
-	CreateChallenge(context.Context, UpsertChallengeInput) (ChallengeSummary, error)
-	UpdateChallenge(context.Context, int64, UpsertChallengeInput) (ChallengeSummary, error)
-	CreateAttachment(context.Context, int64, string, string, string, int64) (Attachment, error)
+	ListChallenges(context.Context, Actor) ([]ChallengeSummary, error)
+	GetChallenge(context.Context, Actor, int64) (ChallengeDetail, error)
+	CreateChallenge(context.Context, Actor, UpsertChallengeInput) (ChallengeSummary, error)
+	UpdateChallenge(context.Context, Actor, int64, UpsertChallengeInput) (ChallengeSummary, error)
+	CreateAttachment(context.Context, Actor, int64, string, string, string, int64) (Attachment, error)
 	GetAttachment(context.Context, int64, int64) (Attachment, string, error)
 	ListUsers(context.Context) ([]UserRecord, error)
 	UpdateUser(context.Context, int64, UpdateUserInput) (UserRecord, error)

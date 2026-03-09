@@ -91,14 +91,16 @@ type testGameRepo struct {
 }
 
 type testAdminRepo struct {
-	challenges    []admin.ChallengeSummary
-	challenge     admin.ChallengeDetail
-	attachments   map[int64]testAttachmentFile
-	users         []admin.UserRecord
-	auditLogs     []admin.AuditLogRecord
-	announcements []admin.Announcement
-	submissions   []admin.SubmissionRecord
-	instances     []admin.InstanceRecord
+	challenges          []admin.ChallengeSummary
+	ownedChallengeIDs   map[int64]map[int64]bool
+	challengeDetails    map[int64]admin.ChallengeDetail
+	attachments         map[int64]testAttachmentFile
+	attachmentChallenge map[int64]int64
+	users               []admin.UserRecord
+	auditLogs           []admin.AuditLogRecord
+	announcements       []admin.Announcement
+	submissions         []admin.SubmissionRecord
+	instances           []admin.InstanceRecord
 }
 
 type testAttachmentFile struct {
@@ -186,35 +188,58 @@ func newTestServer(t *testing.T) (*Server, *testRuntimeRepo) {
 		attachmentPath:   attachmentPath,
 	}
 	adminRepo := &testAdminRepo{
-		challenges: []admin.ChallengeSummary{{ID: 1, Slug: "web-welcome", Title: "Welcome Panel", Category: "web", Points: 100, Visible: true, DynamicEnabled: true}},
-		challenge: admin.ChallengeDetail{
-			ID:             1,
-			Slug:           "web-welcome",
-			Title:          "Welcome Panel",
-			Category:       "web",
-			Description:    "demo",
-			Points:         100,
-			Difficulty:     "easy",
-			FlagType:       "static",
-			FlagValue:      "flag{welcome}",
-			Visible:        true,
-			DynamicEnabled: true,
-			SortOrder:      10,
-			Attachments:    []admin.Attachment{{ID: 1, Filename: "statement.pdf", ContentType: "application/pdf", SizeBytes: 14}},
-			RuntimeConfig: admin.RuntimeConfig{
-				Enabled:         true,
-				ImageName:       "ctf/web-welcome:dev",
-				ExposedProtocol: "http",
-				ContainerPort:   80,
-				DefaultTTL:      1800,
-				MaxRenewCount:   1,
-				MemoryLimitMB:   256,
-				CPUMilli:        500,
+		challenges: []admin.ChallengeSummary{
+			{ID: 1, Slug: "web-welcome", Title: "Welcome Panel", Category: "web", Points: 100, Visible: true, DynamicEnabled: true},
+			{ID: 2, Slug: "crypto-demo", Title: "Crypto Demo", Category: "crypto", Points: 200, Visible: false, DynamicEnabled: false},
+		},
+		ownedChallengeIDs: map[int64]map[int64]bool{
+			1: {1: true},
+		},
+		challengeDetails: map[int64]admin.ChallengeDetail{
+			1: {
+				ID:             1,
+				Slug:           "web-welcome",
+				Title:          "Welcome Panel",
+				Category:       "web",
+				Description:    "demo",
+				Points:         100,
+				Difficulty:     "easy",
+				FlagType:       "static",
+				FlagValue:      "flag{welcome}",
+				Visible:        true,
+				DynamicEnabled: true,
+				SortOrder:      10,
+				Attachments:    []admin.Attachment{{ID: 1, Filename: "statement.pdf", ContentType: "application/pdf", SizeBytes: 14}},
+				RuntimeConfig: admin.RuntimeConfig{
+					Enabled:         true,
+					ImageName:       "ctf/web-welcome:dev",
+					ExposedProtocol: "http",
+					ContainerPort:   80,
+					DefaultTTL:      1800,
+					MaxRenewCount:   1,
+					MemoryLimitMB:   256,
+					CPUMilli:        500,
+				},
+			},
+			2: {
+				ID:             2,
+				Slug:           "crypto-demo",
+				Title:          "Crypto Demo",
+				Category:       "crypto",
+				Description:    "hidden demo",
+				Points:         200,
+				Difficulty:     "normal",
+				FlagType:       "static",
+				FlagValue:      "flag{crypto}",
+				Visible:        false,
+				DynamicEnabled: false,
+				SortOrder:      20,
 			},
 		},
 		attachments: map[int64]testAttachmentFile{
 			1: {attachment: admin.Attachment{ID: 1, Filename: "statement.pdf", ContentType: "application/pdf", SizeBytes: 14}, path: attachmentPath},
 		},
+		attachmentChallenge: map[int64]int64{1: 1},
 		users: []admin.UserRecord{
 			{ID: 1, Role: "admin", Username: "root", Email: "root@example.com", DisplayName: "Root", Status: "active", CreatedAt: now},
 			{ID: 2, Role: "player", Username: "alice", Email: "alice@example.com", DisplayName: "Alice", Status: "active", CreatedAt: now},
@@ -437,36 +462,98 @@ func (r *testGameRepo) ListScoreboard(context.Context) ([]game.ScoreboardEntry, 
 	return r.scoreboard, nil
 }
 
-func (r *testAdminRepo) ListChallenges(context.Context) ([]admin.ChallengeSummary, error) {
-	return r.challenges, nil
+func (r *testAdminRepo) ListChallenges(_ context.Context, actor admin.Actor) ([]admin.ChallengeSummary, error) {
+	items := make([]admin.ChallengeSummary, 0, len(r.challenges))
+	for _, item := range r.challenges {
+		if actor.Role == "author" && !r.ownedChallengeIDs[actor.UserID][item.ID] {
+			continue
+		}
+		items = append(items, item)
+	}
+	return items, nil
 }
-func (r *testAdminRepo) GetChallenge(_ context.Context, challengeID int64) (admin.ChallengeDetail, error) {
-	if r.challenge.ID != challengeID {
+func (r *testAdminRepo) GetChallenge(_ context.Context, actor admin.Actor, challengeID int64) (admin.ChallengeDetail, error) {
+	if actor.Role == "author" && !r.ownedChallengeIDs[actor.UserID][challengeID] {
 		return admin.ChallengeDetail{}, admin.ErrResourceNotFound
 	}
-	return r.challenge, nil
+	detail, ok := r.challengeDetails[challengeID]
+	if !ok {
+		return admin.ChallengeDetail{}, admin.ErrResourceNotFound
+	}
+	return detail, nil
 }
-func (r *testAdminRepo) CreateChallenge(_ context.Context, input admin.UpsertChallengeInput) (admin.ChallengeSummary, error) {
-	challenge := admin.ChallengeSummary{ID: 2, Slug: input.Slug, Title: input.Title, Category: input.CategorySlug, Points: input.Points, Visible: input.Visible, DynamicEnabled: input.DynamicEnabled}
+func (r *testAdminRepo) CreateChallenge(_ context.Context, actor admin.Actor, input admin.UpsertChallengeInput) (admin.ChallengeSummary, error) {
+	id := int64(len(r.challengeDetails) + 1)
+	challenge := admin.ChallengeSummary{ID: id, Slug: input.Slug, Title: input.Title, Category: input.CategorySlug, Points: input.Points, Visible: input.Visible, DynamicEnabled: input.DynamicEnabled}
 	r.challenges = append(r.challenges, challenge)
+	detail := admin.ChallengeDetail{ID: id, Slug: input.Slug, Title: input.Title, Category: input.CategorySlug, Description: input.Description, Points: input.Points, Difficulty: input.Difficulty, FlagType: input.FlagType, FlagValue: input.FlagValue, Visible: input.Visible, DynamicEnabled: input.DynamicEnabled, SortOrder: input.SortOrder}
+	if input.RuntimeConfig != nil {
+		detail.RuntimeConfig = *input.RuntimeConfig
+	}
+	if r.challengeDetails == nil {
+		r.challengeDetails = map[int64]admin.ChallengeDetail{}
+	}
+	r.challengeDetails[id] = detail
+	if actor.Role == "author" {
+		if r.ownedChallengeIDs == nil {
+			r.ownedChallengeIDs = map[int64]map[int64]bool{}
+		}
+		if r.ownedChallengeIDs[actor.UserID] == nil {
+			r.ownedChallengeIDs[actor.UserID] = map[int64]bool{}
+		}
+		r.ownedChallengeIDs[actor.UserID][id] = true
+	}
 	return challenge, nil
 }
-func (r *testAdminRepo) UpdateChallenge(_ context.Context, challengeID int64, input admin.UpsertChallengeInput) (admin.ChallengeSummary, error) {
-	r.challenge = admin.ChallengeDetail{ID: challengeID, Slug: input.Slug, Title: input.Title, Category: input.CategorySlug, Description: input.Description, Points: input.Points, Difficulty: input.Difficulty, FlagType: input.FlagType, FlagValue: input.FlagValue, Visible: input.Visible, DynamicEnabled: input.DynamicEnabled, SortOrder: input.SortOrder, Attachments: r.challenge.Attachments}
+func (r *testAdminRepo) UpdateChallenge(_ context.Context, actor admin.Actor, challengeID int64, input admin.UpsertChallengeInput) (admin.ChallengeSummary, error) {
+	if actor.Role == "author" && !r.ownedChallengeIDs[actor.UserID][challengeID] {
+		return admin.ChallengeSummary{}, admin.ErrResourceNotFound
+	}
+	detail, ok := r.challengeDetails[challengeID]
+	if !ok {
+		return admin.ChallengeSummary{}, admin.ErrResourceNotFound
+	}
+	detail.Slug = input.Slug
+	detail.Title = input.Title
+	detail.Category = input.CategorySlug
+	detail.Description = input.Description
+	detail.Points = input.Points
+	detail.Difficulty = input.Difficulty
+	detail.FlagType = input.FlagType
+	detail.FlagValue = input.FlagValue
+	detail.Visible = input.Visible
+	detail.DynamicEnabled = input.DynamicEnabled
+	detail.SortOrder = input.SortOrder
 	if input.RuntimeConfig != nil {
-		r.challenge.RuntimeConfig = *input.RuntimeConfig
+		detail.RuntimeConfig = *input.RuntimeConfig
+	}
+	r.challengeDetails[challengeID] = detail
+	for i := range r.challenges {
+		if r.challenges[i].ID == challengeID {
+			r.challenges[i] = admin.ChallengeSummary{ID: challengeID, Slug: input.Slug, Title: input.Title, Category: input.CategorySlug, Points: input.Points, Visible: input.Visible, DynamicEnabled: input.DynamicEnabled}
+			break
+		}
 	}
 	return admin.ChallengeSummary{ID: challengeID, Slug: input.Slug, Title: input.Title, Category: input.CategorySlug, Points: input.Points, Visible: input.Visible, DynamicEnabled: input.DynamicEnabled}, nil
 }
-func (r *testAdminRepo) CreateAttachment(_ context.Context, _ int64, filename, storagePath, contentType string, sizeBytes int64) (admin.Attachment, error) {
+func (r *testAdminRepo) CreateAttachment(_ context.Context, actor admin.Actor, challengeID int64, filename, storagePath, contentType string, sizeBytes int64) (admin.Attachment, error) {
+	if actor.Role == "author" && !r.ownedChallengeIDs[actor.UserID][challengeID] {
+		return admin.Attachment{}, admin.ErrResourceNotFound
+	}
 	id := int64(len(r.attachments) + 1)
 	item := admin.Attachment{ID: id, Filename: filename, ContentType: contentType, SizeBytes: sizeBytes}
 	r.attachments[id] = testAttachmentFile{attachment: item, path: storagePath}
-	r.challenge.Attachments = append(r.challenge.Attachments, item)
+	if r.attachmentChallenge == nil {
+		r.attachmentChallenge = map[int64]int64{}
+	}
+	r.attachmentChallenge[id] = challengeID
+	detail := r.challengeDetails[challengeID]
+	detail.Attachments = append(detail.Attachments, item)
+	r.challengeDetails[challengeID] = detail
 	return item, nil
 }
 func (r *testAdminRepo) GetAttachment(_ context.Context, challengeID int64, attachmentID int64) (admin.Attachment, string, error) {
-	if r.challenge.ID != challengeID {
+	if r.attachmentChallenge[attachmentID] != challengeID {
 		return admin.Attachment{}, "", admin.ErrResourceNotFound
 	}
 	item, ok := r.attachments[attachmentID]
@@ -953,6 +1040,75 @@ func TestAdminChallengesEndpoint(t *testing.T) {
 	server.Handler().ServeHTTP(res, req)
 	if res.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.Code)
+	}
+}
+
+func TestAuthorRoleOnlySeesOwnedChallenges(t *testing.T) {
+	server, _ := newTestServer(t)
+	authorToken := issueRoleToken(t, server, "author")
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/challenges", nil)
+	req.Header.Set("Authorization", "Bearer "+authorToken)
+	res := httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.Code)
+	}
+	body := res.Body.String()
+	if !strings.Contains(body, "web-welcome") {
+		t.Fatalf("expected owned challenge in response, got %s", body)
+	}
+	if strings.Contains(body, "crypto-demo") {
+		t.Fatalf("unexpected unowned challenge in response, got %s", body)
+	}
+}
+
+func TestAuthorRoleCannotAccessUnownedChallenge(t *testing.T) {
+	server, _ := newTestServer(t)
+	authorToken := issueRoleToken(t, server, "author")
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/challenges/2", nil)
+	req.Header.Set("Authorization", "Bearer "+authorToken)
+	res := httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", res.Code)
+	}
+}
+
+func TestAuthorRoleCannotUpdateUnownedChallenge(t *testing.T) {
+	server, _ := newTestServer(t)
+	authorToken := issueRoleToken(t, server, "author")
+	body := []byte(`{"slug":"crypto-demo","title":"Crypto Demo","category_slug":"crypto","description":"updated","points":200,"difficulty":"normal","flag_type":"static","flag_value":"flag{crypto}","dynamic_enabled":false,"visible":false,"sort_order":20}`)
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/admin/challenges/2", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+authorToken)
+	res := httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", res.Code)
+	}
+}
+
+func TestAuthorRoleCannotUploadAttachmentToUnownedChallenge(t *testing.T) {
+	server, _ := newTestServer(t)
+	authorToken := issueRoleToken(t, server, "author")
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", "readme.txt")
+	if err != nil {
+		t.Fatalf("create form file: %v", err)
+	}
+	if _, err := part.Write([]byte("hello")); err != nil {
+		t.Fatalf("write form file: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close writer: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/challenges/2/attachments", &body)
+	req.Header.Set("Authorization", "Bearer "+authorToken)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	res := httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", res.Code)
 	}
 }
 

@@ -32,6 +32,10 @@
 
 保存动态实例题目的运行配置，是当前模型里的关键表。
 
+### `challenge_authors`
+
+保存题目与后台出题账号的归属关系。当前 `author` 角色的后台可见范围由该表决定。
+
 ### `challenge_instances`
 
 保存按 `用户 + 题目` 分配的实例记录。
@@ -59,6 +63,7 @@
 - `roles.name` 唯一
 - `categories.slug` 唯一
 - `challenges.slug` 唯一
+- `challenge_authors` 对 `challenge_id + user_id` 唯一
 - `solves` 对 `user_id + challenge_id` 唯一
 - `challenge_instances` 对 `user_id + challenge_id` 的运行中实例做唯一限制
 

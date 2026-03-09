@@ -17,7 +17,10 @@ type fakeRepo struct {
 	auditLogs             []AuditLogRecord
 	instances             []InstanceRecord
 	createdChallengeInput UpsertChallengeInput
+	createdChallengeActor Actor
 	updatedChallengeInput UpsertChallengeInput
+	updatedChallengeActor Actor
+	attachmentActor       Actor
 }
 
 type fakeManager struct {
@@ -33,55 +36,73 @@ func (m *fakeManager) Stop(_ context.Context, containerID string) error {
 	return nil
 }
 
-func (r *fakeRepo) ListChallenges(context.Context) ([]ChallengeSummary, error) {
+func (r *fakeRepo) ListChallenges(context.Context, Actor) ([]ChallengeSummary, error) {
 	return []ChallengeSummary{{ID: 1, Slug: "web-welcome"}}, nil
 }
-func (r *fakeRepo) GetChallenge(context.Context, int64) (ChallengeDetail, error) {
+
+func (r *fakeRepo) GetChallenge(context.Context, Actor, int64) (ChallengeDetail, error) {
 	return ChallengeDetail{ID: 1, Slug: "web-welcome", RuntimeConfig: RuntimeConfig{Enabled: true, ImageName: "ctf/web-welcome:dev"}}, nil
 }
-func (r *fakeRepo) CreateChallenge(_ context.Context, input UpsertChallengeInput) (ChallengeSummary, error) {
+
+func (r *fakeRepo) CreateChallenge(_ context.Context, actor Actor, input UpsertChallengeInput) (ChallengeSummary, error) {
+	r.createdChallengeActor = actor
 	r.createdChallengeInput = input
 	return ChallengeSummary{ID: 2, Slug: input.Slug}, nil
 }
-func (r *fakeRepo) UpdateChallenge(_ context.Context, _ int64, input UpsertChallengeInput) (ChallengeSummary, error) {
+
+func (r *fakeRepo) UpdateChallenge(_ context.Context, actor Actor, _ int64, input UpsertChallengeInput) (ChallengeSummary, error) {
+	r.updatedChallengeActor = actor
 	r.updatedChallengeInput = input
 	return ChallengeSummary{ID: 1, Slug: input.Slug}, nil
 }
-func (r *fakeRepo) CreateAttachment(_ context.Context, _ int64, filename, _, contentType string, sizeBytes int64) (Attachment, error) {
+
+func (r *fakeRepo) CreateAttachment(_ context.Context, actor Actor, _ int64, filename, _, contentType string, sizeBytes int64) (Attachment, error) {
+	r.attachmentActor = actor
 	return Attachment{ID: 1, Filename: filename, ContentType: contentType, SizeBytes: sizeBytes}, nil
 }
+
 func (r *fakeRepo) GetAttachment(context.Context, int64, int64) (Attachment, string, error) {
 	return Attachment{ID: 1, Filename: "statement.pdf", ContentType: "application/pdf", SizeBytes: 128}, "/tmp/statement.pdf", nil
 }
+
 func (r *fakeRepo) ListUsers(context.Context) ([]UserRecord, error) {
 	return r.users, nil
 }
+
 func (r *fakeRepo) UpdateUser(_ context.Context, userID int64, input UpdateUserInput) (UserRecord, error) {
 	return UserRecord{ID: userID, Role: input.Role, DisplayName: input.DisplayName, Status: input.Status}, nil
 }
+
 func (r *fakeRepo) ListAuditLogs(context.Context) ([]AuditLogRecord, error) {
 	return r.auditLogs, nil
 }
+
 func (r *fakeRepo) CreateAuditLog(_ context.Context, actorUserID *int64, action, resourceType, resourceID string, details map[string]any) error {
 	id := int64(len(r.auditLogs) + 1)
 	r.auditLogs = append(r.auditLogs, AuditLogRecord{ID: id, ActorUserID: actorUserID, Action: action, ResourceType: resourceType, ResourceID: resourceID, Details: details})
 	return nil
 }
+
 func (r *fakeRepo) ListAnnouncements(context.Context) ([]Announcement, error) {
 	return []Announcement{{ID: 1, Title: "hello"}}, nil
 }
+
 func (r *fakeRepo) CreateAnnouncement(context.Context, int64, CreateAnnouncementInput) (Announcement, error) {
 	return Announcement{ID: 2, Title: "new"}, nil
 }
+
 func (r *fakeRepo) DeleteAnnouncement(context.Context, int64) (Announcement, error) {
 	return Announcement{ID: 1, Title: "hello", Published: true}, nil
 }
+
 func (r *fakeRepo) ListSubmissions(context.Context) ([]SubmissionRecord, error) {
 	return []SubmissionRecord{{ID: 1}}, nil
 }
+
 func (r *fakeRepo) ListInstances(context.Context) ([]InstanceRecord, error) {
 	return r.instances, nil
 }
+
 func (r *fakeRepo) GetInstance(_ context.Context, instanceID int64) (InstanceRecord, error) {
 	for _, item := range r.instances {
 		if item.ID == instanceID {
@@ -90,6 +111,7 @@ func (r *fakeRepo) GetInstance(_ context.Context, instanceID int64) (InstanceRec
 	}
 	return InstanceRecord{}, ErrResourceNotFound
 }
+
 func (r *fakeRepo) TerminateInstance(_ context.Context, instanceID int64, terminatedAt time.Time) (InstanceRecord, error) {
 	for i := range r.instances {
 		if r.instances[i].ID == instanceID {
@@ -105,7 +127,7 @@ func (r *fakeRepo) TerminateInstance(_ context.Context, instanceID int64, termin
 func TestChallenge(t *testing.T) {
 	repo := &fakeRepo{}
 	service := NewService(repo, t.TempDir())
-	challenge, err := service.Challenge(context.Background(), 1)
+	challenge, err := service.Challenge(context.Background(), Actor{UserID: 1, Role: "admin"}, 1)
 	if err != nil {
 		t.Fatalf("challenge: %v", err)
 	}
@@ -117,8 +139,9 @@ func TestChallenge(t *testing.T) {
 func TestCreateChallengeNormalizesSupportedFlagType(t *testing.T) {
 	repo := &fakeRepo{}
 	service := NewService(repo, t.TempDir())
+	actor := Actor{UserID: 7, Role: "author"}
 
-	_, err := service.CreateChallenge(context.Background(), UpsertChallengeInput{
+	_, err := service.CreateChallenge(context.Background(), actor, UpsertChallengeInput{
 		Slug:         "welcome",
 		Title:        "Welcome",
 		CategorySlug: "web",
@@ -132,13 +155,16 @@ func TestCreateChallengeNormalizesSupportedFlagType(t *testing.T) {
 	if repo.createdChallengeInput.FlagType != game.FlagTypeCaseInsensitive {
 		t.Fatalf("expected normalized flag type, got %q", repo.createdChallengeInput.FlagType)
 	}
+	if repo.createdChallengeActor != actor {
+		t.Fatalf("expected actor to be forwarded, got %+v", repo.createdChallengeActor)
+	}
 }
 
 func TestCreateChallengeRejectsInvalidRegexFlagType(t *testing.T) {
 	repo := &fakeRepo{}
 	service := NewService(repo, t.TempDir())
 
-	_, err := service.CreateChallenge(context.Background(), UpsertChallengeInput{
+	_, err := service.CreateChallenge(context.Background(), Actor{UserID: 1, Role: "admin"}, UpsertChallengeInput{
 		Slug:         "welcome",
 		Title:        "Welcome",
 		CategorySlug: "web",
@@ -156,8 +182,9 @@ func TestCreateAttachmentWritesFileAndAudit(t *testing.T) {
 	storageDir := t.TempDir()
 	service := NewService(repo, storageDir)
 	service.now = func() time.Time { return time.Date(2025, time.March, 8, 12, 0, 0, 0, time.UTC) }
+	actor := Actor{UserID: 9, Role: "author"}
 
-	attachment, err := service.CreateAttachment(context.Background(), 9, 1, CreateAttachmentInput{
+	attachment, err := service.CreateAttachment(context.Background(), actor, 1, CreateAttachmentInput{
 		Filename:    "statement.pdf",
 		ContentType: "application/pdf",
 		Body:        bytes.NewBufferString("pdf-data"),
@@ -168,6 +195,9 @@ func TestCreateAttachmentWritesFileAndAudit(t *testing.T) {
 	}
 	if attachment.Filename != "statement.pdf" {
 		t.Fatalf("unexpected attachment: %+v", attachment)
+	}
+	if repo.attachmentActor != actor {
+		t.Fatalf("expected actor to be forwarded, got %+v", repo.attachmentActor)
 	}
 	matches, err := filepath.Glob(filepath.Join(storageDir, "challenge-1", "*-statement.pdf"))
 	if err != nil || len(matches) != 1 {

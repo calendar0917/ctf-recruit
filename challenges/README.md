@@ -35,6 +35,9 @@ content:
   description: A minimal seeded web challenge for local runtime integration.
   author: platform
 
+ownership:
+  author: platform
+
 runtime:
   image: ctf/web-welcome:dev
   mode: per-user

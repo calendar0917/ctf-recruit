@@ -27,6 +27,9 @@ flag:
   value: flag{welcome}
 content:
   description: Demo challenge
+  author: legacy-platform
+ownership:
+  author: platform@example.com
 runtime:
   image: ctf/web-welcome:dev
   mode: per-user
@@ -55,6 +58,12 @@ attachments:
 	}
 	if spec.Flag.Type != game.FlagTypeStatic {
 		t.Fatalf("unexpected flag type: %q", spec.Flag.Type)
+	}
+	if spec.Content.Author != "legacy-platform" {
+		t.Fatalf("unexpected legacy author: %q", spec.Content.Author)
+	}
+	if spec.Ownership.Author != "platform@example.com" {
+		t.Fatalf("unexpected ownership author: %q", spec.Ownership.Author)
 	}
 	if spec.Runtime == nil {
 		t.Fatal("expected runtime config")
@@ -94,6 +103,19 @@ func TestNormalizeSpecAppliesDefaultsAndFlagNormalization(t *testing.T) {
 	}
 	if normalized.Flag.Type != game.FlagTypeCaseInsensitive {
 		t.Fatalf("expected normalized flag type, got %q", normalized.Flag.Type)
+	}
+}
+
+func TestNormalizedOwnerRefsPrefersExplicitOwnershipAndKeepsCompatibility(t *testing.T) {
+	refs := normalizedOwnerRefs(ChallengeSpec{
+		Content:   ChallengeContent{Author: "legacy-author"},
+		Ownership: ChallengeOwnership{Author: "author@example.com"},
+	})
+	if len(refs) != 2 {
+		t.Fatalf("expected 2 owner refs, got %d (%v)", len(refs), refs)
+	}
+	if refs[0] != "author@example.com" || refs[1] != "legacy-author" {
+		t.Fatalf("unexpected owner refs: %+v", refs)
 	}
 }
 

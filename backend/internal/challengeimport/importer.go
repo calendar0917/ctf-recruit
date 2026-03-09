@@ -16,7 +16,9 @@ import (
 	"strings"
 	"time"
 
+	"ctf/backend/internal/admin"
 	"ctf/backend/internal/game"
+	"ctf/backend/internal/store"
 )
 
 type Importer struct {
@@ -44,6 +46,7 @@ type ChallengeSpec struct {
 	Meta        ChallengeMeta
 	Flag        ChallengeFlag
 	Content     ChallengeContent
+	Ownership   ChallengeOwnership
 	Runtime     *ChallengeRuntime
 	Attachments []AttachmentSpec
 }
@@ -67,6 +70,10 @@ type ChallengeFlag struct {
 type ChallengeContent struct {
 	Description string
 	Author      string
+}
+
+type ChallengeOwnership struct {
+	Author string
 }
 
 type ChallengeRuntime struct {
@@ -140,6 +147,29 @@ func (i *Importer) ImportSpec(ctx context.Context, contestSlug, path string, spe
 	challengeID, err := upsertChallenge(ctx, tx, strings.TrimSpace(contestSlug), normalized)
 	if err != nil {
 		return ImportResult{}, err
+	}
+
+	ownerRefs := normalizedOwnerRefs(normalized)
+	if len(ownerRefs) > 0 {
+		userIDs := make([]int64, 0, len(ownerRefs))
+		seen := make(map[int64]struct{}, len(ownerRefs))
+		for _, ref := range ownerRefs {
+			userID, err := store.ResolveUserIDByAuthorRef(ctx, i.db, ref)
+			if err != nil {
+				if errors.Is(err, admin.ErrResourceNotFound) {
+					return ImportResult{}, fmt.Errorf("resolve challenge owner %q: user not found", ref)
+				}
+				return ImportResult{}, err
+			}
+			if _, ok := seen[userID]; ok {
+				continue
+			}
+			seen[userID] = struct{}{}
+			userIDs = append(userIDs, userID)
+		}
+		if err := store.SetChallengeAuthors(ctx, tx, challengeID, userIDs); err != nil {
+			return ImportResult{}, err
+		}
 	}
 
 	runtimeSynced := false
@@ -243,6 +273,7 @@ func NormalizeSpec(spec ChallengeSpec) (ChallengeSpec, error) {
 
 	normalized.Content.Description = strings.TrimSpace(normalized.Content.Description)
 	normalized.Content.Author = strings.TrimSpace(normalized.Content.Author)
+	normalized.Ownership.Author = strings.TrimSpace(normalized.Ownership.Author)
 	for i := range normalized.Attachments {
 		normalized.Attachments[i].Filename = strings.TrimSpace(normalized.Attachments[i].Filename)
 		normalized.Attachments[i].Source = strings.TrimSpace(normalized.Attachments[i].Source)
@@ -764,6 +795,13 @@ func assignScalar(spec *ChallengeSpec, section, key, value string) error {
 		default:
 			return fmt.Errorf("unsupported content key %q", key)
 		}
+	case "ownership":
+		switch key {
+		case "author":
+			spec.Ownership.Author = value
+		default:
+			return fmt.Errorf("unsupported ownership key %q", key)
+		}
 	case "runtime":
 		if spec.Runtime == nil {
 			spec.Runtime = &ChallengeRuntime{Enabled: true}
@@ -903,4 +941,15 @@ func stripComment(line string) string {
 		}
 	}
 	return line
+}
+
+func normalizedOwnerRefs(spec ChallengeSpec) []string {
+	refs := make([]string, 0, 2)
+	if value := strings.TrimSpace(spec.Ownership.Author); value != "" {
+		refs = append(refs, value)
+	}
+	if value := strings.TrimSpace(spec.Content.Author); value != "" && value != strings.TrimSpace(spec.Ownership.Author) {
+		refs = append(refs, value)
+	}
+	return refs
 }

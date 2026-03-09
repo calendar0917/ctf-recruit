@@ -566,7 +566,12 @@ func (s *Server) handleSubmitFlag(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAdminChallenges(w http.ResponseWriter, r *http.Request) {
-	items, err := s.admin.Challenges(r.Context())
+	actor, ok := adminActorFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
+		return
+	}
+	items, err := s.admin.Challenges(r.Context(), actor)
 	if err != nil {
 		logError("admin.challenges.list.failed", map[string]any{"error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "repository_error", "failed to load admin challenges")
@@ -581,7 +586,12 @@ func (s *Server) handleAdminChallengeDetail(w http.ResponseWriter, r *http.Reque
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_challenge_id", "challenge id must be numeric")
 		return
 	}
-	challenge, err := s.admin.Challenge(r.Context(), challengeID)
+	actor, ok := adminActorFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
+		return
+	}
+	challenge, err := s.admin.Challenge(r.Context(), actor, challengeID)
 	if err != nil {
 		if errors.Is(err, admin.ErrResourceNotFound) {
 			httpx.WriteError(w, http.StatusNotFound, "challenge_not_found", err.Error())
@@ -617,7 +627,12 @@ func (s *Server) handleAdminCreateChallenge(w http.ResponseWriter, r *http.Reque
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_json", err.Error())
 		return
 	}
-	challenge, err := s.admin.CreateChallenge(r.Context(), input)
+	actor, ok := adminActorFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
+		return
+	}
+	challenge, err := s.admin.CreateChallenge(r.Context(), actor, input)
 	if err != nil {
 		if admin.IsInvalidChallengeInput(err) {
 			httpx.WriteError(w, http.StatusBadRequest, "invalid_challenge_input", err.Error())
@@ -658,7 +673,12 @@ func (s *Server) handleAdminUpdateChallenge(w http.ResponseWriter, r *http.Reque
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_json", err.Error())
 		return
 	}
-	challenge, err := s.admin.UpdateChallenge(r.Context(), challengeID, input)
+	actor, ok := adminActorFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
+		return
+	}
+	challenge, err := s.admin.UpdateChallenge(r.Context(), actor, challengeID, input)
 	if err != nil {
 		if errors.Is(err, admin.ErrResourceNotFound) {
 			httpx.WriteError(w, http.StatusNotFound, "challenge_not_found", err.Error())
@@ -704,13 +724,22 @@ func (s *Server) handleAdminCreateAttachment(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	defer file.Close()
-	attachment, err := s.admin.CreateAttachment(r.Context(), actorUserID, challengeID, admin.CreateAttachmentInput{
+	actor, ok := adminActorFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
+		return
+	}
+	attachment, err := s.admin.CreateAttachment(r.Context(), actor, challengeID, admin.CreateAttachmentInput{
 		Filename:    filename,
 		ContentType: contentType,
 		Body:        file,
 		SizeBytes:   size,
 	})
 	if err != nil {
+		if errors.Is(err, admin.ErrResourceNotFound) {
+			httpx.WriteError(w, http.StatusNotFound, "challenge_not_found", err.Error())
+			return
+		}
 		logError("admin.attachment.create.failed", map[string]any{"error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "create_failed", "failed to create attachment")
 		return
@@ -1170,6 +1199,18 @@ func userIDFromContext(ctx context.Context) (int64, bool) {
 func roleFromContext(ctx context.Context) (string, bool) {
 	value, ok := ctx.Value(authRoleKey{}).(string)
 	return value, ok
+}
+
+func adminActorFromContext(ctx context.Context) (admin.Actor, bool) {
+	userID, ok := userIDFromContext(ctx)
+	if !ok {
+		return admin.Actor{}, false
+	}
+	role, ok := roleFromContext(ctx)
+	if !ok {
+		return admin.Actor{}, false
+	}
+	return admin.Actor{UserID: userID, Role: role}, true
 }
 
 func requestSourceIP(r *http.Request) string {
