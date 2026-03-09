@@ -13,3 +13,6 @@ coverage/
 .DS_Store
 
 frontend/tsconfig.tsbuildinfo
+
+tests/load/output/
+__pycache__/

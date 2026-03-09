@@ -150,6 +150,7 @@ scripts/restore-db.sh
 
 - 恢复前应先确认目标数据库、回滚窗口和停机影响
 - 赛前至少要完成一次“备份生成 -> 新库恢复 -> API 验证”的完整演练
+- 赛前至少要执行一轮 [tests/load/basic.py](/home/calendar/code/ctf/tests/load/basic.py) 基线压测，并记录结果
 
 ## 赛前彩排
 

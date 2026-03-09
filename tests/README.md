@@ -74,3 +74,32 @@ BASE_URL='http://127.0.0.1:8080' tests/smoke/smoke.sh
 - 若登录管理员失败，先确认已执行 `scripts/dev-seed.sh` 或等价管理员 bootstrap
 - 若 readiness 失败，先确认数据库已完成迁移且 API 能连接 PostgreSQL
 - 若数据库校验失败，先确认脚本连接的是与 API 相同的数据库实例
+
+## Load Test
+
+文件：
+
+- [tests/load/basic.py](/home/calendar/code/ctf/tests/load/basic.py)
+- [tests/load/README.md](/home/calendar/code/ctf/tests/load/README.md)
+- [tests/load/capacity-record-template.md](/home/calendar/code/ctf/tests/load/capacity-record-template.md)
+
+覆盖基线：
+
+- 公告、题目列表、题目详情、排行榜
+- 登录态常用读取接口
+- 登录、Flag 提交
+- 动态实例创建、查询、续期、删除
+- `/api/v1/metrics` 前后快照对比
+
+最小执行建议：
+
+```bash
+python3 tests/load/basic.py --scenario public --concurrency 16 --duration-seconds 60
+python3 tests/load/basic.py --scenario player --player-email 'player@example.com' --player-password 'PlayerPass123!' --concurrency 16 --duration-seconds 60
+python3 tests/load/basic.py --scenario login --player-email 'player@example.com' --player-password 'PlayerPass123!' --concurrency 8 --duration-seconds 30
+python3 tests/load/basic.py --scenario instance --register-player --concurrency 2 --duration-seconds 20
+```
+
+正式记录前，请同步填写：
+
+- [tests/load/capacity-record-template.md](/home/calendar/code/ctf/tests/load/capacity-record-template.md)

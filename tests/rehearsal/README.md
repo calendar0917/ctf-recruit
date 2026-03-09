@@ -18,8 +18,9 @@
 1. 准备环境变量、数据库、Redis、Docker Engine 和动态题镜像
 2. 按部署文档启动服务
 3. 执行 [tests/smoke/smoke.sh](/home/calendar/code/ctf/tests/smoke/smoke.sh)
-4. 记录执行时间、失败点和关键日志
-5. 清理测试账号、异常实例和临时数据
+4. 执行至少一组 [tests/load/basic.py](/home/calendar/code/ctf/tests/load/basic.py) 基线压测并保存报告
+5. 记录执行时间、失败点、关键日志和容量结论
+6. 清理测试账号、异常实例和临时数据
 
 ## 彩排通过标准
 
