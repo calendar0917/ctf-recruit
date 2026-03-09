@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"mime"
 	"mime/multipart"
 	"net"
@@ -34,6 +33,7 @@ type Server struct {
 	game     *game.Service
 	runtime  *runtime.Service
 	limiters AppLimiters
+	metrics  *metricsRegistry
 	db       *sql.DB
 }
 
@@ -54,6 +54,7 @@ func NewServer(cfg config.Config) (*Server, error) {
 	tokens := auth.NewTokenManager(cfg.JWTSecret, cfg.JWTTTL)
 	manager := runtime.NewDockerManager(cfg.DockerSocketPath)
 	limiters := newAppLimiters(cfg)
+	metrics := newMetricsRegistry()
 
 	return &Server{
 		cfg:      cfg,
@@ -62,6 +63,7 @@ func NewServer(cfg config.Config) (*Server, error) {
 		game:     game.NewService(gameRepo),
 		runtime:  runtime.NewService(cfg.PublicBaseURL, manager, runtimeRepo),
 		limiters: limiters,
+		metrics:  metrics,
 		db:       db,
 	}, nil
 }
@@ -74,6 +76,7 @@ func NewServerForTests(cfg config.Config, adminService *admin.Service, authServi
 		game:     gameService,
 		runtime:  runtimeService,
 		limiters: newAppLimiters(cfg),
+		metrics:  newMetricsRegistry(),
 	}
 }
 
@@ -88,6 +91,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/health", s.handleHealth)
 	mux.HandleFunc("GET /api/v1/ready", s.handleReady)
+	mux.Handle("GET /api/v1/metrics", s.metrics)
 	mux.HandleFunc("POST /api/v1/auth/register", s.handleRegister)
 	mux.HandleFunc("POST /api/v1/auth/login", s.handleLogin)
 	mux.Handle("GET /api/v1/me", s.authenticated(http.HandlerFunc(s.handleMe)))
@@ -117,58 +121,60 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/admin/users", s.requirePermission("user:read", http.HandlerFunc(s.handleAdminUsers)))
 	mux.Handle("PATCH /api/v1/admin/users/{userID}", s.requirePermission("user:write", http.HandlerFunc(s.handleAdminUpdateUser)))
 	mux.Handle("GET /api/v1/admin/audit-logs", s.requirePermission("audit:read", http.HandlerFunc(s.handleAdminAuditLogs)))
-	return loggingMiddleware(mux)
+	return loggingMiddleware(s.metrics, mux)
 }
 
 func (s *Server) StartBackground(ctx context.Context) {
 	interval, err := time.ParseDuration(s.cfg.InstanceSweeperPollInterval)
 	if err != nil {
-		log.Printf("invalid INSTANCE_SWEEPER_POLL_INTERVAL: %v", err)
+		logWarn("instance_sweeper.invalid_interval", map[string]any{"error": err.Error()})
 		interval = 30 * time.Second
 	}
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	log.Printf("instance sweeper started, interval=%s", interval)
+	logInfo("instance_sweeper.started", map[string]any{"interval": interval.String()})
 	if report, err := s.runtime.Reconcile(ctx); err != nil {
-		log.Printf("instance reconcile error: %v", err)
+		logError("instance_reconcile.error", map[string]any{"error": err.Error()})
 	} else if report.TerminatedRecords > 0 || report.RemovedContainers > 0 {
-		log.Printf("instance reconcile corrected records=%d containers=%d", report.TerminatedRecords, report.RemovedContainers)
+		logInfo("instance_reconcile.corrected", map[string]any{"terminated_records": report.TerminatedRecords, "removed_containers": report.RemovedContainers})
 	}
 
 	for {
 		select {
 		case <-ctx.Done():
-			log.Printf("instance sweeper stopped")
+			logInfo("instance_sweeper.stopped", nil)
 			return
 		case <-ticker.C:
 			terminated, err := s.runtime.SweepExpired(ctx)
 			if err != nil {
-				log.Printf("instance sweeper error: %v", err)
+				logError("instance_sweeper.error", map[string]any{"error": err.Error()})
 				continue
 			}
 			if terminated > 0 {
-				log.Printf("instance sweeper terminated %d expired instances", terminated)
+				logInfo("instance_sweeper.terminated", map[string]any{"count": terminated})
 			}
 
 			report, err := s.runtime.Reconcile(ctx)
 			if err != nil {
-				log.Printf("instance reconcile error: %v", err)
+				logError("instance_reconcile.error", map[string]any{"error": err.Error()})
 				continue
 			}
 			if report.TerminatedRecords > 0 || report.RemovedContainers > 0 {
-				log.Printf("instance reconcile corrected records=%d containers=%d", report.TerminatedRecords, report.RemovedContainers)
+				logInfo("instance_reconcile.corrected", map[string]any{"terminated_records": report.TerminatedRecords, "removed_containers": report.RemovedContainers})
 			}
 		}
 	}
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
+	s.metrics.Inc("ctf_http_health_requests_total", nil)
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "api"})
 }
 
 func (s *Server) handleReady(w http.ResponseWriter, _ *http.Request) {
+	s.metrics.Inc("ctf_http_ready_requests_total", nil)
 	ready := s.db != nil
 	if s.db != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -204,18 +210,20 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 	allowed, err := enforceRateLimit(r.Context(), s.limiters.Register, registerRateLimitKey(r))
 	if err != nil {
-		log.Printf("register rate limit: %v", err)
+		s.metrics.Inc("ctf_rate_limit_errors_total", map[string]string{"scope": "register"})
+		logError("rate_limit.register.error", map[string]any{"error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "rate_limit_error", "failed to enforce rate limit")
 		return
 	}
 	if !allowed {
+		s.metrics.Inc("ctf_rate_limit_hits_total", map[string]string{"scope": "register"})
 		httpx.WriteError(w, http.StatusTooManyRequests, "register_rate_limited", "too many registration attempts, please try again later")
 		return
 	}
 
 	result, err := s.auth.Register(r.Context(), input)
 	if err != nil {
-		log.Printf("register user: %v", err)
+		logWarn("auth.register.failed", map[string]any{"error": err.Error()})
 		httpx.WriteError(w, http.StatusBadRequest, "register_failed", "failed to register user")
 		return
 	}
@@ -230,11 +238,13 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	allowed, err := enforceRateLimit(r.Context(), s.limiters.Login, authRateLimitKey("login", input.Identifier, r))
 	if err != nil {
-		log.Printf("login rate limit: %v", err)
+		s.metrics.Inc("ctf_rate_limit_errors_total", map[string]string{"scope": "login"})
+		logError("rate_limit.login.error", map[string]any{"error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "rate_limit_error", "failed to enforce rate limit")
 		return
 	}
 	if !allowed {
+		s.metrics.Inc("ctf_rate_limit_hits_total", map[string]string{"scope": "login"})
 		httpx.WriteError(w, http.StatusTooManyRequests, "login_rate_limited", "too many login attempts, please try again later")
 		return
 	}
@@ -245,7 +255,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusUnauthorized, "invalid_credentials", err.Error())
 			return
 		}
-		log.Printf("login user: %v", err)
+		logWarn("auth.login.failed", map[string]any{"error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "login_failed", "failed to login")
 		return
 	}
@@ -277,7 +287,7 @@ func (s *Server) handleMeSubmissions(w http.ResponseWriter, r *http.Request) {
 
 	items, err := s.game.UserSubmissions(r.Context(), userID)
 	if err != nil {
-		log.Printf("list my submissions: %v", err)
+		logError("me.submissions.failed", map[string]any{"error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "repository_error", "failed to load submissions")
 		return
 	}
@@ -296,7 +306,7 @@ func (s *Server) handleMeSolves(w http.ResponseWriter, r *http.Request) {
 
 	items, err := s.game.UserSolves(r.Context(), userID)
 	if err != nil {
-		log.Printf("list my solves: %v", err)
+		logError("me.solves.failed", map[string]any{"error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "repository_error", "failed to load solves")
 		return
 	}
@@ -309,7 +319,7 @@ func (s *Server) handleMeSolves(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleAnnouncements(w http.ResponseWriter, r *http.Request) {
 	items, err := s.game.Announcements(r.Context())
 	if err != nil {
-		log.Printf("list announcements: %v", err)
+		logError("announcements.list.failed", map[string]any{"error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "repository_error", "failed to load announcements")
 		return
 	}
@@ -325,7 +335,7 @@ func (s *Server) handleAnnouncements(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleChallenges(w http.ResponseWriter, r *http.Request) {
 	items, err := s.runtime.Challenges(r.Context())
 	if err != nil {
-		log.Printf("list challenges: %v", err)
+		logError("challenges.list.failed", map[string]any{"error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "repository_error", "failed to load challenges")
 		return
 	}
@@ -339,7 +349,7 @@ func (s *Server) handleChallengeDetail(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusNotFound, "challenge_not_found", err.Error())
 			return
 		}
-		log.Printf("load challenge detail: %v", err)
+		logError("challenge.detail.failed", map[string]any{"error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "repository_error", "failed to load challenge")
 		return
 	}
@@ -361,14 +371,14 @@ func (s *Server) handleChallengeAttachmentDownload(w http.ResponseWriter, r *htt
 		case errors.Is(err, game.ErrAttachmentNotFound):
 			httpx.WriteError(w, http.StatusNotFound, "attachment_not_found", err.Error())
 		default:
-			log.Printf("load challenge attachment: %v", err)
+			logError("challenge.attachment.lookup_failed", map[string]any{"error": err.Error()})
 			httpx.WriteError(w, http.StatusBadGateway, "repository_error", "failed to load attachment")
 		}
 		return
 	}
 	file, err := os.Open(storagePath)
 	if err != nil {
-		log.Printf("open challenge attachment: %v", err)
+		logError("challenge.attachment.open_failed", map[string]any{"error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "attachment_unavailable", "failed to open attachment")
 		return
 	}
@@ -389,7 +399,7 @@ func (s *Server) handleChallengeAttachmentDownload(w http.ResponseWriter, r *htt
 func (s *Server) handleScoreboard(w http.ResponseWriter, r *http.Request) {
 	items, err := s.game.Scoreboard(r.Context())
 	if err != nil {
-		log.Printf("load scoreboard: %v", err)
+		logError("scoreboard.load.failed", map[string]any{"error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "repository_error", "failed to load scoreboard")
 		return
 	}
@@ -465,11 +475,13 @@ func (s *Server) handleSubmitFlag(w http.ResponseWriter, r *http.Request) {
 	limiterKey := limitKey("submission", fmt.Sprintf("%d", userID), r.PathValue("challengeID"))
 	allowed, err := enforceRateLimit(r.Context(), s.limiters.Submission, limiterKey)
 	if err != nil {
-		log.Printf("submission rate limit: %v", err)
+		s.metrics.Inc("ctf_rate_limit_errors_total", map[string]string{"scope": "submission"})
+		logError("rate_limit.submission.error", map[string]any{"error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "rate_limit_error", "failed to enforce rate limit")
 		return
 	}
 	if !allowed {
+		s.metrics.Inc("ctf_rate_limit_hits_total", map[string]string{"scope": "submission"})
 		httpx.WriteError(w, http.StatusTooManyRequests, "submission_rate_limited", "too many submissions, please try again later")
 		return
 	}
@@ -488,7 +500,7 @@ func (s *Server) handleSubmitFlag(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusNotFound, "challenge_not_found", err.Error())
 			return
 		}
-		log.Printf("submit flag: %v", err)
+		logError("flag.submit.failed", map[string]any{"error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "submit_failed", "failed to submit flag")
 		return
 	}
@@ -502,7 +514,7 @@ func (s *Server) handleSubmitFlag(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleAdminChallenges(w http.ResponseWriter, r *http.Request) {
 	items, err := s.admin.Challenges(r.Context())
 	if err != nil {
-		log.Printf("list admin challenges: %v", err)
+		logError("admin.challenges.list.failed", map[string]any{"error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "repository_error", "failed to load admin challenges")
 		return
 	}
@@ -521,7 +533,7 @@ func (s *Server) handleAdminChallengeDetail(w http.ResponseWriter, r *http.Reque
 			httpx.WriteError(w, http.StatusNotFound, "challenge_not_found", err.Error())
 			return
 		}
-		log.Printf("load admin challenge detail: %v", err)
+		logError("admin.challenge.detail.failed", map[string]any{"error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "repository_error", "failed to load admin challenge")
 		return
 	}
@@ -536,11 +548,13 @@ func (s *Server) handleAdminCreateChallenge(w http.ResponseWriter, r *http.Reque
 	}
 	allowed, err := enforceRateLimit(r.Context(), s.limiters.AdminWrite, adminRateLimitKey("challenge_create", r, actorUserID))
 	if err != nil {
-		log.Printf("admin challenge create rate limit: %v", err)
+		s.metrics.Inc("ctf_rate_limit_errors_total", map[string]string{"scope": "admin_write"})
+		logError("rate_limit.admin_write.error", map[string]any{"action": "challenge_create", "error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "rate_limit_error", "failed to enforce rate limit")
 		return
 	}
 	if !allowed {
+		s.metrics.Inc("ctf_rate_limit_hits_total", map[string]string{"scope": "admin_write"})
 		httpx.WriteError(w, http.StatusTooManyRequests, "admin_rate_limited", "too many admin write requests, please try again later")
 		return
 	}
@@ -551,7 +565,7 @@ func (s *Server) handleAdminCreateChallenge(w http.ResponseWriter, r *http.Reque
 	}
 	challenge, err := s.admin.CreateChallenge(r.Context(), input)
 	if err != nil {
-		log.Printf("create admin challenge: %v", err)
+		logError("admin.challenge.create.failed", map[string]any{"error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "create_failed", "failed to create challenge")
 		return
 	}
@@ -566,11 +580,13 @@ func (s *Server) handleAdminUpdateChallenge(w http.ResponseWriter, r *http.Reque
 	}
 	allowed, err := enforceRateLimit(r.Context(), s.limiters.AdminWrite, adminRateLimitKey("challenge_update", r, actorUserID))
 	if err != nil {
-		log.Printf("admin challenge update rate limit: %v", err)
+		s.metrics.Inc("ctf_rate_limit_errors_total", map[string]string{"scope": "admin_write"})
+		logError("rate_limit.admin_write.error", map[string]any{"action": "challenge_update", "error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "rate_limit_error", "failed to enforce rate limit")
 		return
 	}
 	if !allowed {
+		s.metrics.Inc("ctf_rate_limit_hits_total", map[string]string{"scope": "admin_write"})
 		httpx.WriteError(w, http.StatusTooManyRequests, "admin_rate_limited", "too many admin write requests, please try again later")
 		return
 	}
@@ -590,7 +606,7 @@ func (s *Server) handleAdminUpdateChallenge(w http.ResponseWriter, r *http.Reque
 			httpx.WriteError(w, http.StatusNotFound, "challenge_not_found", err.Error())
 			return
 		}
-		log.Printf("update admin challenge: %v", err)
+		logError("admin.challenge.update.failed", map[string]any{"error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "update_failed", "failed to update challenge")
 		return
 	}
@@ -605,11 +621,13 @@ func (s *Server) handleAdminCreateAttachment(w http.ResponseWriter, r *http.Requ
 	}
 	allowed, err := enforceRateLimit(r.Context(), s.limiters.AdminWrite, adminRateLimitKey("attachment_create", r, actorUserID))
 	if err != nil {
-		log.Printf("admin attachment create rate limit: %v", err)
+		s.metrics.Inc("ctf_rate_limit_errors_total", map[string]string{"scope": "admin_write"})
+		logError("rate_limit.admin_write.error", map[string]any{"action": "attachment_create", "error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "rate_limit_error", "failed to enforce rate limit")
 		return
 	}
 	if !allowed {
+		s.metrics.Inc("ctf_rate_limit_hits_total", map[string]string{"scope": "admin_write"})
 		httpx.WriteError(w, http.StatusTooManyRequests, "admin_rate_limited", "too many admin write requests, please try again later")
 		return
 	}
@@ -631,7 +649,7 @@ func (s *Server) handleAdminCreateAttachment(w http.ResponseWriter, r *http.Requ
 		SizeBytes:   size,
 	})
 	if err != nil {
-		log.Printf("create admin attachment: %v", err)
+		logError("admin.attachment.create.failed", map[string]any{"error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "create_failed", "failed to create attachment")
 		return
 	}
@@ -641,7 +659,7 @@ func (s *Server) handleAdminCreateAttachment(w http.ResponseWriter, r *http.Requ
 func (s *Server) handleAdminAnnouncements(w http.ResponseWriter, r *http.Request) {
 	items, err := s.admin.Announcements(r.Context())
 	if err != nil {
-		log.Printf("list admin announcements: %v", err)
+		logError("admin.announcements.list.failed", map[string]any{"error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "repository_error", "failed to load admin announcements")
 		return
 	}
@@ -656,11 +674,13 @@ func (s *Server) handleAdminCreateAnnouncement(w http.ResponseWriter, r *http.Re
 	}
 	allowed, err := enforceRateLimit(r.Context(), s.limiters.AdminWrite, adminRateLimitKey("announcement_create", r, actorUserID))
 	if err != nil {
-		log.Printf("admin announcement create rate limit: %v", err)
+		s.metrics.Inc("ctf_rate_limit_errors_total", map[string]string{"scope": "admin_write"})
+		logError("rate_limit.admin_write.error", map[string]any{"action": "announcement_create", "error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "rate_limit_error", "failed to enforce rate limit")
 		return
 	}
 	if !allowed {
+		s.metrics.Inc("ctf_rate_limit_hits_total", map[string]string{"scope": "admin_write"})
 		httpx.WriteError(w, http.StatusTooManyRequests, "admin_rate_limited", "too many admin write requests, please try again later")
 		return
 	}
@@ -671,7 +691,7 @@ func (s *Server) handleAdminCreateAnnouncement(w http.ResponseWriter, r *http.Re
 	}
 	announcement, err := s.admin.CreateAnnouncement(r.Context(), actorUserID, input)
 	if err != nil {
-		log.Printf("create admin announcement: %v", err)
+		logError("admin.announcement.create.failed", map[string]any{"error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "create_failed", "failed to create announcement")
 		return
 	}
@@ -686,11 +706,13 @@ func (s *Server) handleAdminDeleteAnnouncement(w http.ResponseWriter, r *http.Re
 	}
 	allowed, err := enforceRateLimit(r.Context(), s.limiters.AdminWrite, adminRateLimitKey("announcement_delete", r, actorUserID))
 	if err != nil {
-		log.Printf("admin announcement delete rate limit: %v", err)
+		s.metrics.Inc("ctf_rate_limit_errors_total", map[string]string{"scope": "admin_write"})
+		logError("rate_limit.admin_write.error", map[string]any{"action": "announcement_delete", "error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "rate_limit_error", "failed to enforce rate limit")
 		return
 	}
 	if !allowed {
+		s.metrics.Inc("ctf_rate_limit_hits_total", map[string]string{"scope": "admin_write"})
 		httpx.WriteError(w, http.StatusTooManyRequests, "admin_rate_limited", "too many admin write requests, please try again later")
 		return
 	}
@@ -705,7 +727,7 @@ func (s *Server) handleAdminDeleteAnnouncement(w http.ResponseWriter, r *http.Re
 			httpx.WriteError(w, http.StatusNotFound, "announcement_not_found", err.Error())
 			return
 		}
-		log.Printf("delete admin announcement: %v", err)
+		logError("admin.announcement.delete.failed", map[string]any{"error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "delete_failed", "failed to delete announcement")
 		return
 	}
@@ -715,7 +737,7 @@ func (s *Server) handleAdminDeleteAnnouncement(w http.ResponseWriter, r *http.Re
 func (s *Server) handleAdminSubmissions(w http.ResponseWriter, r *http.Request) {
 	items, err := s.admin.Submissions(r.Context())
 	if err != nil {
-		log.Printf("list admin submissions: %v", err)
+		logError("admin.submissions.list.failed", map[string]any{"error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "repository_error", "failed to load submissions")
 		return
 	}
@@ -725,7 +747,7 @@ func (s *Server) handleAdminSubmissions(w http.ResponseWriter, r *http.Request) 
 func (s *Server) handleAdminInstances(w http.ResponseWriter, r *http.Request) {
 	items, err := s.admin.Instances(r.Context())
 	if err != nil {
-		log.Printf("list admin instances: %v", err)
+		logError("admin.instances.list.failed", map[string]any{"error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "repository_error", "failed to load instances")
 		return
 	}
@@ -740,11 +762,13 @@ func (s *Server) handleAdminTerminateInstance(w http.ResponseWriter, r *http.Req
 	}
 	allowed, err := enforceRateLimit(r.Context(), s.limiters.AdminWrite, adminRateLimitKey("instance_terminate", r, actorUserID))
 	if err != nil {
-		log.Printf("admin terminate instance rate limit: %v", err)
+		s.metrics.Inc("ctf_rate_limit_errors_total", map[string]string{"scope": "admin_write"})
+		logError("rate_limit.admin_write.error", map[string]any{"action": "instance_terminate", "error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "rate_limit_error", "failed to enforce rate limit")
 		return
 	}
 	if !allowed {
+		s.metrics.Inc("ctf_rate_limit_hits_total", map[string]string{"scope": "admin_write"})
 		httpx.WriteError(w, http.StatusTooManyRequests, "admin_rate_limited", "too many admin write requests, please try again later")
 		return
 	}
@@ -759,7 +783,7 @@ func (s *Server) handleAdminTerminateInstance(w http.ResponseWriter, r *http.Req
 			httpx.WriteError(w, http.StatusNotFound, "instance_not_found", err.Error())
 			return
 		}
-		log.Printf("terminate admin instance: %v", err)
+		logError("admin.instance.terminate.failed", map[string]any{"error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "terminate_failed", "failed to terminate instance")
 		return
 	}
@@ -769,7 +793,7 @@ func (s *Server) handleAdminTerminateInstance(w http.ResponseWriter, r *http.Req
 func (s *Server) handleAdminUsers(w http.ResponseWriter, r *http.Request) {
 	items, err := s.admin.Users(r.Context())
 	if err != nil {
-		log.Printf("list admin users: %v", err)
+		logError("admin.users.list.failed", map[string]any{"error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "repository_error", "failed to load users")
 		return
 	}
@@ -784,11 +808,13 @@ func (s *Server) handleAdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	allowed, err := enforceRateLimit(r.Context(), s.limiters.AdminWrite, adminRateLimitKey("user_update", r, actorUserID))
 	if err != nil {
-		log.Printf("admin update user rate limit: %v", err)
+		s.metrics.Inc("ctf_rate_limit_errors_total", map[string]string{"scope": "admin_write"})
+		logError("rate_limit.admin_write.error", map[string]any{"action": "user_update", "error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "rate_limit_error", "failed to enforce rate limit")
 		return
 	}
 	if !allowed {
+		s.metrics.Inc("ctf_rate_limit_hits_total", map[string]string{"scope": "admin_write"})
 		httpx.WriteError(w, http.StatusTooManyRequests, "admin_rate_limited", "too many admin write requests, please try again later")
 		return
 	}
@@ -808,7 +834,7 @@ func (s *Server) handleAdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusNotFound, "user_not_found", err.Error())
 			return
 		}
-		log.Printf("update admin user: %v", err)
+		logError("admin.user.update.failed", map[string]any{"error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "update_failed", "failed to update user")
 		return
 	}
@@ -818,7 +844,7 @@ func (s *Server) handleAdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleAdminAuditLogs(w http.ResponseWriter, r *http.Request) {
 	items, err := s.admin.AuditLogs(r.Context())
 	if err != nil {
-		log.Printf("list admin audit logs: %v", err)
+		logError("admin.audit_logs.list.failed", map[string]any{"error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "repository_error", "failed to load audit logs")
 		return
 	}
@@ -842,7 +868,7 @@ func (s *Server) writeRuntimeError(w http.ResponseWriter, err error) {
 	case errors.Is(err, runtime.ErrInstanceCooldownActive):
 		httpx.WriteError(w, http.StatusConflict, "instance_cooldown_active", err.Error())
 	default:
-		log.Printf("runtime error: %v", err)
+		logError("runtime.error", map[string]any{"error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "runtime_error", fmt.Sprintf("%v", err))
 	}
 }
@@ -1008,10 +1034,32 @@ func extractUpload(r *http.Request) (string, string, int64, multipart.File, erro
 	return header.Filename, contentType, header.Size, file, nil
 }
 
-func loggingMiddleware(next http.Handler) http.Handler {
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (r *statusRecorder) WriteHeader(status int) {
+	r.status = status
+	r.ResponseWriter.WriteHeader(status)
+}
+
+func loggingMiddleware(metrics *metricsRegistry, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		next.ServeHTTP(w, r)
-		log.Printf("%s %s finished in %s", r.Method, r.URL.Path, time.Since(start))
+		recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(recorder, r)
+		durationMs := float64(time.Since(start).Milliseconds())
+		if metrics != nil {
+			metrics.Inc("ctf_http_requests_total", map[string]string{"method": r.Method, "path": r.URL.Path, "status": strconv.Itoa(recorder.status)})
+			metrics.Add("ctf_http_request_duration_ms_total", durationMs, map[string]string{"method": r.Method, "path": r.URL.Path})
+		}
+		logInfo("http.request", map[string]any{
+			"method":      r.Method,
+			"path":        r.URL.Path,
+			"status":      recorder.status,
+			"duration_ms": durationMs,
+			"remote_ip":   requestSourceIP(r),
+		})
 	})
 }

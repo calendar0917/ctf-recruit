@@ -25,6 +25,7 @@
 
 - smoke test 全部通过
 - `GET /api/v1/ready` 返回数据库连通
+- `GET /api/v1/metrics` 可返回基础指标文本
 - 后台能看到 smoke 账号提交与实例记录
 - 管理员终止实例后，选手侧实例查询返回 `404 instance_not_found`
 - 宿主机上没有遗留的 smoke 动态容器

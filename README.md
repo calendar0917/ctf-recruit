@@ -132,4 +132,5 @@ docker compose -f deploy/docker-compose.prod.yml exec -T \
 - `deploy/docker-compose.yml` 是开发环境；`deploy/docker-compose.prod.yml` 是当前最小生产骨架
 - 生产环境首个管理员必须通过显式 bootstrap 命令创建
 - 登录、注册、Flag 提交和后台关键写接口当前已接入 Redis 共享限流
+- API 当前已提供 `GET /api/v1/metrics` 和数据库备份恢复脚本
 - 接下来的开发优先级以 [开发基线与升级路线](docs/development-baseline.md) 为准

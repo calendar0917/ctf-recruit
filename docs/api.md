@@ -8,6 +8,7 @@
 
 - `GET /api/v1/health`
 - `GET /api/v1/ready`
+- `GET /api/v1/metrics`
 - `POST /api/v1/auth/register`
 - `POST /api/v1/auth/login`
 - `GET /api/v1/announcements`

@@ -13,6 +13,7 @@
 
 - `GET /health`
 - `GET /ready`
+- `GET /metrics`
 - 选手注册、登录、`GET /me`
 - 公告、题目列表、题目详情、排行榜
 - Flag 提交与解题入榜

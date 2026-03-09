@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
@@ -25,7 +26,7 @@ func main() {
 	}
 	defer func() {
 		if err := server.Close(); err != nil {
-			log.Printf("close server resources: %v", err)
+			emit("warn", "api.close.failed", map[string]any{"error": err.Error()})
 		}
 	}()
 
@@ -38,7 +39,7 @@ func main() {
 	go server.StartBackground(context.Background())
 
 	go func() {
-		log.Printf("api listening on %s", cfg.HTTPAddr)
+		emit("info", "api.started", map[string]any{"addr": cfg.HTTPAddr})
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("listen: %v", err)
 		}
@@ -46,12 +47,30 @@ func main() {
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	<-sigCh
+	sig := <-sigCh
+	emit("info", "api.shutdown.signal", map[string]any{"signal": sig.String()})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if err := httpServer.Shutdown(ctx); err != nil {
-		log.Printf("shutdown error: %v", err)
+		emit("error", "api.shutdown.failed", map[string]any{"error": err.Error()})
 	}
+}
+
+func emit(level, event string, fields map[string]any) {
+	entry := map[string]any{
+		"level": level,
+		"time":  time.Now().UTC().Format(time.RFC3339Nano),
+		"event": event,
+	}
+	for key, value := range fields {
+		entry[key] = value
+	}
+	payload, err := json.Marshal(entry)
+	if err != nil {
+		log.Printf("structured log fallback: event=%s fields=%v", event, fields)
+		return
+	}
+	log.Print(string(payload))
 }

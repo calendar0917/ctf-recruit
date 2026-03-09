@@ -116,6 +116,41 @@ docker compose -f deploy/docker-compose.prod.yml exec -T \
 - 生产环境建议保持 `REDIS_ADDR` 指向 Compose 内的 `redis:6379` 或专用 Redis 实例
 - 若 Redis 不可用，API 会回退到进程内内存限流并记录日志，但这只适合作为临时降级手段
 
+
+## 观测与备份
+
+当前已提供的基础观测能力：
+
+- API 请求会输出 JSON 结构化日志
+- `GET /api/v1/metrics` 提供基础文本指标
+- 已覆盖基础 HTTP 请求计数、请求耗时累计、限流命中计数、限流错误计数
+
+当前已提供的备份恢复脚本：
+
+- [backup-db.sh](/home/calendar/code/ctf/scripts/backup-db.sh)
+- [restore-db.sh](/home/calendar/code/ctf/scripts/restore-db.sh)
+
+最小备份示例：
+
+```bash
+export DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/ctf?sslmode=disable'
+export BACKUP_DIR='./backups'
+scripts/backup-db.sh
+```
+
+最小恢复示例：
+
+```bash
+export DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/ctf?sslmode=disable'
+export BACKUP_FILE='./backups/ctf-20250101T000000Z.sql.gz'
+scripts/restore-db.sh
+```
+
+说明：
+
+- 恢复前应先确认目标数据库、回滚窗口和停机影响
+- 赛前至少要完成一次“备份生成 -> 新库恢复 -> API 验证”的完整演练
+
 ## 赛前彩排
 
 彩排前至少确认：

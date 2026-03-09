@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"ctf/backend/internal/auth"
 	"ctf/backend/internal/config"
@@ -62,5 +64,22 @@ func main() {
 		log.Fatalf("create bootstrap admin: %v", err)
 	}
 
-	log.Printf("bootstrap admin created: username=%s email=%s id=%d", user.Username, user.Email, user.ID)
+	emit("info", "bootstrap_admin.created", map[string]any{"username": user.Username, "email": user.Email, "id": user.ID})
+}
+
+func emit(level, event string, fields map[string]any) {
+	entry := map[string]any{
+		"level": level,
+		"time":  time.Now().UTC().Format(time.RFC3339Nano),
+		"event": event,
+	}
+	for key, value := range fields {
+		entry[key] = value
+	}
+	payload, err := json.Marshal(entry)
+	if err != nil {
+		log.Printf("structured log fallback: event=%s fields=%v", event, fields)
+		return
+	}
+	log.Print(string(payload))
 }

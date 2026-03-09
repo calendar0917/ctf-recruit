@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -529,6 +530,27 @@ func TestHealthEndpoint(t *testing.T) {
 	server.Handler().ServeHTTP(res, req)
 	if res.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.Code)
+	}
+}
+
+func TestMetricsEndpoint(t *testing.T) {
+	server, _ := newTestServer(t)
+	healthReq := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
+	healthRes := httptest.NewRecorder()
+	server.Handler().ServeHTTP(healthRes, healthReq)
+
+	metricsReq := httptest.NewRequest(http.MethodGet, "/api/v1/metrics", nil)
+	metricsRes := httptest.NewRecorder()
+	server.Handler().ServeHTTP(metricsRes, metricsReq)
+	if metricsRes.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", metricsRes.Code)
+	}
+	body := metricsRes.Body.String()
+	if !strings.Contains(body, "ctf_http_requests_total") {
+		t.Fatalf("expected request counter in metrics, got %q", body)
+	}
+	if !strings.Contains(body, "ctf_http_health_requests_total") {
+		t.Fatalf("expected health counter in metrics, got %q", body)
 	}
 }
 
