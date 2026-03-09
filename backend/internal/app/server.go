@@ -1096,6 +1096,11 @@ func hasPermission(role, permission string) bool {
 			"instance:write":    true,
 			"audit:read":        true,
 		},
+		"author": {
+			"challenge:read":   true,
+			"challenge:write":  true,
+			"attachment:write": true,
+		},
 	}
 	if rolePerms, ok := permissions[role]; ok {
 		return rolePerms[permission]

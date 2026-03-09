@@ -14,7 +14,7 @@
 
 ### `users`
 
-保存选手和管理员账号信息，角色通过 `roles` 关联。
+保存选手和后台账号信息，角色通过 `roles` 关联。当前基础角色包括 `player`、`author`、`ops`、`admin`。
 
 ### `categories`
 

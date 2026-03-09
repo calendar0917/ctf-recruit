@@ -906,6 +906,44 @@ func TestOpsRoleCanAccessInstanceActionsButNotUserManagement(t *testing.T) {
 	}
 }
 
+func TestAuthorRoleCanManageChallengesButNotOpsOrUsers(t *testing.T) {
+	server, _ := newTestServer(t)
+	authorToken := issueRoleToken(t, server, "author")
+
+	challengeReq := httptest.NewRequest(http.MethodGet, "/api/v1/admin/challenges", nil)
+	challengeReq.Header.Set("Authorization", "Bearer "+authorToken)
+	challengeRes := httptest.NewRecorder()
+	server.Handler().ServeHTTP(challengeRes, challengeReq)
+	if challengeRes.Code != http.StatusOK {
+		t.Fatalf("expected author challenge read 200, got %d", challengeRes.Code)
+	}
+
+	attachmentReq := httptest.NewRequest(http.MethodPost, "/api/v1/admin/challenges/1/attachments", strings.NewReader(""))
+	attachmentReq.Header.Set("Authorization", "Bearer "+authorToken)
+	attachmentReq.Header.Set("Content-Type", "multipart/form-data; boundary=unused")
+	attachmentRes := httptest.NewRecorder()
+	server.Handler().ServeHTTP(attachmentRes, attachmentReq)
+	if attachmentRes.Code == http.StatusForbidden {
+		t.Fatalf("expected author attachment endpoint to pass permission gate, got %d", attachmentRes.Code)
+	}
+
+	instanceReq := httptest.NewRequest(http.MethodGet, "/api/v1/admin/instances", nil)
+	instanceReq.Header.Set("Authorization", "Bearer "+authorToken)
+	instanceRes := httptest.NewRecorder()
+	server.Handler().ServeHTTP(instanceRes, instanceReq)
+	if instanceRes.Code != http.StatusForbidden {
+		t.Fatalf("expected author instance read 403, got %d", instanceRes.Code)
+	}
+
+	userReq := httptest.NewRequest(http.MethodGet, "/api/v1/admin/users", nil)
+	userReq.Header.Set("Authorization", "Bearer "+authorToken)
+	userRes := httptest.NewRecorder()
+	server.Handler().ServeHTTP(userRes, userReq)
+	if userRes.Code != http.StatusForbidden {
+		t.Fatalf("expected author user read 403, got %d", userRes.Code)
+	}
+}
+
 func TestAdminChallengesEndpoint(t *testing.T) {
 	server, _ := newTestServer(t)
 	adminToken := issueAdminToken(t, server)

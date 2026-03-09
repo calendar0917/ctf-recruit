@@ -17,9 +17,10 @@ func main() {
 	cfg := config.Load()
 
 	var (
-		contestSlug = flag.String("contest", envOrDefault("IMPORT_CONTEST_SLUG", "recruit-2025"), "contest slug to receive imported challenges")
-		root        = flag.String("root", envOrDefault("CHALLENGE_ROOT", detectDefaultRoot()), "directory to scan for challenge.yaml files")
-		path        = flag.String("path", strings.TrimSpace(os.Getenv("CHALLENGE_SPEC_PATH")), "optional single challenge.yaml path to import")
+		contestSlug   = flag.String("contest", envOrDefault("IMPORT_CONTEST_SLUG", "recruit-2025"), "contest slug to receive imported challenges")
+		root          = flag.String("root", envOrDefault("CHALLENGE_ROOT", detectDefaultRoot()), "directory to scan for challenge.yaml files")
+		path          = flag.String("path", strings.TrimSpace(os.Getenv("CHALLENGE_SPEC_PATH")), "optional single challenge.yaml path to import")
+		attachmentDir = flag.String("attachment-dir", envOrDefault("ATTACHMENT_STORAGE_DIR", cfg.AttachmentStorageDir), "attachment storage directory used when attachment specs are present")
 	)
 	flag.Parse()
 
@@ -29,7 +30,7 @@ func main() {
 	}
 	defer db.Close()
 
-	importer := challengeimport.New(db)
+	importer := challengeimport.NewWithAttachmentStorage(db, strings.TrimSpace(*attachmentDir))
 	ctx := context.Background()
 
 	paths := make([]string, 0)
@@ -50,7 +51,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("import %s: %v", specPath, err)
 		}
-		fmt.Printf("imported %s (id=%d runtime=%t) from %s\n", result.Slug, result.ChallengeID, result.RuntimeSynced, result.Path)
+		fmt.Printf("imported %s (id=%d runtime=%t attachments=%d) from %s\n", result.Slug, result.ChallengeID, result.RuntimeSynced, result.AttachmentsSynced, result.Path)
 	}
 }
 

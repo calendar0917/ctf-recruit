@@ -30,3 +30,8 @@ runtime:
   env:
     MODE: dev
   command:
+
+attachments:
+  - filename: statement.txt
+    source: attachments/statement.txt
+    content_type: text/plain

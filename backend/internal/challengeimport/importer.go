@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"mime"
 	"os"
 	"path/filepath"
 	"sort"
@@ -18,25 +20,32 @@ import (
 )
 
 type Importer struct {
-	db *sql.DB
+	db                   *sql.DB
+	attachmentStorageDir string
 }
 
 func New(db *sql.DB) *Importer {
-	return &Importer{db: db}
+	return NewWithAttachmentStorage(db, "")
+}
+
+func NewWithAttachmentStorage(db *sql.DB, attachmentStorageDir string) *Importer {
+	return &Importer{db: db, attachmentStorageDir: strings.TrimSpace(attachmentStorageDir)}
 }
 
 type ImportResult struct {
-	Path          string
-	Slug          string
-	ChallengeID   int64
-	RuntimeSynced bool
+	Path              string
+	Slug              string
+	ChallengeID       int64
+	RuntimeSynced     bool
+	AttachmentsSynced int
 }
 
 type ChallengeSpec struct {
-	Meta    ChallengeMeta
-	Flag    ChallengeFlag
-	Content ChallengeContent
-	Runtime *ChallengeRuntime
+	Meta        ChallengeMeta
+	Flag        ChallengeFlag
+	Content     ChallengeContent
+	Runtime     *ChallengeRuntime
+	Attachments []AttachmentSpec
 }
 
 type ChallengeMeta struct {
@@ -76,6 +85,12 @@ type ChallengeRuntime struct {
 	Enabled            bool
 }
 
+type AttachmentSpec struct {
+	Filename    string
+	Source      string
+	ContentType string
+}
+
 func (i *Importer) ImportFile(ctx context.Context, contestSlug, path string) (ImportResult, error) {
 	spec, err := LoadSpecFile(path)
 	if err != nil {
@@ -92,6 +107,27 @@ func (i *Importer) ImportSpec(ctx context.Context, contestSlug, path string, spe
 	if err != nil {
 		return ImportResult{}, err
 	}
+
+	specDir := filepath.Dir(path)
+	stagedAttachments := make([]stagedAttachment, 0, len(normalized.Attachments))
+	if len(normalized.Attachments) > 0 {
+		if i.attachmentStorageDir == "" {
+			return ImportResult{}, errors.New("attachment storage dir is required when attachment specs are present")
+		}
+		stagedAttachments, err = stageAttachments(specDir, normalized.Attachments)
+		if err != nil {
+			return ImportResult{}, err
+		}
+	}
+	cleanup := true
+	defer func() {
+		if !cleanup {
+			return
+		}
+		for _, item := range stagedAttachments {
+			_ = os.Remove(item.tempPath)
+		}
+	}()
 
 	tx, err := i.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -114,15 +150,25 @@ func (i *Importer) ImportSpec(ctx context.Context, contestSlug, path string, spe
 		runtimeSynced = true
 	}
 
+	attachmentsSynced := 0
+	if len(stagedAttachments) > 0 {
+		attachmentsSynced, err = syncAttachments(ctx, tx, challengeID, i.attachmentStorageDir, stagedAttachments)
+		if err != nil {
+			return ImportResult{}, err
+		}
+	}
+
 	if err := tx.Commit(); err != nil {
 		return ImportResult{}, fmt.Errorf("commit import challenge: %w", err)
 	}
+	cleanup = false
 
 	return ImportResult{
-		Path:          path,
-		Slug:          normalized.Meta.Slug,
-		ChallengeID:   challengeID,
-		RuntimeSynced: runtimeSynced,
+		Path:              path,
+		Slug:              normalized.Meta.Slug,
+		ChallengeID:       challengeID,
+		RuntimeSynced:     runtimeSynced,
+		AttachmentsSynced: attachmentsSynced,
 	}, nil
 }
 
@@ -197,6 +243,17 @@ func NormalizeSpec(spec ChallengeSpec) (ChallengeSpec, error) {
 
 	normalized.Content.Description = strings.TrimSpace(normalized.Content.Description)
 	normalized.Content.Author = strings.TrimSpace(normalized.Content.Author)
+	for i := range normalized.Attachments {
+		normalized.Attachments[i].Filename = strings.TrimSpace(normalized.Attachments[i].Filename)
+		normalized.Attachments[i].Source = strings.TrimSpace(normalized.Attachments[i].Source)
+		normalized.Attachments[i].ContentType = strings.TrimSpace(normalized.Attachments[i].ContentType)
+		if normalized.Attachments[i].Filename == "" {
+			return ChallengeSpec{}, fmt.Errorf("attachments[%d].filename is required", i)
+		}
+		if normalized.Attachments[i].Source == "" {
+			return ChallengeSpec{}, fmt.Errorf("attachments[%d].source is required", i)
+		}
+	}
 
 	if normalized.Runtime == nil {
 		return normalized, nil
@@ -269,6 +326,7 @@ func parseSpec(scanner *bufio.Scanner) (ChallengeSpec, error) {
 		runtimeEnv  = make(map[string]string)
 		runtimeCmd  []string
 		runtimeSeen bool
+		attachment  *AttachmentSpec
 	)
 
 	for scanner.Scan() {
@@ -290,6 +348,7 @@ func parseSpec(scanner *bufio.Scanner) (ChallengeSpec, error) {
 			}
 			section = strings.TrimSuffix(trimmed, ":")
 			nested = ""
+			attachment = nil
 			if section == "runtime" && spec.Runtime == nil {
 				spec.Runtime = &ChallengeRuntime{Enabled: true}
 				runtimeSeen = true
@@ -298,6 +357,24 @@ func parseSpec(scanner *bufio.Scanner) (ChallengeSpec, error) {
 		}
 
 		if indent == 2 {
+			if section == "attachments" && strings.HasPrefix(trimmed, "- ") {
+				item := AttachmentSpec{}
+				spec.Attachments = append(spec.Attachments, item)
+				attachment = &spec.Attachments[len(spec.Attachments)-1]
+				nested = "attachment"
+				content := strings.TrimSpace(trimmed[2:])
+				if content != "" {
+					key, value, err := splitKeyValue(content)
+					if err != nil {
+						return ChallengeSpec{}, fmt.Errorf("line %d: %w", lineNumber, err)
+					}
+					if err := assignAttachmentScalar(attachment, key, value); err != nil {
+						return ChallengeSpec{}, fmt.Errorf("line %d: %w", lineNumber, err)
+					}
+				}
+				continue
+			}
+
 			if strings.HasSuffix(trimmed, ":") {
 				nested = strings.TrimSuffix(trimmed, ":")
 				if section == "runtime" {
@@ -326,6 +403,7 @@ func parseSpec(scanner *bufio.Scanner) (ChallengeSpec, error) {
 				return ChallengeSpec{}, fmt.Errorf("line %d: %w", lineNumber, err)
 			}
 			nested = ""
+			attachment = nil
 			if err := assignScalar(&spec, section, key, value); err != nil {
 				return ChallengeSpec{}, fmt.Errorf("line %d: %w", lineNumber, err)
 			}
@@ -333,33 +411,42 @@ func parseSpec(scanner *bufio.Scanner) (ChallengeSpec, error) {
 		}
 
 		if indent == 4 {
-			if section != "runtime" {
-				return ChallengeSpec{}, fmt.Errorf("line %d: nested values are only supported under runtime", lineNumber)
+			if section == "runtime" {
+				switch nested {
+				case "command":
+					value := strings.TrimSpace(trimmed)
+					if !strings.HasPrefix(value, "- ") {
+						return ChallengeSpec{}, fmt.Errorf("line %d: command items must use '- value'", lineNumber)
+					}
+					runtimeCmd = append(runtimeCmd, strings.TrimSpace(value[2:]))
+					if spec.Runtime != nil {
+						spec.Runtime.Command = runtimeCmd
+					}
+					continue
+				case "env":
+					key, value, err := splitKeyValue(trimmed)
+					if err != nil {
+						return ChallengeSpec{}, fmt.Errorf("line %d: %w", lineNumber, err)
+					}
+					runtimeEnv[key] = normalizeScalar(value)
+					if spec.Runtime != nil {
+						spec.Runtime.Env = runtimeEnv
+					}
+					continue
+				}
+				return ChallengeSpec{}, fmt.Errorf("line %d: unsupported nested runtime section %q", lineNumber, nested)
 			}
-			switch nested {
-			case "command":
-				value := strings.TrimSpace(trimmed)
-				if !strings.HasPrefix(value, "- ") {
-					return ChallengeSpec{}, fmt.Errorf("line %d: command items must use '- value'", lineNumber)
-				}
-				runtimeCmd = append(runtimeCmd, strings.TrimSpace(value[2:]))
-				if spec.Runtime != nil {
-					spec.Runtime.Command = runtimeCmd
-				}
-				continue
-			case "env":
+			if section == "attachments" && nested == "attachment" && attachment != nil {
 				key, value, err := splitKeyValue(trimmed)
 				if err != nil {
 					return ChallengeSpec{}, fmt.Errorf("line %d: %w", lineNumber, err)
 				}
-				runtimeEnv[key] = normalizeScalar(value)
-				if spec.Runtime != nil {
-					spec.Runtime.Env = runtimeEnv
+				if err := assignAttachmentScalar(attachment, key, value); err != nil {
+					return ChallengeSpec{}, fmt.Errorf("line %d: %w", lineNumber, err)
 				}
 				continue
-			default:
-				return ChallengeSpec{}, fmt.Errorf("line %d: unsupported nested runtime section %q", lineNumber, nested)
 			}
+			return ChallengeSpec{}, fmt.Errorf("line %d: nested values are only supported under runtime and attachments", lineNumber)
 		}
 
 		return ChallengeSpec{}, fmt.Errorf("line %d: nesting deeper than 4 spaces is not supported", lineNumber)
@@ -494,6 +581,131 @@ ON CONFLICT (challenge_id) DO UPDATE SET
 	return nil
 }
 
+type stagedAttachment struct {
+	filename    string
+	contentType string
+	sizeBytes   int64
+	tempPath    string
+}
+
+func stageAttachments(specDir string, attachments []AttachmentSpec) ([]stagedAttachment, error) {
+	staged := make([]stagedAttachment, 0, len(attachments))
+	for _, item := range attachments {
+		sourcePath := item.Source
+		if !filepath.IsAbs(sourcePath) {
+			sourcePath = filepath.Join(specDir, sourcePath)
+		}
+		file, err := os.Open(sourcePath)
+		if err != nil {
+			return nil, fmt.Errorf("open attachment source %q: %w", item.Source, err)
+		}
+		defer file.Close()
+
+		stat, err := file.Stat()
+		if err != nil {
+			return nil, fmt.Errorf("stat attachment source %q: %w", item.Source, err)
+		}
+		if stat.IsDir() {
+			return nil, fmt.Errorf("attachment source %q must be a file", item.Source)
+		}
+
+		tmp, err := os.CreateTemp("", "ctf-attachment-*")
+		if err != nil {
+			return nil, fmt.Errorf("create temp attachment for %q: %w", item.Source, err)
+		}
+		if _, err := io.Copy(tmp, file); err != nil {
+			tmp.Close()
+			_ = os.Remove(tmp.Name())
+			return nil, fmt.Errorf("copy attachment source %q: %w", item.Source, err)
+		}
+		if err := tmp.Close(); err != nil {
+			_ = os.Remove(tmp.Name())
+			return nil, fmt.Errorf("flush attachment temp file for %q: %w", item.Source, err)
+		}
+
+		contentType := item.ContentType
+		if contentType == "" {
+			contentType = mime.TypeByExtension(filepath.Ext(item.Filename))
+		}
+		if contentType == "" {
+			contentType = "application/octet-stream"
+		}
+
+		staged = append(staged, stagedAttachment{
+			filename:    item.Filename,
+			contentType: contentType,
+			sizeBytes:   stat.Size(),
+			tempPath:    tmp.Name(),
+		})
+	}
+	return staged, nil
+}
+
+func syncAttachments(ctx context.Context, tx *sql.Tx, challengeID int64, storageRoot string, attachments []stagedAttachment) (int, error) {
+	const deleteQuery = `DELETE FROM challenge_attachments WHERE challenge_id = $1`
+	if _, err := tx.ExecContext(ctx, deleteQuery, challengeID); err != nil {
+		return 0, fmt.Errorf("clear challenge attachments: %w", err)
+	}
+
+	challengeDir := filepath.Join(storageRoot, fmt.Sprintf("challenge-%d", challengeID))
+	if err := os.MkdirAll(challengeDir, 0o755); err != nil {
+		return 0, fmt.Errorf("create challenge attachment dir: %w", err)
+	}
+	entries, err := os.ReadDir(challengeDir)
+	if err != nil {
+		return 0, fmt.Errorf("read challenge attachment dir: %w", err)
+	}
+	for _, entry := range entries {
+		if err := os.RemoveAll(filepath.Join(challengeDir, entry.Name())); err != nil {
+			return 0, fmt.Errorf("cleanup challenge attachment dir: %w", err)
+		}
+	}
+
+	const insertQuery = `
+INSERT INTO challenge_attachments (challenge_id, filename, storage_path, content_type, size_bytes)
+VALUES ($1, $2, $3, $4, $5)
+`
+	for _, item := range attachments {
+		targetPath := filepath.Join(challengeDir, sanitizeFilename(item.filename))
+		if err := os.Rename(item.tempPath, targetPath); err != nil {
+			if err := copyFile(item.tempPath, targetPath); err != nil {
+				return 0, fmt.Errorf("persist attachment %q: %w", item.filename, err)
+			}
+			_ = os.Remove(item.tempPath)
+		}
+		if _, err := tx.ExecContext(ctx, insertQuery, challengeID, item.filename, targetPath, item.contentType, item.sizeBytes); err != nil {
+			return 0, fmt.Errorf("insert challenge attachment %q: %w", item.filename, err)
+		}
+	}
+	return len(attachments), nil
+}
+
+func copyFile(sourcePath, targetPath string) error {
+	source, err := os.Open(sourcePath)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+	target, err := os.Create(targetPath)
+	if err != nil {
+		return err
+	}
+	defer target.Close()
+	if _, err := io.Copy(target, source); err != nil {
+		return err
+	}
+	return target.Close()
+}
+
+func sanitizeFilename(name string) string {
+	name = filepath.Base(strings.TrimSpace(name))
+	name = strings.ReplaceAll(name, "..", "")
+	if name == "" || name == "." || name == string(filepath.Separator) {
+		return "attachment.bin"
+	}
+	return name
+}
+
 func assignScalar(spec *ChallengeSpec, section, key, value string) error {
 	value = normalizeScalar(value)
 	switch section {
@@ -622,6 +834,21 @@ func assignScalar(spec *ChallengeSpec, section, key, value string) error {
 		}
 	default:
 		return fmt.Errorf("unsupported section %q", section)
+	}
+	return nil
+}
+
+func assignAttachmentScalar(attachment *AttachmentSpec, key, value string) error {
+	value = normalizeScalar(value)
+	switch key {
+	case "filename":
+		attachment.Filename = value
+	case "source":
+		attachment.Source = value
+	case "content_type":
+		attachment.ContentType = value
+	default:
+		return fmt.Errorf("unsupported attachment key %q", key)
 	}
 	return nil
 }

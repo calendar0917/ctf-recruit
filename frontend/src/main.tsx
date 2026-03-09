@@ -92,7 +92,7 @@ const categoryOptions = ['web', 'pwn', 'misc', 'crypto', 'reverse']
 const difficultyOptions = ['easy', 'normal', 'hard']
 const flagTypeOptions = ['static', 'case_insensitive', 'regex']
 const boardDifficultyOptions: BoardDifficultyFilter[] = ['all', 'easy', 'normal', 'hard']
-const userRoleOptions = ['player', 'admin']
+const userRoleOptions = ['player', 'author', 'ops', 'admin']
 const userStatusOptions = ['active', 'disabled']
 
 function describeError(error: unknown, fallback: string): string {
@@ -481,10 +481,10 @@ function App(): React.JSX.Element {
   const [adminAuditLoading, setAdminAuditLoading] = useState(false)
   const [adminAuditNotice, setAdminAuditNotice] = useState<Notice | null>(null)
 
-  const canAccessAdmin = authUser?.role === 'admin' || authUser?.role === 'ops'
-  const canWriteChallenges = authUser?.role === 'admin'
+  const canAccessAdmin = authUser?.role === 'admin' || authUser?.role === 'ops' || authUser?.role === 'author'
+  const canWriteChallenges = authUser?.role === 'admin' || authUser?.role === 'author'
   const canWriteAnnouncements = authUser?.role === 'admin'
-  const canUploadAttachments = authUser?.role === 'admin' || authUser?.role === 'ops'
+  const canUploadAttachments = authUser?.role === 'admin' || authUser?.role === 'ops' || authUser?.role === 'author'
   const canManageUsers = authUser?.role === 'admin'
   const canTerminateInstances = authUser?.role === 'admin' || authUser?.role === 'ops'
 
@@ -909,16 +909,20 @@ function App(): React.JSX.Element {
     if (!canAccessAdmin) {
       return sections
     }
-    sections.push({ id: 'contest', label: '比赛', note: 'Lifecycle' })
+    if (authUser?.role === 'admin' || authUser?.role === 'ops') {
+      sections.push({ id: 'contest', label: '比赛', note: 'Lifecycle' })
+    }
     sections.push({ id: 'challenges', label: '题目', note: 'Catalog' })
-    sections.push({ id: 'announcements', label: '公告', note: 'Broadcast' })
-    sections.push({ id: 'traffic', label: '流量', note: 'Ops Feed' })
+    if (authUser?.role === 'admin' || authUser?.role === 'ops') {
+      sections.push({ id: 'announcements', label: '公告', note: 'Broadcast' })
+      sections.push({ id: 'traffic', label: '流量', note: 'Ops Feed' })
+    }
     if (canManageUsers) {
       sections.push({ id: 'users', label: '用户', note: 'Identity' })
     }
     sections.push({ id: 'audit', label: '审计', note: 'Audit Trail' })
     return sections
-  }, [canAccessAdmin, canManageUsers])
+  }, [authUser?.role, canAccessAdmin, canManageUsers])
 
   useEffect(() => {
     if (view === 'admin' && !canAccessAdmin) {
@@ -2832,7 +2836,7 @@ function App(): React.JSX.Element {
         <Panel
           eyebrow="管理后台"
           title="后台工作区"
-          subtitle="按后端实际权限拆分。管理员可写题目、公告和用户；ops 仅展示允许的运维与只读模块。"
+          subtitle="按后端实际权限拆分。admin 拥有全量后台能力；ops 聚焦运维读写；author 仅处理题目与附件。"
         >
           <div className="tab-strip">
             {availableAdminSections.map((item) => (

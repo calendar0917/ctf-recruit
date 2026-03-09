@@ -42,6 +42,10 @@ runtime:
     MODE: prod
   command:
     - /app/start
+attachments:
+  - filename: statement.txt
+    source: attachments/statement.txt
+    content_type: text/plain
 `)))
 	if err != nil {
 		t.Fatalf("parse spec: %v", err)
@@ -63,6 +67,9 @@ runtime:
 	}
 	if len(spec.Runtime.Command) != 1 || spec.Runtime.Command[0] != "/app/start" {
 		t.Fatalf("unexpected command: %+v", spec.Runtime.Command)
+	}
+	if len(spec.Attachments) != 1 || spec.Attachments[0].Filename != "statement.txt" {
+		t.Fatalf("unexpected attachments: %+v", spec.Attachments)
 	}
 }
 
@@ -107,6 +114,17 @@ func TestNormalizeSpecRejectsUnsupportedRuntimeMode(t *testing.T) {
 	}
 }
 
+func TestNormalizeSpecRejectsAttachmentWithoutSource(t *testing.T) {
+	_, err := NormalizeSpec(ChallengeSpec{
+		Meta:        ChallengeMeta{Slug: "demo", Title: "Demo", Category: "web", Points: 100},
+		Flag:        ChallengeFlag{Type: game.FlagTypeStatic, Value: "flag{demo}"},
+		Attachments: []AttachmentSpec{{Filename: "statement.txt"}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "source is required") {
+		t.Fatalf("expected attachment source error, got %v", err)
+	}
+}
+
 func TestDiscoverSpecFilesFindsNestedChallengeYAML(t *testing.T) {
 	root := t.TempDir()
 	mustWriteFile(t, filepath.Join(root, "templates", "web-a", "challenge.yaml"), "meta:\n  slug: web-a\n")
@@ -122,6 +140,31 @@ func TestDiscoverSpecFilesFindsNestedChallengeYAML(t *testing.T) {
 	}
 	if !strings.HasSuffix(paths[0], filepath.Join("templates", "web-a", "challenge.yaml")) || !strings.HasSuffix(paths[1], filepath.Join("templates", "web-b", "challenge.yaml")) {
 		t.Fatalf("unexpected paths: %+v", paths)
+	}
+}
+
+func TestStageAttachmentsCopiesFilesAndDetectsContentType(t *testing.T) {
+	root := t.TempDir()
+	sourcePath := filepath.Join(root, "attachments", "statement.txt")
+	mustWriteFile(t, sourcePath, "hello")
+
+	staged, err := stageAttachments(root, []AttachmentSpec{{Filename: "statement.txt", Source: "attachments/statement.txt"}})
+	if err != nil {
+		t.Fatalf("stage attachments: %v", err)
+	}
+	if len(staged) != 1 {
+		t.Fatalf("expected 1 staged attachment, got %d", len(staged))
+	}
+	defer os.Remove(staged[0].tempPath)
+	if staged[0].contentType != "text/plain; charset=utf-8" && staged[0].contentType != "text/plain" {
+		t.Fatalf("unexpected content type: %q", staged[0].contentType)
+	}
+	content, err := os.ReadFile(staged[0].tempPath)
+	if err != nil {
+		t.Fatalf("read staged file: %v", err)
+	}
+	if string(content) != "hello" {
+		t.Fatalf("unexpected staged content: %q", string(content))
 	}
 }
 

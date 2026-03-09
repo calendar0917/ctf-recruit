@@ -20,6 +20,11 @@ if [[ -d backend && -f backend/go.mod ]]; then
         [[ $# -gt 0 ]] || { echo "--root requires a value" >&2; exit 1; }
         args+=(--root "$REPO_ROOT/$1")
         ;;
+      --attachment-dir)
+        shift
+        [[ $# -gt 0 ]] || { echo "--attachment-dir requires a value" >&2; exit 1; }
+        args+=(--attachment-dir "$1")
+        ;;
       *)
         args+=("$1")
         ;;

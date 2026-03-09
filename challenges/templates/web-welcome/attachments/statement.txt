@@ -1,0 +1,4 @@
+Welcome Panel
+
+Visit the dynamic instance and recover the flag.
+Flag format: flag{...}
