@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"ctf/backend/internal/challengecfg"
 	"ctf/backend/internal/game"
 )
 
@@ -42,6 +43,12 @@ func (s *Service) CreateChallenge(ctx context.Context, actor Actor, input Upsert
 		return ChallengeSummary{}, fmt.Errorf("%w: %v", ErrInvalidChallengeInput, err)
 	}
 	input.FlagType = normalized
+	status, err := challengecfg.NormalizeInputStatus(input.Status, input.Visible)
+	if err != nil {
+		return ChallengeSummary{}, fmt.Errorf("%w: %v", ErrInvalidChallengeInput, err)
+	}
+	input.Status = status
+	input.Visible = challengecfg.IsPublished(status)
 	return s.repo.CreateChallenge(ctx, actor, input)
 }
 
@@ -51,6 +58,12 @@ func (s *Service) UpdateChallenge(ctx context.Context, actor Actor, challengeID 
 		return ChallengeSummary{}, fmt.Errorf("%w: %v", ErrInvalidChallengeInput, err)
 	}
 	input.FlagType = normalized
+	status, err := challengecfg.NormalizeInputStatus(input.Status, input.Visible)
+	if err != nil {
+		return ChallengeSummary{}, fmt.Errorf("%w: %v", ErrInvalidChallengeInput, err)
+	}
+	input.Status = status
+	input.Visible = challengecfg.IsPublished(status)
 	return s.repo.UpdateChallenge(ctx, actor, challengeID, input)
 }
 

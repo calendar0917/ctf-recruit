@@ -20,6 +20,7 @@ meta:
   points: 100
   difficulty: easy
   dynamic: true
+  status: published
   visible: true
   sort_order: 10
 flag:
@@ -103,6 +104,38 @@ func TestNormalizeSpecAppliesDefaultsAndFlagNormalization(t *testing.T) {
 	}
 	if normalized.Flag.Type != game.FlagTypeCaseInsensitive {
 		t.Fatalf("expected normalized flag type, got %q", normalized.Flag.Type)
+	}
+}
+
+func TestNormalizeSpecMapsLegacyVisibleToPublishedStatus(t *testing.T) {
+	normalized, err := NormalizeSpec(ChallengeSpec{
+		Meta: ChallengeMeta{
+			Slug:     "demo",
+			Title:    "Demo",
+			Category: "web",
+			Points:   100,
+			Visible:  true,
+		},
+		Flag: ChallengeFlag{Type: game.FlagTypeStatic, Value: "flag{demo}"},
+	})
+	if err != nil {
+		t.Fatalf("normalize spec: %v", err)
+	}
+	if normalized.Meta.Status != "published" {
+		t.Fatalf("expected published status, got %q", normalized.Meta.Status)
+	}
+	if !normalized.Meta.Visible {
+		t.Fatalf("expected visible compatibility flag to stay true")
+	}
+}
+
+func TestNormalizeSpecRejectsInvalidChallengeStatus(t *testing.T) {
+	_, err := NormalizeSpec(ChallengeSpec{
+		Meta: ChallengeMeta{Slug: "demo", Title: "Demo", Category: "web", Points: 100, Status: "launching"},
+		Flag: ChallengeFlag{Type: game.FlagTypeStatic, Value: "flag{demo}"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "invalid challenge status") {
+		t.Fatalf("expected invalid status error, got %v", err)
 	}
 }
 

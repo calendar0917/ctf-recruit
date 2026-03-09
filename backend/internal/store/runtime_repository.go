@@ -24,7 +24,7 @@ func (r *RuntimeRepository) ListChallenges(ctx context.Context) ([]runtime.Chall
 SELECT c.id::text, c.slug, c.title, cat.slug, c.points, c.difficulty, c.dynamic_enabled
 FROM challenges c
 JOIN categories cat ON cat.id = c.category_id
-WHERE c.visible = TRUE
+WHERE c.status = 'published'
 ORDER BY c.id ASC
 `
 
@@ -72,7 +72,7 @@ SELECT
 FROM challenges c
 JOIN categories cat ON cat.id = c.category_id
 LEFT JOIN challenge_runtime_configs rc ON rc.challenge_id = c.id AND rc.enabled = TRUE
-WHERE c.visible = TRUE AND (c.id::text = $1 OR lower(c.slug) = lower($1))
+WHERE c.status = 'published' AND (c.id::text = $1 OR lower(c.slug) = lower($1))
 LIMIT 1
 `
 

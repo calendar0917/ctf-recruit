@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"ctf/backend/internal/admin"
+	"ctf/backend/internal/challengecfg"
 )
 
 type AdminRepository struct {
@@ -22,7 +23,7 @@ func NewAdminRepository(db *sql.DB) *AdminRepository {
 
 func (r *AdminRepository) ListChallenges(ctx context.Context, actor admin.Actor) ([]admin.ChallengeSummary, error) {
 	query := `
-SELECT c.id, c.slug, c.title, cat.slug, c.points, c.visible, c.dynamic_enabled
+SELECT c.id, c.slug, c.title, cat.slug, c.points, c.status, c.dynamic_enabled
 FROM challenges c
 JOIN categories cat ON cat.id = c.category_id
 `
@@ -45,9 +46,11 @@ WHERE ca.user_id = $1
 	items := make([]admin.ChallengeSummary, 0)
 	for rows.Next() {
 		var item admin.ChallengeSummary
-		if err := rows.Scan(&item.ID, &item.Slug, &item.Title, &item.Category, &item.Points, &item.Visible, &item.DynamicEnabled); err != nil {
+		if err := rows.Scan(&item.ID, &item.Slug, &item.Title, &item.Category, &item.Points, &item.Status, &item.DynamicEnabled); err != nil {
 			return nil, fmt.Errorf("scan admin challenge: %w", err)
 		}
+		item.Status = challengecfg.NormalizeStatus(item.Status)
+		item.Visible = challengecfg.IsPublished(item.Status)
 		items = append(items, item)
 	}
 	if err := rows.Err(); err != nil {
@@ -58,7 +61,7 @@ WHERE ca.user_id = $1
 
 func (r *AdminRepository) GetChallenge(ctx context.Context, actor admin.Actor, challengeID int64) (admin.ChallengeDetail, error) {
 	challengeQuery := `
-SELECT c.id, c.slug, c.title, cat.slug, c.description, c.points, c.difficulty, c.flag_type, c.flag_value, c.visible, c.dynamic_enabled, c.sort_order
+SELECT c.id, c.slug, c.title, cat.slug, c.description, c.points, c.difficulty, c.flag_type, c.flag_value, c.status, c.dynamic_enabled, c.sort_order
 FROM challenges c
 JOIN categories cat ON cat.id = c.category_id
 `
@@ -86,7 +89,7 @@ LIMIT 1
 		&detail.Difficulty,
 		&detail.FlagType,
 		&detail.FlagValue,
-		&detail.Visible,
+		&detail.Status,
 		&detail.DynamicEnabled,
 		&detail.SortOrder,
 	); err != nil {
@@ -106,6 +109,8 @@ LIMIT 1
 	if err != nil {
 		return admin.ChallengeDetail{}, err
 	}
+	detail.Status = challengecfg.NormalizeStatus(detail.Status)
+	detail.Visible = challengecfg.IsPublished(detail.Status)
 	detail.Attachments = attachments
 
 	runtimeConfig, err := r.getChallengeRuntimeConfig(ctx, challengeID)
@@ -137,12 +142,13 @@ INSERT INTO challenges (
     flag_type,
     flag_value,
     dynamic_enabled,
+    status,
     visible,
     sort_order
 )
-SELECT c.id, cat.id, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+SELECT c.id, cat.id, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
 FROM contests c, categories cat
-WHERE c.slug = 'recruit-2025' AND cat.slug = $11
+WHERE c.slug = 'recruit-2025' AND cat.slug = $12
 RETURNING id
 `
 	var id int64
@@ -155,6 +161,7 @@ RETURNING id
 		input.FlagType,
 		input.FlagValue,
 		input.DynamicEnabled,
+		input.Status,
 		input.Visible,
 		input.SortOrder,
 		input.CategorySlug,
@@ -181,6 +188,7 @@ RETURNING id
 		Title:          input.Title,
 		Category:       input.CategorySlug,
 		Points:         input.Points,
+		Status:         input.Status,
 		Visible:        input.Visible,
 		DynamicEnabled: input.DynamicEnabled,
 	}, nil
@@ -251,8 +259,9 @@ SET
     flag_type = $7,
     flag_value = $8,
     dynamic_enabled = $9,
-    visible = $10,
-    sort_order = $11,
+    status = $10,
+    visible = $11,
+    sort_order = $12,
     updated_at = NOW()
 FROM categories cat
 `
@@ -266,21 +275,22 @@ FROM categories cat
 		input.FlagType,
 		input.FlagValue,
 		input.DynamicEnabled,
+		input.Status,
 		input.Visible,
 		input.SortOrder,
 		input.CategorySlug,
 	}
 	if actor.RestrictToOwnedChallenges() {
 		query += `
-WHERE c.id = $1 AND cat.slug = $12 AND EXISTS (
-    SELECT 1 FROM challenge_authors ca WHERE ca.challenge_id = c.id AND ca.user_id = $13
+WHERE c.id = $1 AND cat.slug = $13 AND EXISTS (
+    SELECT 1 FROM challenge_authors ca WHERE ca.challenge_id = c.id AND ca.user_id = $14
 )
 RETURNING c.id
 `
 		args = append(args, actor.UserID)
 	} else {
 		query += `
-WHERE c.id = $1 AND cat.slug = $12
+WHERE c.id = $1 AND cat.slug = $13
 RETURNING c.id
 `
 	}
@@ -307,6 +317,7 @@ RETURNING c.id
 		Title:          input.Title,
 		Category:       input.CategorySlug,
 		Points:         input.Points,
+		Status:         input.Status,
 		Visible:        input.Visible,
 		DynamicEnabled: input.DynamicEnabled,
 	}, nil

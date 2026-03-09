@@ -184,6 +184,7 @@ export type AdminChallengeSummary = {
   title: string
   category: string
   points: number
+  status: string
   visible: boolean
   dynamic_enabled: boolean
 }
@@ -198,6 +199,7 @@ export type AdminChallengeDetail = {
   difficulty: string
   flag_type: string
   flag_value: string
+  status: string
   visible: boolean
   dynamic_enabled: boolean
   sort_order: number
@@ -216,6 +218,7 @@ export type AdminChallengeInput = {
   flag_type: string
   flag_value: string
   dynamic_enabled: boolean
+  status: string
   visible: boolean
   sort_order: number
   runtime_config?: AdminRuntimeConfig

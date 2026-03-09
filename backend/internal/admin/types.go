@@ -57,6 +57,7 @@ type ChallengeSummary struct {
 	Title          string `json:"title"`
 	Category       string `json:"category"`
 	Points         int    `json:"points"`
+	Status         string `json:"status"`
 	Visible        bool   `json:"visible"`
 	DynamicEnabled bool   `json:"dynamic_enabled"`
 }
@@ -71,6 +72,7 @@ type ChallengeDetail struct {
 	Difficulty     string            `json:"difficulty"`
 	FlagType       string            `json:"flag_type"`
 	FlagValue      string            `json:"flag_value"`
+	Status         string            `json:"status"`
 	Visible        bool              `json:"visible"`
 	DynamicEnabled bool              `json:"dynamic_enabled"`
 	SortOrder      int               `json:"sort_order"`
@@ -89,6 +91,7 @@ type UpsertChallengeInput struct {
 	FlagType       string         `json:"flag_type"`
 	FlagValue      string         `json:"flag_value"`
 	DynamicEnabled bool           `json:"dynamic_enabled"`
+	Status         string         `json:"status"`
 	Visible        bool           `json:"visible"`
 	SortOrder      int            `json:"sort_order"`
 	RuntimeConfig  *RuntimeConfig `json:"runtime_config,omitempty"`

@@ -51,6 +51,7 @@ type AdminChallengeDraft = {
   flag_type: string
   flag_value: string
   dynamic_enabled: boolean
+  status: string
   visible: boolean
   sort_order: string
   runtime_enabled: boolean
@@ -95,6 +96,7 @@ const flagTypeOptions = ['static', 'case_insensitive', 'regex']
 const boardDifficultyOptions: BoardDifficultyFilter[] = ['all', 'easy', 'normal', 'hard']
 const userRoleOptions = ['player', 'author', 'ops', 'admin']
 const userStatusOptions = ['active', 'disabled']
+const challengeStatusOptions = ['draft', 'review', 'ready', 'published']
 
 function describeError(error: unknown, fallback: string): string {
   const typed = error as AppError | undefined
@@ -135,6 +137,35 @@ function formatBytes(value: number): string {
     return `${(value / 1024).toFixed(1)} KB`
   }
   return `${(value / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function formatChallengeStatus(value?: string | null): string {
+  if (!value) {
+    return '草稿'
+  }
+  if (value === 'draft') {
+    return '草稿'
+  }
+  if (value === 'review') {
+    return '待审核'
+  }
+  if (value === 'ready') {
+    return '待发布'
+  }
+  if (value === 'published') {
+    return '已发布'
+  }
+  return value
+}
+
+function challengeStatusBadgeClass(value?: string | null): string {
+  if (value === 'published') {
+    return 'badge badge-solid'
+  }
+  if (value === 'ready') {
+    return 'badge badge-accent'
+  }
+  return 'badge'
 }
 
 function formatDifficultyLabel(value?: string | null): string {
@@ -257,6 +288,7 @@ function createBlankChallengeDraft(): AdminChallengeDraft {
     flag_type: 'static',
     flag_value: '',
     dynamic_enabled: false,
+    status: 'draft',
     visible: false,
     sort_order: '10',
     runtime_enabled: false,
@@ -285,6 +317,7 @@ function challengeDraftFromDetail(detail: AdminChallengeDetail): AdminChallengeD
     flag_type: detail.flag_type,
     flag_value: detail.flag_value,
     dynamic_enabled: detail.dynamic_enabled,
+    status: detail.status,
     visible: detail.visible,
     sort_order: String(detail.sort_order),
     runtime_enabled: detail.runtime_config.enabled || detail.dynamic_enabled,
@@ -320,7 +353,8 @@ function buildChallengePayload(draft: AdminChallengeDraft): AdminChallengeInput 
     flag_type: draft.flag_type,
     flag_value: draft.flag_value.trim(),
     dynamic_enabled: draft.dynamic_enabled,
-    visible: draft.visible,
+    status: draft.status,
+    visible: draft.status === 'published',
     sort_order: parseInteger(draft.sort_order, 10),
     runtime_config: hasRuntimeConfig
       ? {
@@ -2303,7 +2337,7 @@ function App(): React.JSX.Element {
                 </div>
                 <div className="badge-row">
                   <span className="badge">{item.category}</span>
-                  {item.visible ? <span className="badge badge-solid">Visible</span> : <span className="badge">Hidden</span>}
+                  <span className={challengeStatusBadgeClass(item.status)}>{formatChallengeStatus(item.status)}</span>
                   {item.dynamic_enabled ? <span className="badge badge-accent">Dynamic</span> : null}
                 </div>
               </button>
@@ -2378,6 +2412,16 @@ function App(): React.JSX.Element {
                     value={adminChallengeDraft.sort_order}
                   />
                 </label>
+                <div className="detail-list compact-list">
+                  <div className="detail-row">
+                    <span>当前状态</span>
+                    <strong>{formatChallengeStatus(adminChallengeDraft.status)}</strong>
+                  </div>
+                  <div className="detail-row">
+                    <span>公开可见</span>
+                    <strong>{adminChallengeDraft.status === 'published' ? '是' : '否'}</strong>
+                  </div>
+                </div>
                 <label className="field wide-field">
                   <span>题面</span>
                   <textarea
@@ -2421,13 +2465,24 @@ function App(): React.JSX.Element {
                     <strong>按 Go 正则表达式匹配提交内容</strong>
                   </div>
                 </div>
-                <label className="toggle-field">
-                  <input
-                    checked={adminChallengeDraft.visible}
-                    onChange={(event) => setAdminChallengeDraft((current) => ({ ...current, visible: event.target.checked }))}
-                    type="checkbox"
-                  />
-                  <span>公开显示</span>
+                <label className="field">
+                  <span>发布状态</span>
+                  <select
+                    onChange={(event) =>
+                      setAdminChallengeDraft((current) => ({
+                        ...current,
+                        status: event.target.value,
+                        visible: event.target.value === 'published',
+                      }))
+                    }
+                    value={adminChallengeDraft.status}
+                  >
+                    {challengeStatusOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {formatChallengeStatus(option)}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label className="toggle-field">
                   <input

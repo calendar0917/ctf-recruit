@@ -176,6 +176,48 @@ func TestCreateChallengeNormalizesSupportedFlagType(t *testing.T) {
 	}
 }
 
+func TestCreateChallengeNormalizesPublishedStatusFromLegacyVisible(t *testing.T) {
+	repo := &fakeRepo{}
+	service := NewService(repo, t.TempDir())
+
+	_, err := service.CreateChallenge(context.Background(), Actor{UserID: 1, Role: "admin"}, UpsertChallengeInput{
+		Slug:         "welcome",
+		Title:        "Welcome",
+		CategorySlug: "web",
+		Difficulty:   "easy",
+		FlagType:     game.FlagTypeStatic,
+		FlagValue:    "flag{welcome}",
+		Visible:      true,
+	})
+	if err != nil {
+		t.Fatalf("create challenge: %v", err)
+	}
+	if repo.createdChallengeInput.Status != "published" {
+		t.Fatalf("expected published status, got %q", repo.createdChallengeInput.Status)
+	}
+	if !repo.createdChallengeInput.Visible {
+		t.Fatalf("expected visible compatibility flag to remain true")
+	}
+}
+
+func TestCreateChallengeRejectsInvalidStatus(t *testing.T) {
+	repo := &fakeRepo{}
+	service := NewService(repo, t.TempDir())
+
+	_, err := service.CreateChallenge(context.Background(), Actor{UserID: 1, Role: "admin"}, UpsertChallengeInput{
+		Slug:         "welcome",
+		Title:        "Welcome",
+		CategorySlug: "web",
+		Difficulty:   "easy",
+		FlagType:     game.FlagTypeStatic,
+		FlagValue:    "flag{welcome}",
+		Status:       "launching",
+	})
+	if !errors.Is(err, ErrInvalidChallengeInput) {
+		t.Fatalf("expected invalid challenge input, got %v", err)
+	}
+}
+
 func TestCreateChallengeRejectsInvalidRegexFlagType(t *testing.T) {
 	repo := &fakeRepo{}
 	service := NewService(repo, t.TempDir())

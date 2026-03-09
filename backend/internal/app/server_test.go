@@ -189,8 +189,8 @@ func newTestServer(t *testing.T) (*Server, *testRuntimeRepo) {
 	}
 	adminRepo := &testAdminRepo{
 		challenges: []admin.ChallengeSummary{
-			{ID: 1, Slug: "web-welcome", Title: "Welcome Panel", Category: "web", Points: 100, Visible: true, DynamicEnabled: true},
-			{ID: 2, Slug: "crypto-demo", Title: "Crypto Demo", Category: "crypto", Points: 200, Visible: false, DynamicEnabled: false},
+			{ID: 1, Slug: "web-welcome", Title: "Welcome Panel", Category: "web", Points: 100, Status: "published", Visible: true, DynamicEnabled: true},
+			{ID: 2, Slug: "crypto-demo", Title: "Crypto Demo", Category: "crypto", Points: 200, Status: "draft", Visible: false, DynamicEnabled: false},
 		},
 		ownedChallengeIDs: map[int64]map[int64]bool{
 			1: {1: true},
@@ -207,6 +207,7 @@ func newTestServer(t *testing.T) (*Server, *testRuntimeRepo) {
 				Difficulty:     "easy",
 				FlagType:       "static",
 				FlagValue:      "flag{welcome}",
+				Status:         "published",
 				Visible:        true,
 				DynamicEnabled: true,
 				SortOrder:      10,
@@ -233,6 +234,7 @@ func newTestServer(t *testing.T) (*Server, *testRuntimeRepo) {
 				Difficulty:     "normal",
 				FlagType:       "static",
 				FlagValue:      "flag{crypto}",
+				Status:         "draft",
 				Visible:        false,
 				DynamicEnabled: false,
 				SortOrder:      20,
@@ -487,9 +489,9 @@ func (r *testAdminRepo) GetChallenge(_ context.Context, actor admin.Actor, chall
 }
 func (r *testAdminRepo) CreateChallenge(_ context.Context, actor admin.Actor, input admin.UpsertChallengeInput) (admin.ChallengeSummary, error) {
 	id := int64(len(r.challengeDetails) + 1)
-	challenge := admin.ChallengeSummary{ID: id, Slug: input.Slug, Title: input.Title, Category: input.CategorySlug, Points: input.Points, Visible: input.Visible, DynamicEnabled: input.DynamicEnabled}
+	challenge := admin.ChallengeSummary{ID: id, Slug: input.Slug, Title: input.Title, Category: input.CategorySlug, Points: input.Points, Status: input.Status, Visible: input.Visible, DynamicEnabled: input.DynamicEnabled}
 	r.challenges = append(r.challenges, challenge)
-	detail := admin.ChallengeDetail{ID: id, Slug: input.Slug, Title: input.Title, Category: input.CategorySlug, Description: input.Description, Points: input.Points, Difficulty: input.Difficulty, FlagType: input.FlagType, FlagValue: input.FlagValue, Visible: input.Visible, DynamicEnabled: input.DynamicEnabled, SortOrder: input.SortOrder}
+	detail := admin.ChallengeDetail{ID: id, Slug: input.Slug, Title: input.Title, Category: input.CategorySlug, Description: input.Description, Points: input.Points, Difficulty: input.Difficulty, FlagType: input.FlagType, FlagValue: input.FlagValue, Status: input.Status, Visible: input.Visible, DynamicEnabled: input.DynamicEnabled, SortOrder: input.SortOrder}
 	if input.RuntimeConfig != nil {
 		detail.RuntimeConfig = *input.RuntimeConfig
 	}
@@ -557,6 +559,7 @@ func (r *testAdminRepo) UpdateChallenge(_ context.Context, actor admin.Actor, ch
 	detail.Difficulty = input.Difficulty
 	detail.FlagType = input.FlagType
 	detail.FlagValue = input.FlagValue
+	detail.Status = input.Status
 	detail.Visible = input.Visible
 	detail.DynamicEnabled = input.DynamicEnabled
 	detail.SortOrder = input.SortOrder
@@ -566,11 +569,11 @@ func (r *testAdminRepo) UpdateChallenge(_ context.Context, actor admin.Actor, ch
 	r.challengeDetails[challengeID] = detail
 	for i := range r.challenges {
 		if r.challenges[i].ID == challengeID {
-			r.challenges[i] = admin.ChallengeSummary{ID: challengeID, Slug: input.Slug, Title: input.Title, Category: input.CategorySlug, Points: input.Points, Visible: input.Visible, DynamicEnabled: input.DynamicEnabled}
+			r.challenges[i] = admin.ChallengeSummary{ID: challengeID, Slug: input.Slug, Title: input.Title, Category: input.CategorySlug, Points: input.Points, Status: input.Status, Visible: input.Visible, DynamicEnabled: input.DynamicEnabled}
 			break
 		}
 	}
-	return admin.ChallengeSummary{ID: challengeID, Slug: input.Slug, Title: input.Title, Category: input.CategorySlug, Points: input.Points, Visible: input.Visible, DynamicEnabled: input.DynamicEnabled}, nil
+	return admin.ChallengeSummary{ID: challengeID, Slug: input.Slug, Title: input.Title, Category: input.CategorySlug, Points: input.Points, Status: input.Status, Visible: input.Visible, DynamicEnabled: input.DynamicEnabled}, nil
 }
 func (r *testAdminRepo) CreateAttachment(_ context.Context, actor admin.Actor, challengeID int64, filename, storagePath, contentType string, sizeBytes int64) (admin.Attachment, error) {
 	if actor.Role == "author" && !r.ownedChallengeIDs[actor.UserID][challengeID] {
@@ -1113,7 +1116,7 @@ func TestAuthorRoleCannotAccessUnownedChallenge(t *testing.T) {
 func TestAuthorRoleCannotUpdateUnownedChallenge(t *testing.T) {
 	server, _ := newTestServer(t)
 	authorToken := issueRoleToken(t, server, "author")
-	body := []byte(`{"slug":"crypto-demo","title":"Crypto Demo","category_slug":"crypto","description":"updated","points":200,"difficulty":"normal","flag_type":"static","flag_value":"flag{crypto}","dynamic_enabled":false,"visible":false,"sort_order":20}`)
+	body := []byte(`{"slug":"crypto-demo","title":"Crypto Demo","category_slug":"crypto","description":"updated","points":200,"difficulty":"normal","flag_type":"static","flag_value":"flag{crypto}","status":"draft","visible":false,"sort_order":20}`)
 	req := httptest.NewRequest(http.MethodPatch, "/api/v1/admin/challenges/2", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+authorToken)
 	res := httptest.NewRecorder()
@@ -1148,6 +1151,16 @@ func TestAuthorRoleCannotUploadAttachmentToUnownedChallenge(t *testing.T) {
 	}
 }
 
+func TestChallengeDetailEndpointReturnsNotFoundForUnpublishedChallenge(t *testing.T) {
+	server, _ := newTestServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/challenges/2", nil)
+	res := httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", res.Code)
+	}
+}
+
 func TestAdminChallengeDetailEndpoint(t *testing.T) {
 	server, _ := newTestServer(t)
 	adminToken := issueAdminToken(t, server)
@@ -1163,7 +1176,7 @@ func TestAdminChallengeDetailEndpoint(t *testing.T) {
 func TestAdminUpdateChallengePersistsRuntimeConfigPayload(t *testing.T) {
 	server, _ := newTestServer(t)
 	adminToken := issueAdminToken(t, server)
-	body := []byte(`{"slug":"web-welcome","title":"Welcome Panel","category_slug":"web","description":"updated","points":100,"difficulty":"easy","flag_type":"static","flag_value":"flag{welcome}","dynamic_enabled":true,"visible":true,"sort_order":10,"runtime_config":{"enabled":true,"image_name":"ctf/web-welcome:v2","exposed_protocol":"http","container_port":8080,"default_ttl_seconds":2400,"max_renew_count":2,"memory_limit_mb":512,"cpu_limit_millicores":1000,"max_active_instances":5,"user_cooldown_seconds":120,"env":{"MODE":"prod"},"command":["/app/start"]}}`)
+	body := []byte(`{"slug":"web-welcome","title":"Welcome Panel","category_slug":"web","description":"updated","points":100,"difficulty":"easy","flag_type":"static","flag_value":"flag{welcome}","dynamic_enabled":true,"status":"published","visible":true,"sort_order":10,"runtime_config":{"enabled":true,"image_name":"ctf/web-welcome:v2","exposed_protocol":"http","container_port":8080,"default_ttl_seconds":2400,"max_renew_count":2,"memory_limit_mb":512,"cpu_limit_millicores":1000,"max_active_instances":5,"user_cooldown_seconds":120,"env":{"MODE":"prod"},"command":["/app/start"]}}`)
 	req := httptest.NewRequest(http.MethodPatch, "/api/v1/admin/challenges/1", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+adminToken)
 	res := httptest.NewRecorder()
@@ -1176,7 +1189,7 @@ func TestAdminUpdateChallengePersistsRuntimeConfigPayload(t *testing.T) {
 func TestAdminCreateChallengeRejectsInvalidFlagType(t *testing.T) {
 	server, _ := newTestServer(t)
 	adminToken := issueAdminToken(t, server)
-	body := []byte(`{"slug":"regex-demo","title":"Regex Demo","category_slug":"web","description":"demo","points":100,"difficulty":"easy","flag_type":"script","flag_value":"flag{demo}","dynamic_enabled":false,"visible":true,"sort_order":10}`)
+	body := []byte(`{"slug":"regex-demo","title":"Regex Demo","category_slug":"web","description":"demo","points":100,"difficulty":"easy","flag_type":"script","flag_value":"flag{demo}","dynamic_enabled":false,"status":"published","visible":true,"sort_order":10}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/challenges", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+adminToken)
 	res := httptest.NewRecorder()
@@ -1190,7 +1203,7 @@ func TestAdminCreateChallengeRejectsInvalidFlagType(t *testing.T) {
 func TestAdminUpdateChallengeRejectsInvalidRegexFlagType(t *testing.T) {
 	server, _ := newTestServer(t)
 	adminToken := issueAdminToken(t, server)
-	body := []byte(`{"slug":"web-welcome","title":"Welcome Panel","category_slug":"web","description":"updated","points":100,"difficulty":"easy","flag_type":"regex","flag_value":"^(broken$","dynamic_enabled":true,"visible":true,"sort_order":10}`)
+	body := []byte(`{"slug":"web-welcome","title":"Welcome Panel","category_slug":"web","description":"updated","points":100,"difficulty":"easy","flag_type":"regex","flag_value":"^(broken$","dynamic_enabled":true,"status":"published","visible":true,"sort_order":10}`)
 	req := httptest.NewRequest(http.MethodPatch, "/api/v1/admin/challenges/1", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+adminToken)
 	res := httptest.NewRecorder()

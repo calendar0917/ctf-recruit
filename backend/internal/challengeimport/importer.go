@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"ctf/backend/internal/admin"
+	"ctf/backend/internal/challengecfg"
 	"ctf/backend/internal/game"
 	"ctf/backend/internal/store"
 )
@@ -58,6 +59,7 @@ type ChallengeMeta struct {
 	Points     int
 	Difficulty string
 	Dynamic    bool
+	Status     string
 	Visible    bool
 	SortOrder  int
 }
@@ -249,6 +251,12 @@ func NormalizeSpec(spec ChallengeSpec) (ChallengeSpec, error) {
 	if meta.SortOrder == 0 {
 		meta.SortOrder = 10
 	}
+	status, err := challengecfg.NormalizeInputStatus(meta.Status, meta.Visible)
+	if err != nil {
+		return ChallengeSpec{}, err
+	}
+	meta.Status = status
+	meta.Visible = challengecfg.IsPublished(status)
 	if meta.Slug == "" {
 		return ChallengeSpec{}, errors.New("meta.slug is required")
 	}
@@ -504,14 +512,15 @@ INSERT INTO challenges (
     flag_type,
     flag_value,
     dynamic_enabled,
+    status,
     visible,
     sort_order,
     updated_at
 )
-SELECT c.id, cat.id, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW()
+SELECT c.id, cat.id, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW()
 FROM contests c
-JOIN categories cat ON cat.slug = $11
-WHERE c.slug = $12
+JOIN categories cat ON cat.slug = $12
+WHERE c.slug = $13
 ON CONFLICT (slug) DO UPDATE SET
     category_id = EXCLUDED.category_id,
     title = EXCLUDED.title,
@@ -521,6 +530,7 @@ ON CONFLICT (slug) DO UPDATE SET
     flag_type = EXCLUDED.flag_type,
     flag_value = EXCLUDED.flag_value,
     dynamic_enabled = EXCLUDED.dynamic_enabled,
+    status = EXCLUDED.status,
     visible = EXCLUDED.visible,
     sort_order = EXCLUDED.sort_order,
     updated_at = NOW()
@@ -536,6 +546,7 @@ RETURNING id
 		spec.Flag.Type,
 		spec.Flag.Value,
 		spec.Meta.Dynamic,
+		spec.Meta.Status,
 		spec.Meta.Visible,
 		spec.Meta.SortOrder,
 		spec.Meta.Category,
@@ -762,6 +773,8 @@ func assignScalar(spec *ChallengeSpec, section, key, value string) error {
 				return fmt.Errorf("meta.dynamic must be boolean")
 			}
 			spec.Meta.Dynamic = parsed
+		case "status":
+			spec.Meta.Status = value
 		case "visible":
 			parsed, err := parseBool(value)
 			if err != nil {

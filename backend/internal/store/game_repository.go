@@ -58,7 +58,7 @@ func (r *GameRepository) GetChallenge(ctx context.Context, challengeRef string) 
 SELECT c.id, c.slug, c.title, cat.slug, c.points, c.difficulty, c.description, c.flag_type, c.dynamic_enabled, c.flag_value
 FROM challenges c
 JOIN categories cat ON cat.id = c.category_id
-WHERE c.visible = TRUE AND (c.id::text = $1 OR lower(c.slug) = lower($1))
+WHERE c.status = 'published' AND (c.id::text = $1 OR lower(c.slug) = lower($1))
 LIMIT 1
 `
 
