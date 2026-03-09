@@ -3,7 +3,18 @@ meta:
   title: Welcome Panel
   category: web
   points: 100
+  difficulty: easy
   dynamic: true
+  visible: true
+  sort_order: 10
+
+flag:
+  type: static
+  value: flag{welcome}
+
+content:
+  description: A minimal seeded web challenge for local runtime integration.
+  author: platform
 
 runtime:
   image: ctf/web-welcome:dev
@@ -13,4 +24,9 @@ runtime:
   ttl: 30m
   memory_limit_mb: 256
   cpu_limit_millicores: 500
-  renew_allowed: true
+  max_renew_count: 1
+  max_active_instances: 0
+  user_cooldown: 0s
+  env:
+    MODE: dev
+  command:

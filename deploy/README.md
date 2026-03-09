@@ -81,9 +81,19 @@ docker compose -f deploy/docker-compose.prod.yml exec -T \
   api /usr/local/bin/bootstrap-admin
 ```
 
+5. 从 `challenges/` 模板导入题目配置：
+
+```bash
+docker compose -f deploy/docker-compose.prod.yml exec -T \
+  -e DATABASE_URL="postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/ctf?sslmode=disable" \
+  api /usr/local/bin/import-challenges --contest recruit-2025 --root /app/challenges
+```
+
 说明：
 
 - `bootstrap-admin` 是一次性初始化入口，不应在日常运维流程中反复执行
+- `import-challenges` 会幂等同步 `challenge.yaml` 中的题目元数据和 runtime 配置
+- 导入流程不负责构建题目镜像；赛前仍需先构建并推送镜像
 - 默认迁移不会再生成任何已知管理员口令
 - `scripts/dev-seed.sh` 只用于本地开发，不能进入生产流程
 
@@ -160,6 +170,7 @@ scripts/restore-db.sh
 - API、数据库、Redis 和 Docker Engine 已启动
 - 数据库已完成迁移
 - 已存在可用管理员账号
+- 已执行一次题目模板导入：`scripts/import-challenges.sh --contest recruit-2025 --root challenges`
 
 最小彩排执行：
 
