@@ -44,19 +44,19 @@ func (r *fakeRepo) ListChallenges(context.Context, Actor) ([]ChallengeSummary, e
 }
 
 func (r *fakeRepo) GetChallenge(context.Context, Actor, int64) (ChallengeDetail, error) {
-	return ChallengeDetail{ID: 1, Slug: "web-welcome", RuntimeConfig: RuntimeConfig{Enabled: true, ImageName: "ctf/web-welcome:dev"}}, nil
+	return ChallengeDetail{ID: 1, Slug: "web-welcome", Title: "Welcome Panel", Category: "web", Points: 100, Status: "draft", Visible: false, RuntimeConfig: RuntimeConfig{Enabled: true, ImageName: "ctf/web-welcome:dev"}}, nil
 }
 
 func (r *fakeRepo) CreateChallenge(_ context.Context, actor Actor, input UpsertChallengeInput) (ChallengeSummary, error) {
 	r.createdChallengeActor = actor
 	r.createdChallengeInput = input
-	return ChallengeSummary{ID: 2, Slug: input.Slug}, nil
+	return ChallengeSummary{ID: 2, Slug: input.Slug, Title: input.Title, Category: input.CategorySlug, Points: input.Points, Status: input.Status, Visible: input.Visible, DynamicEnabled: input.DynamicEnabled}, nil
 }
 
 func (r *fakeRepo) UpdateChallenge(_ context.Context, actor Actor, _ int64, input UpsertChallengeInput) (ChallengeSummary, error) {
 	r.updatedChallengeActor = actor
 	r.updatedChallengeInput = input
-	return ChallengeSummary{ID: 1, Slug: input.Slug}, nil
+	return ChallengeSummary{ID: 1, Slug: input.Slug, Title: input.Title, Category: input.CategorySlug, Points: input.Points, Status: input.Status, Visible: input.Visible, DynamicEnabled: input.DynamicEnabled}, nil
 }
 
 func (r *fakeRepo) ListChallengeAuthors(context.Context, Actor, int64) ([]ChallengeAuthor, error) {
@@ -232,6 +232,57 @@ func TestCreateChallengeRejectsInvalidRegexFlagType(t *testing.T) {
 	})
 	if !errors.Is(err, ErrInvalidChallengeInput) {
 		t.Fatalf("expected invalid challenge input, got %v", err)
+	}
+}
+
+func TestCreateChallengeWritesAuditLog(t *testing.T) {
+	repo := &fakeRepo{}
+	service := NewService(repo, t.TempDir())
+	actor := Actor{UserID: 7, Role: "author"}
+
+	_, err := service.CreateChallenge(context.Background(), actor, UpsertChallengeInput{
+		Slug:           "welcome",
+		Title:          "Welcome",
+		CategorySlug:   "web",
+		Difficulty:     "easy",
+		FlagType:       game.FlagTypeStatic,
+		FlagValue:      "flag{welcome}",
+		Status:         "published",
+		DynamicEnabled: true,
+	})
+	if err != nil {
+		t.Fatalf("create challenge: %v", err)
+	}
+	if len(repo.auditLogs) != 1 || repo.auditLogs[0].Action != "challenge.create" {
+		t.Fatalf("expected challenge create audit log, got %+v", repo.auditLogs)
+	}
+	if repo.auditLogs[0].Details["status"] != "published" {
+		t.Fatalf("expected published status in audit log, got %+v", repo.auditLogs[0].Details)
+	}
+}
+
+func TestUpdateChallengeWritesStatusTransitionAuditLog(t *testing.T) {
+	repo := &fakeRepo{}
+	service := NewService(repo, t.TempDir())
+	actor := Actor{UserID: 1, Role: "admin"}
+
+	_, err := service.UpdateChallenge(context.Background(), actor, 1, UpsertChallengeInput{
+		Slug:         "web-welcome",
+		Title:        "Welcome",
+		CategorySlug: "web",
+		Difficulty:   "easy",
+		FlagType:     game.FlagTypeStatic,
+		FlagValue:    "flag{welcome}",
+		Status:       "published",
+	})
+	if err != nil {
+		t.Fatalf("update challenge: %v", err)
+	}
+	if len(repo.auditLogs) != 1 || repo.auditLogs[0].Action != "challenge.update" {
+		t.Fatalf("expected challenge update audit log, got %+v", repo.auditLogs)
+	}
+	if repo.auditLogs[0].Details["status_transition"] != "draft->published" {
+		t.Fatalf("expected status transition in audit log, got %+v", repo.auditLogs[0].Details)
 	}
 }
 

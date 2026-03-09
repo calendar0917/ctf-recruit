@@ -40,6 +40,7 @@ type Notice = {
 
 type BoardDifficultyFilter = 'all' | 'easy' | 'normal' | 'hard'
 type BoardSortMode = 'recommended' | 'difficulty' | 'points-asc' | 'points-desc' | 'title'
+type AdminChallengeStatusFilter = 'all' | 'draft' | 'review' | 'ready' | 'published'
 
 type AdminChallengeDraft = {
   slug: string
@@ -475,6 +476,7 @@ function App(): React.JSX.Element {
   const [adminChallenges, setAdminChallenges] = useState<AdminChallengeSummary[]>([])
   const [adminChallengesLoading, setAdminChallengesLoading] = useState(false)
   const [adminChallengesNotice, setAdminChallengesNotice] = useState<Notice | null>(null)
+  const [adminChallengeStatusFilter, setAdminChallengeStatusFilter] = useState<AdminChallengeStatusFilter>('all')
   const [selectedAdminChallenge, setSelectedAdminChallenge] = useState<number | 'new' | null>(null)
   const [adminChallengeDetail, setAdminChallengeDetail] = useState<AdminChallengeDetail | null>(null)
   const [adminChallengeDraft, setAdminChallengeDraft] = useState<AdminChallengeDraft>(createBlankChallengeDraft())
@@ -1038,6 +1040,27 @@ function App(): React.JSX.Element {
     }
     void loadAdminChallengeDetail(selectedAdminChallenge)
   }, [adminSection, canAccessAdmin, loadAdminChallengeDetail, selectedAdminChallenge, token, view])
+
+  const filteredAdminChallenges = useMemo(() => {
+    return adminChallenges.filter((item) => adminChallengeStatusFilter === 'all' || item.status === adminChallengeStatusFilter)
+  }, [adminChallengeStatusFilter, adminChallenges])
+
+  useEffect(() => {
+    if (!(canAccessAdmin && view === 'admin' && adminSection === 'challenges')) {
+      return
+    }
+    if (selectedAdminChallenge === 'new') {
+      return
+    }
+    if (typeof selectedAdminChallenge === 'number' && filteredAdminChallenges.some((item) => item.id === selectedAdminChallenge)) {
+      return
+    }
+    if (filteredAdminChallenges.length > 0) {
+      setSelectedAdminChallenge(filteredAdminChallenges[0].id)
+      return
+    }
+    setSelectedAdminChallenge(canWriteChallenges ? 'new' : null)
+  }, [adminSection, canAccessAdmin, canWriteChallenges, filteredAdminChallenges, selectedAdminChallenge, view])
 
   const selectedAdminUser = useMemo(
     () => adminUsers.find((item) => item.id === selectedAdminUserId) ?? null,
@@ -2319,9 +2342,22 @@ function App(): React.JSX.Element {
           }
         >
           <NoticeBanner notice={adminChallengesNotice} />
+          <div className="toolbar-row">
+            <label className="field">
+              <span>状态筛选</span>
+              <select value={adminChallengeStatusFilter} onChange={(event) => setAdminChallengeStatusFilter(event.target.value as AdminChallengeStatusFilter)}>
+                <option value="all">全部状态</option>
+                {challengeStatusOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {formatChallengeStatus(option)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
           {adminChallengesLoading ? <div className="empty-state">正在读取后台题目目录…</div> : null}
           <div className="challenge-card-list">
-            {adminChallenges.map((item) => (
+            {filteredAdminChallenges.map((item) => (
               <button
                 className={selectedAdminChallenge === item.id ? 'challenge-card active' : 'challenge-card'}
                 key={item.id}
@@ -2342,7 +2378,7 @@ function App(): React.JSX.Element {
                 </div>
               </button>
             ))}
-            {adminChallenges.length === 0 && !adminChallengesLoading ? <div className="empty-state">当前还没有题目。</div> : null}
+            {filteredAdminChallenges.length === 0 && !adminChallengesLoading ? <div className="empty-state">当前筛选条件下没有题目。</div> : null}
           </div>
         </Panel>
 

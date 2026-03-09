@@ -49,7 +49,20 @@ func (s *Service) CreateChallenge(ctx context.Context, actor Actor, input Upsert
 	}
 	input.Status = status
 	input.Visible = challengecfg.IsPublished(status)
-	return s.repo.CreateChallenge(ctx, actor, input)
+	challenge, err := s.repo.CreateChallenge(ctx, actor, input)
+	if err != nil {
+		return ChallengeSummary{}, err
+	}
+	_ = s.repo.CreateAuditLog(ctx, &actor.UserID, "challenge.create", "challenge", fmt.Sprintf("%d", challenge.ID), map[string]any{
+		"slug":            challenge.Slug,
+		"title":           challenge.Title,
+		"category":        challenge.Category,
+		"points":          challenge.Points,
+		"status":          challenge.Status,
+		"published":       challenge.Visible,
+		"dynamic_enabled": challenge.DynamicEnabled,
+	})
+	return challenge, nil
 }
 
 func (s *Service) UpdateChallenge(ctx context.Context, actor Actor, challengeID int64, input UpsertChallengeInput) (ChallengeSummary, error) {
@@ -64,7 +77,30 @@ func (s *Service) UpdateChallenge(ctx context.Context, actor Actor, challengeID 
 	}
 	input.Status = status
 	input.Visible = challengecfg.IsPublished(status)
-	return s.repo.UpdateChallenge(ctx, actor, challengeID, input)
+	previous, err := s.repo.GetChallenge(ctx, actor, challengeID)
+	if err != nil {
+		return ChallengeSummary{}, err
+	}
+	challenge, err := s.repo.UpdateChallenge(ctx, actor, challengeID, input)
+	if err != nil {
+		return ChallengeSummary{}, err
+	}
+	details := map[string]any{
+		"slug":               challenge.Slug,
+		"title":              challenge.Title,
+		"category":           challenge.Category,
+		"points":             challenge.Points,
+		"status":             challenge.Status,
+		"published":          challenge.Visible,
+		"dynamic_enabled":    challenge.DynamicEnabled,
+		"previous_status":    previous.Status,
+		"previous_published": previous.Visible,
+	}
+	if previous.Status != challenge.Status {
+		details["status_transition"] = fmt.Sprintf("%s->%s", previous.Status, challenge.Status)
+	}
+	_ = s.repo.CreateAuditLog(ctx, &actor.UserID, "challenge.update", "challenge", fmt.Sprintf("%d", challenge.ID), details)
+	return challenge, nil
 }
 
 func (s *Service) ChallengeAuthors(ctx context.Context, actor Actor, challengeID int64) ([]ChallengeAuthor, error) {
