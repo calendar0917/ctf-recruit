@@ -1339,3 +1339,335 @@ textarea::placeholder {
     grid-template-columns: 1fr;
   }
 }
+
+.admin-announcements-view,
+.admin-traffic-view,
+.admin-audit-view {
+  display: grid;
+  gap: 18px;
+}
+
+.audit-list .entry-card {
+  border-radius: var(--radius-lg);
+}
+
+.archive-notice-list,
+.audit-list,
+.card-list.scoreboard-card-list {
+  gap: 14px;
+}
+
+.player-focused-view,
+.player-focused-board {
+  gap: 16px;
+}
+
+.player-hero {
+  padding: 24px;
+}
+
+.player-hero-stack,
+.player-summary-stack,
+.player-entry-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.player-hero-stack {
+  max-width: 920px;
+}
+
+.player-entry-grid {
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  align-items: start;
+}
+
+.player-side-panel {
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
+}
+
+.compact-stat-row {
+  grid-template-columns: minmax(0, 1.2fr) repeat(2, minmax(0, 1fr));
+}
+
+.hero-stat-card-strong {
+  background: linear-gradient(145deg, #0f172a, #1e293b);
+  color: #f8fafc;
+}
+
+.hero-stat-card-strong strong,
+.hero-stat-card-strong small,
+.hero-stat-card-strong span {
+  color: inherit;
+}
+
+.player-mini-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.focused-board-shell {
+  grid-template-columns: minmax(290px, 340px) minmax(0, 1fr);
+}
+
+.focused-main-column {
+  gap: 14px;
+}
+
+.focused-meta-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.statement-card-focused {
+  padding: 30px;
+}
+
+.focused-action-grid {
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+}
+
+.focused-primary-action-panel {
+  border-color: rgba(3, 105, 161, 0.18);
+  box-shadow: var(--shadow-lg);
+}
+
+.focused-primary-action-panel .primary-action-layout {
+  gap: 14px;
+}
+
+.briefing-view .overview-stack > .panel:nth-child(n + 3),
+.briefing-view .overview-stack .leaderboard-mini-list,
+.briefing-view .overview-stack .briefing-feed-grid .subpanel:nth-child(2),
+.briefing-view .overview-stack .briefing-feed-grid .subpanel:nth-child(3) {
+  display: none;
+}
+
+@media (max-width: 1180px) {
+  .player-entry-grid,
+  .focused-action-grid,
+  .compact-stat-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .player-mini-grid,
+  .focused-meta-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.player-hero-copy,
+.runtime-focus-stack,
+.runtime-action-strip,
+.scoreboard-personal-strip,
+.scoreboard-row-details {
+  display: grid;
+  gap: 16px;
+}
+
+.player-hero-copy {
+  max-width: 840px;
+}
+
+.compact-capability-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.announcement-subpanel,
+.challenge-workspace-panel,
+.compact-runtime-panel,
+.runtime-stage-hero,
+.scoreboard-stage-hero {
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
+}
+
+.announcement-compact-list,
+.runtime-help-grid {
+  gap: 10px;
+}
+
+.announcement-row p {
+  margin: 2px 0 0;
+  color: var(--ink-soft);
+  line-height: 1.6;
+}
+
+.compact-admin-launch {
+  margin-bottom: 0;
+}
+
+.board-hero-compact .board-summary-grid,
+.runtime-stage-hero .board-summary-grid,
+.scoreboard-stage-hero .board-summary-grid {
+  align-items: start;
+}
+
+.challenge-workspace-panel {
+  box-shadow: var(--shadow-md);
+}
+
+.compact-runtime-panel .runtime-quick-card,
+.runtime-focused-layout .content-stack > .panel {
+  gap: 16px;
+}
+
+.compact-runtime-metrics {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.runtime-availability-row {
+  background: rgba(240, 249, 255, 0.92);
+  border-color: rgba(3, 105, 161, 0.12);
+}
+
+.runtime-focused-layout {
+  grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+}
+
+.runtime-status-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.runtime-action-strip {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.runtime-help-grid {
+  grid-template-columns: 1fr;
+}
+
+.scoreboard-personal-strip {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 18px;
+}
+
+.scoreboard-table {
+  display: grid;
+  gap: 10px;
+}
+
+.scoreboard-table-header,
+.scoreboard-table-row {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1.8fr) minmax(110px, 0.9fr) minmax(96px, 0.8fr) minmax(160px, 1fr) 92px;
+  gap: 12px;
+  align-items: center;
+}
+
+.scoreboard-table-header {
+  padding: 0 16px 8px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.scoreboard-table-entry {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: var(--shadow-sm);
+}
+
+.scoreboard-table-entry.expanded {
+  border-color: rgba(3, 105, 161, 0.18);
+}
+
+.scoreboard-table-row {
+  padding: 16px;
+}
+
+.scoreboard-rank-cell {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 1.35rem;
+  letter-spacing: -0.03em;
+}
+
+.scoreboard-player-cell,
+.scoreboard-value-cell,
+.scoreboard-table-solve > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.scoreboard-player-cell small,
+.scoreboard-time-cell,
+.scoreboard-value-cell span {
+  color: var(--muted);
+}
+
+.scoreboard-value-cell strong {
+  font-size: 1.05rem;
+}
+
+.scoreboard-actions-cell {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.scoreboard-row-details {
+  padding: 0 16px 16px;
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.scoreboard-table-solve {
+  display: grid;
+  gap: 10px;
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.scoreboard-table-solve:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+@media (max-width: 1180px) {
+  .runtime-focused-layout,
+  .scoreboard-personal-strip,
+  .runtime-status-grid,
+  .runtime-action-strip,
+  .compact-runtime-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .scoreboard-table-header,
+  .scoreboard-table-row {
+    grid-template-columns: 72px minmax(0, 1.4fr) minmax(90px, 0.8fr) minmax(90px, 0.8fr);
+  }
+
+  .scoreboard-table-header span:nth-child(5),
+  .scoreboard-table-header span:nth-child(6) {
+    display: none;
+  }
+
+  .scoreboard-time-cell,
+  .scoreboard-actions-cell {
+    grid-column: span 2;
+  }
+
+  .scoreboard-actions-cell {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 720px) {
+  .compact-capability-grid,
+  .scoreboard-table-header,
+  .scoreboard-table-row {
+    grid-template-columns: 1fr;
+  }
+
+  .scoreboard-table-header {
+    display: none;
+  }
+
+  .scoreboard-table-row {
+    gap: 10px;
+  }
+
+  .scoreboard-time-cell,
+  .scoreboard-actions-cell {
+    grid-column: auto;
+  }
+}
