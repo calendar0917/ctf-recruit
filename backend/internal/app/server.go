@@ -28,13 +28,13 @@ import (
 )
 
 type Server struct {
-	cfg               config.Config
-	admin             *admin.Service
-	auth              *auth.Service
-	game              *game.Service
-	runtime           *runtime.Service
-	submissionLimiter *submissionLimiter
-	db                *sql.DB
+	cfg      config.Config
+	admin    *admin.Service
+	auth     *auth.Service
+	game     *game.Service
+	runtime  *runtime.Service
+	limiters AppLimiters
+	db       *sql.DB
 }
 
 func NewServer(cfg config.Config) (*Server, error) {
@@ -53,26 +53,27 @@ func NewServer(cfg config.Config) (*Server, error) {
 	runtimeRepo := store.NewRuntimeRepository(db)
 	tokens := auth.NewTokenManager(cfg.JWTSecret, cfg.JWTTTL)
 	manager := runtime.NewDockerManager(cfg.DockerSocketPath)
+	limiters := newAppLimiters(cfg)
 
 	return &Server{
-		cfg:               cfg,
-		admin:             admin.NewServiceWithManager(adminRepo, cfg.AttachmentStorageDir, manager),
-		auth:              auth.NewService(userRepo, tokens),
-		game:              game.NewService(gameRepo),
-		runtime:           runtime.NewService(cfg.PublicBaseURL, manager, runtimeRepo),
-		submissionLimiter: newSubmissionLimiter(cfg.SubmissionRateLimitWindow, cfg.SubmissionRateLimitMax),
-		db:                db,
+		cfg:      cfg,
+		admin:    admin.NewServiceWithManager(adminRepo, cfg.AttachmentStorageDir, manager),
+		auth:     auth.NewService(userRepo, tokens),
+		game:     game.NewService(gameRepo),
+		runtime:  runtime.NewService(cfg.PublicBaseURL, manager, runtimeRepo),
+		limiters: limiters,
+		db:       db,
 	}, nil
 }
 
 func NewServerForTests(cfg config.Config, adminService *admin.Service, authService *auth.Service, gameService *game.Service, runtimeService *runtime.Service) *Server {
 	return &Server{
-		cfg:               cfg,
-		admin:             adminService,
-		auth:              authService,
-		game:              gameService,
-		runtime:           runtimeService,
-		submissionLimiter: newSubmissionLimiter(cfg.SubmissionRateLimitWindow, cfg.SubmissionRateLimitMax),
+		cfg:      cfg,
+		admin:    adminService,
+		auth:     authService,
+		game:     gameService,
+		runtime:  runtimeService,
+		limiters: newAppLimiters(cfg),
 	}
 }
 
@@ -176,14 +177,22 @@ func (s *Server) handleReady(w http.ResponseWriter, _ *http.Request) {
 	}
 
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
-		"status":                       "ready",
-		"database_url_configured":      s.cfg.DatabaseURL != "",
-		"database_connected":           ready,
-		"docker_socket_path":           s.cfg.DockerSocketPath,
-		"dynamic_runtime_enabled":      true,
-		"attachment_storage_dir":       s.cfg.AttachmentStorageDir,
-		"submission_rate_limit_window": s.cfg.SubmissionRateLimitWindow.String(),
-		"submission_rate_limit_max":    s.cfg.SubmissionRateLimitMax,
+		"status":                                "ready",
+		"database_url_configured":               s.cfg.DatabaseURL != "",
+		"database_connected":                    ready,
+		"docker_socket_path":                    s.cfg.DockerSocketPath,
+		"dynamic_runtime_enabled":               true,
+		"attachment_storage_dir":                s.cfg.AttachmentStorageDir,
+		"redis_addr":                            s.cfg.RedisAddr,
+		"redis_rate_limit_enabled":              s.limiters.RedisAvailable,
+		"login_rate_limit_window_seconds":       s.cfg.LoginRateLimitWindowSeconds,
+		"login_rate_limit_max":                  s.cfg.LoginRateLimitMax,
+		"register_rate_limit_window_seconds":    s.cfg.RegisterRateLimitWindowSeconds,
+		"register_rate_limit_max":               s.cfg.RegisterRateLimitMax,
+		"submission_rate_limit_window_seconds":  s.cfg.SubmissionRateLimitWindowSeconds,
+		"submission_rate_limit_max":             s.cfg.SubmissionRateLimitMax,
+		"admin_write_rate_limit_window_seconds": s.cfg.AdminWriteRateLimitWindowSeconds,
+		"admin_write_rate_limit_max":            s.cfg.AdminWriteRateLimitMax,
 	})
 }
 
@@ -191,6 +200,16 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	var input auth.RegisterInput
 	if err := decodeJSON(r, &input); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	allowed, err := enforceRateLimit(r.Context(), s.limiters.Register, registerRateLimitKey(r))
+	if err != nil {
+		log.Printf("register rate limit: %v", err)
+		httpx.WriteError(w, http.StatusBadGateway, "rate_limit_error", "failed to enforce rate limit")
+		return
+	}
+	if !allowed {
+		httpx.WriteError(w, http.StatusTooManyRequests, "register_rate_limited", "too many registration attempts, please try again later")
 		return
 	}
 
@@ -207,6 +226,16 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	var input auth.LoginInput
 	if err := decodeJSON(r, &input); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	allowed, err := enforceRateLimit(r.Context(), s.limiters.Login, authRateLimitKey("login", input.Identifier, r))
+	if err != nil {
+		log.Printf("login rate limit: %v", err)
+		httpx.WriteError(w, http.StatusBadGateway, "rate_limit_error", "failed to enforce rate limit")
+		return
+	}
+	if !allowed {
+		httpx.WriteError(w, http.StatusTooManyRequests, "login_rate_limited", "too many login attempts, please try again later")
 		return
 	}
 
@@ -433,8 +462,14 @@ func (s *Server) handleSubmitFlag(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
 		return
 	}
-	limiterKey := fmt.Sprintf("%d:%s", userID, r.PathValue("challengeID"))
-	if !s.submissionLimiter.Allow(limiterKey) {
+	limiterKey := limitKey("submission", fmt.Sprintf("%d", userID), r.PathValue("challengeID"))
+	allowed, err := enforceRateLimit(r.Context(), s.limiters.Submission, limiterKey)
+	if err != nil {
+		log.Printf("submission rate limit: %v", err)
+		httpx.WriteError(w, http.StatusBadGateway, "rate_limit_error", "failed to enforce rate limit")
+		return
+	}
+	if !allowed {
 		httpx.WriteError(w, http.StatusTooManyRequests, "submission_rate_limited", "too many submissions, please try again later")
 		return
 	}
@@ -494,6 +529,21 @@ func (s *Server) handleAdminChallengeDetail(w http.ResponseWriter, r *http.Reque
 }
 
 func (s *Server) handleAdminCreateChallenge(w http.ResponseWriter, r *http.Request) {
+	actorUserID, ok := userIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
+		return
+	}
+	allowed, err := enforceRateLimit(r.Context(), s.limiters.AdminWrite, adminRateLimitKey("challenge_create", r, actorUserID))
+	if err != nil {
+		log.Printf("admin challenge create rate limit: %v", err)
+		httpx.WriteError(w, http.StatusBadGateway, "rate_limit_error", "failed to enforce rate limit")
+		return
+	}
+	if !allowed {
+		httpx.WriteError(w, http.StatusTooManyRequests, "admin_rate_limited", "too many admin write requests, please try again later")
+		return
+	}
 	var input admin.UpsertChallengeInput
 	if err := decodeJSON(r, &input); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_json", err.Error())
@@ -509,6 +559,21 @@ func (s *Server) handleAdminCreateChallenge(w http.ResponseWriter, r *http.Reque
 }
 
 func (s *Server) handleAdminUpdateChallenge(w http.ResponseWriter, r *http.Request) {
+	actorUserID, ok := userIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
+		return
+	}
+	allowed, err := enforceRateLimit(r.Context(), s.limiters.AdminWrite, adminRateLimitKey("challenge_update", r, actorUserID))
+	if err != nil {
+		log.Printf("admin challenge update rate limit: %v", err)
+		httpx.WriteError(w, http.StatusBadGateway, "rate_limit_error", "failed to enforce rate limit")
+		return
+	}
+	if !allowed {
+		httpx.WriteError(w, http.StatusTooManyRequests, "admin_rate_limited", "too many admin write requests, please try again later")
+		return
+	}
 	challengeID, err := strconv.ParseInt(r.PathValue("challengeID"), 10, 64)
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_challenge_id", "challenge id must be numeric")
@@ -536,6 +601,16 @@ func (s *Server) handleAdminCreateAttachment(w http.ResponseWriter, r *http.Requ
 	actorUserID, ok := userIDFromContext(r.Context())
 	if !ok {
 		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
+		return
+	}
+	allowed, err := enforceRateLimit(r.Context(), s.limiters.AdminWrite, adminRateLimitKey("attachment_create", r, actorUserID))
+	if err != nil {
+		log.Printf("admin attachment create rate limit: %v", err)
+		httpx.WriteError(w, http.StatusBadGateway, "rate_limit_error", "failed to enforce rate limit")
+		return
+	}
+	if !allowed {
+		httpx.WriteError(w, http.StatusTooManyRequests, "admin_rate_limited", "too many admin write requests, please try again later")
 		return
 	}
 	challengeID, err := strconv.ParseInt(r.PathValue("challengeID"), 10, 64)
@@ -579,6 +654,16 @@ func (s *Server) handleAdminCreateAnnouncement(w http.ResponseWriter, r *http.Re
 		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
 		return
 	}
+	allowed, err := enforceRateLimit(r.Context(), s.limiters.AdminWrite, adminRateLimitKey("announcement_create", r, actorUserID))
+	if err != nil {
+		log.Printf("admin announcement create rate limit: %v", err)
+		httpx.WriteError(w, http.StatusBadGateway, "rate_limit_error", "failed to enforce rate limit")
+		return
+	}
+	if !allowed {
+		httpx.WriteError(w, http.StatusTooManyRequests, "admin_rate_limited", "too many admin write requests, please try again later")
+		return
+	}
 	var input admin.CreateAnnouncementInput
 	if err := decodeJSON(r, &input); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_json", err.Error())
@@ -597,6 +682,16 @@ func (s *Server) handleAdminDeleteAnnouncement(w http.ResponseWriter, r *http.Re
 	actorUserID, ok := userIDFromContext(r.Context())
 	if !ok {
 		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
+		return
+	}
+	allowed, err := enforceRateLimit(r.Context(), s.limiters.AdminWrite, adminRateLimitKey("announcement_delete", r, actorUserID))
+	if err != nil {
+		log.Printf("admin announcement delete rate limit: %v", err)
+		httpx.WriteError(w, http.StatusBadGateway, "rate_limit_error", "failed to enforce rate limit")
+		return
+	}
+	if !allowed {
+		httpx.WriteError(w, http.StatusTooManyRequests, "admin_rate_limited", "too many admin write requests, please try again later")
 		return
 	}
 	announcementID, err := strconv.ParseInt(r.PathValue("announcementID"), 10, 64)
@@ -643,6 +738,16 @@ func (s *Server) handleAdminTerminateInstance(w http.ResponseWriter, r *http.Req
 		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
 		return
 	}
+	allowed, err := enforceRateLimit(r.Context(), s.limiters.AdminWrite, adminRateLimitKey("instance_terminate", r, actorUserID))
+	if err != nil {
+		log.Printf("admin terminate instance rate limit: %v", err)
+		httpx.WriteError(w, http.StatusBadGateway, "rate_limit_error", "failed to enforce rate limit")
+		return
+	}
+	if !allowed {
+		httpx.WriteError(w, http.StatusTooManyRequests, "admin_rate_limited", "too many admin write requests, please try again later")
+		return
+	}
 	instanceID, err := strconv.ParseInt(r.PathValue("instanceID"), 10, 64)
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_instance_id", "instance id must be numeric")
@@ -675,6 +780,16 @@ func (s *Server) handleAdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 	actorUserID, ok := userIDFromContext(r.Context())
 	if !ok {
 		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
+		return
+	}
+	allowed, err := enforceRateLimit(r.Context(), s.limiters.AdminWrite, adminRateLimitKey("user_update", r, actorUserID))
+	if err != nil {
+		log.Printf("admin update user rate limit: %v", err)
+		httpx.WriteError(w, http.StatusBadGateway, "rate_limit_error", "failed to enforce rate limit")
+		return
+	}
+	if !allowed {
+		httpx.WriteError(w, http.StatusTooManyRequests, "admin_rate_limited", "too many admin write requests, please try again later")
 		return
 	}
 	userID, err := strconv.ParseInt(r.PathValue("userID"), 10, 64)

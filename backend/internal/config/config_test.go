@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestConfigValidateAllowsDevelopmentDefaults(t *testing.T) {
 	cfg := Config{AppEnv: "development", JWTSecret: defaultDevJWTSecret}
@@ -39,5 +42,15 @@ func TestConfigValidateAllowsExplicitSecretOutsideDevelopment(t *testing.T) {
 	cfg := Config{AppEnv: "production", JWTSecret: "replace-with-strong-random-secret"}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("expected explicit jwt secret to validate: %v", err)
+	}
+}
+
+func TestRateLimitWindowUsesSeconds(t *testing.T) {
+	cfg := Config{}
+	if got := cfg.RateLimitWindow("login", 60); got != time.Minute {
+		t.Fatalf("expected 1 minute, got %s", got)
+	}
+	if got := cfg.RateLimitWindow("login", 0); got != 0 {
+		t.Fatalf("expected zero duration, got %s", got)
 	}
 }

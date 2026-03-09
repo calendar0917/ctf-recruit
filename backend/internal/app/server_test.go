@@ -219,15 +219,33 @@ func newTestServer(t *testing.T) (*Server, *testRuntimeRepo) {
 
 	cfg := config.Load()
 	cfg.AttachmentStorageDir = attachmentDir
-	cfg.SubmissionRateLimitWindow = time.Minute
+	cfg.RedisAddr = ""
+	cfg.SubmissionRateLimitWindowSeconds = 60
 	cfg.SubmissionRateLimitMax = 2
+	cfg.LoginRateLimitWindowSeconds = 60
+	cfg.LoginRateLimitMax = 2
+	cfg.RegisterRateLimitWindowSeconds = 300
+	cfg.RegisterRateLimitMax = 5
+	cfg.AdminWriteRateLimitWindowSeconds = 60
+	cfg.AdminWriteRateLimitMax = 1
 	tokens := auth.NewTokenManager(cfg.JWTSecret, cfg.JWTTTL)
 	authService := auth.NewService(userRepo, tokens)
 	adminService := admin.NewServiceWithManager(adminRepo, cfg.AttachmentStorageDir, manager)
 	gameService := game.NewService(gameRepo)
 	runtimeService := runtime.NewService("http://localhost:8080", manager, runtimeRepo)
 	server := NewServerForTests(cfg, adminService, authService, gameService, runtimeService)
-	server.submissionLimiter.now = func() time.Time { return now }
+	if limiter, ok := server.limiters.Submission.(*memoryRateLimiter); ok {
+		limiter.now = func() time.Time { return now }
+	}
+	if limiter, ok := server.limiters.Login.(*memoryRateLimiter); ok {
+		limiter.now = func() time.Time { return now }
+	}
+	if limiter, ok := server.limiters.Register.(*memoryRateLimiter); ok {
+		limiter.now = func() time.Time { return now }
+	}
+	if limiter, ok := server.limiters.AdminWrite.(*memoryRateLimiter); ok {
+		limiter.now = func() time.Time { return now }
+	}
 	return server, runtimeRepo
 }
 
@@ -610,6 +628,53 @@ func TestSubmitFlagEndpoint(t *testing.T) {
 	}
 }
 
+func TestRegisterRateLimitEndpoint(t *testing.T) {
+	server, _ := newTestServer(t)
+	if limiter, ok := server.limiters.Register.(*memoryRateLimiter); ok {
+		limiter.max = 1
+	}
+	body := []byte(`{"username":"alice","email":"alice@example.com","password":"Password123!","display_name":"Alice"}`)
+	firstReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewReader(body))
+	firstReq.RemoteAddr = "127.0.0.1:54321"
+	firstRes := httptest.NewRecorder()
+	server.Handler().ServeHTTP(firstRes, firstReq)
+	if firstRes.Code != http.StatusCreated {
+		t.Fatalf("expected first register 201, got %d", firstRes.Code)
+	}
+
+	secondReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewReader(body))
+	secondReq.RemoteAddr = "127.0.0.1:54321"
+	secondRes := httptest.NewRecorder()
+	server.Handler().ServeHTTP(secondRes, secondReq)
+	if secondRes.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got %d", secondRes.Code)
+	}
+	assertAPIErrorCode(t, secondRes.Body.Bytes(), "register_rate_limited")
+}
+
+func TestLoginRateLimitEndpoint(t *testing.T) {
+	server, _ := newTestServer(t)
+	registerTestUser(t, server)
+	body := []byte(`{"identifier":"alice@example.com","password":"wrong-password"}`)
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body))
+		req.RemoteAddr = "127.0.0.1:54321"
+		res := httptest.NewRecorder()
+		server.Handler().ServeHTTP(res, req)
+		if res.Code != http.StatusUnauthorized {
+			t.Fatalf("expected warmup 401, got %d", res.Code)
+		}
+	}
+	thirdReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body))
+	thirdReq.RemoteAddr = "127.0.0.1:54321"
+	thirdRes := httptest.NewRecorder()
+	server.Handler().ServeHTTP(thirdRes, thirdReq)
+	if thirdRes.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got %d", thirdRes.Code)
+	}
+	assertAPIErrorCode(t, thirdRes.Body.Bytes(), "login_rate_limited")
+}
+
 func TestSubmitFlagRateLimitEndpoint(t *testing.T) {
 	server, _ := newTestServer(t)
 	token := registerTestUser(t, server)
@@ -813,6 +878,30 @@ func TestAdminUpdateChallengePersistsRuntimeConfigPayload(t *testing.T) {
 	if res.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.Code)
 	}
+}
+
+func TestAdminWriteRateLimitEndpoint(t *testing.T) {
+	server, _ := newTestServer(t)
+	adminToken := issueAdminToken(t, server)
+	body := []byte(`{"title":"One","content":"hello","pinned":false,"published":true}`)
+	firstReq := httptest.NewRequest(http.MethodPost, "/api/v1/admin/announcements", bytes.NewReader(body))
+	firstReq.Header.Set("Authorization", "Bearer "+adminToken)
+	firstReq.RemoteAddr = "127.0.0.1:54321"
+	firstRes := httptest.NewRecorder()
+	server.Handler().ServeHTTP(firstRes, firstReq)
+	if firstRes.Code != http.StatusCreated {
+		t.Fatalf("expected first create 201, got %d", firstRes.Code)
+	}
+
+	secondReq := httptest.NewRequest(http.MethodPost, "/api/v1/admin/announcements", bytes.NewReader(body))
+	secondReq.Header.Set("Authorization", "Bearer "+adminToken)
+	secondReq.RemoteAddr = "127.0.0.1:54321"
+	secondRes := httptest.NewRecorder()
+	server.Handler().ServeHTTP(secondRes, secondReq)
+	if secondRes.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got %d", secondRes.Code)
+	}
+	assertAPIErrorCode(t, secondRes.Body.Bytes(), "admin_rate_limited")
 }
 
 func TestAdminCreateAttachmentEndpoint(t *testing.T) {

@@ -81,6 +81,8 @@ cd frontend && pnpm install && pnpm dev
 docker compose -f deploy/docker-compose.yml up postgres redis api
 ```
 
+开发环境如需临时关闭 Redis 共享限流，可将 API 的 `REDIS_ADDR` 设为空，此时会自动回退到进程内内存限流。
+
 初始化数据库结构与公开示例数据：
 
 ```bash
@@ -103,6 +105,7 @@ scripts/dev-seed.sh
 export POSTGRES_PASSWORD='replace-with-strong-db-password'
 export JWT_SECRET='replace-with-long-random-secret'
 export PUBLIC_BASE_URL='https://ctf.example.edu'
+export REDIS_PASSWORD=''
 make prod-compose-up
 ```
 
@@ -128,4 +131,5 @@ docker compose -f deploy/docker-compose.prod.yml exec -T \
 - API 在非 `development` 环境下会拒绝空值、`change-me` 和开发态默认 `JWT_SECRET`
 - `deploy/docker-compose.yml` 是开发环境；`deploy/docker-compose.prod.yml` 是当前最小生产骨架
 - 生产环境首个管理员必须通过显式 bootstrap 命令创建
+- 登录、注册、Flag 提交和后台关键写接口当前已接入 Redis 共享限流
 - 接下来的开发优先级以 [开发基线与升级路线](docs/development-baseline.md) 为准

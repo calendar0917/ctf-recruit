@@ -15,32 +15,52 @@ const (
 )
 
 type Config struct {
-	HTTPAddr                    string
-	AppEnv                      string
-	DatabaseURL                 string
-	JWTSecret                   string
-	JWTTTL                      time.Duration
-	InstanceSweeperPollInterval string
-	DockerSocketPath            string
-	PublicBaseURL               string
-	AttachmentStorageDir        string
-	SubmissionRateLimitWindow   time.Duration
-	SubmissionRateLimitMax      int
+	HTTPAddr                         string
+	AppEnv                           string
+	DatabaseURL                      string
+	JWTSecret                        string
+	JWTTTL                           time.Duration
+	InstanceSweeperPollInterval      string
+	DockerSocketPath                 string
+	PublicBaseURL                    string
+	AttachmentStorageDir             string
+	RedisAddr                        string
+	RedisPassword                    string
+	RedisDB                          int
+	RedisKeyPrefix                   string
+	LoginRateLimitWindowSeconds      int
+	LoginRateLimitMax                int
+	RegisterRateLimitWindowSeconds   int
+	RegisterRateLimitMax             int
+	SubmissionRateLimitWindowSeconds int
+	SubmissionRateLimitMax           int
+	AdminWriteRateLimitWindowSeconds int
+	AdminWriteRateLimitMax           int
 }
 
 func Load() Config {
 	return Config{
-		HTTPAddr:                    getEnv("HTTP_ADDR", ":8080"),
-		AppEnv:                      getEnv("APP_ENV", developmentEnv),
-		DatabaseURL:                 getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/ctf?sslmode=disable"),
-		JWTSecret:                   getEnv("JWT_SECRET", defaultDevJWTSecret),
-		JWTTTL:                      getDurationEnv("JWT_TTL", 24*time.Hour),
-		InstanceSweeperPollInterval: getEnv("INSTANCE_SWEEPER_POLL_INTERVAL", "30s"),
-		DockerSocketPath:            getEnv("DOCKER_SOCKET_PATH", "/var/run/docker.sock"),
-		PublicBaseURL:               getEnv("PUBLIC_BASE_URL", "http://localhost:8080"),
-		AttachmentStorageDir:        getEnv("ATTACHMENT_STORAGE_DIR", "/tmp/ctf-attachments"),
-		SubmissionRateLimitWindow:   getDurationEnv("SUBMISSION_RATE_LIMIT_WINDOW", time.Minute),
-		SubmissionRateLimitMax:      getIntEnv("SUBMISSION_RATE_LIMIT_MAX", 10),
+		HTTPAddr:                         getEnv("HTTP_ADDR", ":8080"),
+		AppEnv:                           getEnv("APP_ENV", developmentEnv),
+		DatabaseURL:                      getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/ctf?sslmode=disable"),
+		JWTSecret:                        getEnv("JWT_SECRET", defaultDevJWTSecret),
+		JWTTTL:                           getDurationEnv("JWT_TTL", 24*time.Hour),
+		InstanceSweeperPollInterval:      getEnv("INSTANCE_SWEEPER_POLL_INTERVAL", "30s"),
+		DockerSocketPath:                 getEnv("DOCKER_SOCKET_PATH", "/var/run/docker.sock"),
+		PublicBaseURL:                    getEnv("PUBLIC_BASE_URL", "http://localhost:8080"),
+		AttachmentStorageDir:             getEnv("ATTACHMENT_STORAGE_DIR", "/tmp/ctf-attachments"),
+		RedisAddr:                        getEnv("REDIS_ADDR", "redis:6379"),
+		RedisPassword:                    getEnv("REDIS_PASSWORD", ""),
+		RedisDB:                          getIntEnv("REDIS_DB", 0),
+		RedisKeyPrefix:                   getEnv("REDIS_KEY_PREFIX", "ctf:"),
+		LoginRateLimitWindowSeconds:      getIntEnv("LOGIN_RATE_LIMIT_WINDOW_SECONDS", 60),
+		LoginRateLimitMax:                getIntEnv("LOGIN_RATE_LIMIT_MAX", 10),
+		RegisterRateLimitWindowSeconds:   getIntEnv("REGISTER_RATE_LIMIT_WINDOW_SECONDS", 300),
+		RegisterRateLimitMax:             getIntEnv("REGISTER_RATE_LIMIT_MAX", 5),
+		SubmissionRateLimitWindowSeconds: getIntEnv("SUBMISSION_RATE_LIMIT_WINDOW_SECONDS", 60),
+		SubmissionRateLimitMax:           getIntEnv("SUBMISSION_RATE_LIMIT_MAX", 10),
+		AdminWriteRateLimitWindowSeconds: getIntEnv("ADMIN_WRITE_RATE_LIMIT_WINDOW_SECONDS", 60),
+		AdminWriteRateLimitMax:           getIntEnv("ADMIN_WRITE_RATE_LIMIT_MAX", 30),
 	}
 }
 
@@ -61,6 +81,13 @@ func (c Config) Validate() error {
 
 func (c Config) IsDevelopment() bool {
 	return normalizeAppEnv(c.AppEnv) == developmentEnv
+}
+
+func (c Config) RateLimitWindow(_ string, seconds int) time.Duration {
+	if seconds <= 0 {
+		return 0
+	}
+	return time.Duration(seconds) * time.Second
 }
 
 func normalizeAppEnv(value string) string {

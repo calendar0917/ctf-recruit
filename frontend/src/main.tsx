@@ -1014,7 +1014,12 @@ function App(): React.JSX.Element {
       setAuthNotice({ tone: 'success', text: `已登录为 ${response.user.display_name || response.user.username}` })
       setView('board')
     } catch (error) {
-      setAuthNotice({ tone: 'danger', text: describeError(error, '登录失败。') })
+      const code = readErrorCode(error)
+      if (code === 'login_rate_limited') {
+        setAuthNotice({ tone: 'danger', text: '登录尝试过于频繁，请稍后再试。' })
+      } else {
+        setAuthNotice({ tone: 'danger', text: describeError(error, '登录失败。') })
+      }
     } finally {
       setAuthBusy(false)
     }
@@ -1036,7 +1041,12 @@ function App(): React.JSX.Element {
       setAuthNotice({ tone: 'success', text: '注册成功，已自动登录。' })
       setView('board')
     } catch (error) {
-      setAuthNotice({ tone: 'danger', text: describeError(error, '注册失败。') })
+      const code = readErrorCode(error)
+      if (code === 'register_rate_limited') {
+        setAuthNotice({ tone: 'danger', text: '注册尝试过于频繁，请稍后再试。' })
+      } else {
+        setAuthNotice({ tone: 'danger', text: describeError(error, '注册失败。') })
+      }
     } finally {
       setAuthBusy(false)
     }
@@ -1156,7 +1166,12 @@ function App(): React.JSX.Element {
         await loadAdminChallengeDetail(selectedAdminChallenge)
       }
     } catch (error) {
-      setAdminChallengeNotice({ tone: 'danger', text: guardedError(error, '题目保存失败。') })
+      const code = readErrorCode(error)
+      if (code === 'admin_rate_limited') {
+        setAdminChallengeNotice({ tone: 'danger', text: '后台写操作过于频繁，请稍后再试。' })
+      } else {
+        setAdminChallengeNotice({ tone: 'danger', text: guardedError(error, '题目保存失败。') })
+      }
     } finally {
       setAdminChallengeSubmitting(false)
     }
@@ -1179,7 +1194,12 @@ function App(): React.JSX.Element {
       setAdminChallengeNotice({ tone: 'success', text: '附件上传完成。' })
       await loadAdminChallengeDetail(selectedAdminChallenge)
     } catch (error) {
-      setAdminChallengeNotice({ tone: 'danger', text: guardedError(error, '附件上传失败。') })
+      const code = readErrorCode(error)
+      if (code === 'admin_rate_limited') {
+        setAdminChallengeNotice({ tone: 'danger', text: '后台写操作过于频繁，请稍后再试。' })
+      } else {
+        setAdminChallengeNotice({ tone: 'danger', text: guardedError(error, '附件上传失败。') })
+      }
     } finally {
       setAttachmentUploading(false)
     }
@@ -1199,7 +1219,12 @@ function App(): React.JSX.Element {
       setAdminAnnouncementsNotice({ tone: 'success', text: '公告已写入。' })
       await Promise.all([loadAdminAnnouncements(), loadPublicData()])
     } catch (error) {
-      setAdminAnnouncementsNotice({ tone: 'danger', text: guardedError(error, '公告创建失败。') })
+      const code = readErrorCode(error)
+      if (code === 'admin_rate_limited') {
+        setAdminAnnouncementsNotice({ tone: 'danger', text: '后台写操作过于频繁，请稍后再试。' })
+      } else {
+        setAdminAnnouncementsNotice({ tone: 'danger', text: guardedError(error, '公告创建失败。') })
+      }
     } finally {
       setAnnouncementSubmitting(false)
     }
@@ -1217,7 +1242,12 @@ function App(): React.JSX.Element {
       setAdminAnnouncementsNotice({ tone: 'success', text: `公告 #${announcementId} 已移除。` })
       await Promise.all([loadAdminAnnouncements(), loadPublicData()])
     } catch (error) {
-      setAdminAnnouncementsNotice({ tone: 'danger', text: guardedError(error, '公告删除失败。') })
+      const code = readErrorCode(error)
+      if (code === 'admin_rate_limited') {
+        setAdminAnnouncementsNotice({ tone: 'danger', text: '后台写操作过于频繁，请稍后再试。' })
+      } else {
+        setAdminAnnouncementsNotice({ tone: 'danger', text: guardedError(error, '公告删除失败。') })
+      }
     } finally {
       setDeletingAnnouncementId(null)
     }
@@ -1235,7 +1265,12 @@ function App(): React.JSX.Element {
       setAdminInstancesNotice({ tone: 'success', text: `实例 #${instanceId} 已终止。` })
       await loadAdminInstances()
     } catch (error) {
-      setAdminInstancesNotice({ tone: 'danger', text: guardedError(error, '实例终止失败。') })
+      const code = readErrorCode(error)
+      if (code === 'admin_rate_limited') {
+        setAdminInstancesNotice({ tone: 'danger', text: '后台写操作过于频繁，请稍后再试。' })
+      } else {
+        setAdminInstancesNotice({ tone: 'danger', text: guardedError(error, '实例终止失败。') })
+      }
     } finally {
       setTerminatingInstanceId(null)
     }
@@ -1254,7 +1289,12 @@ function App(): React.JSX.Element {
       setAdminUsersNotice({ tone: 'success', text: '用户资料已更新。' })
       await loadAdminUsers()
     } catch (error) {
-      setAdminUsersNotice({ tone: 'danger', text: guardedError(error, '用户更新失败。') })
+      const code = readErrorCode(error)
+      if (code === 'admin_rate_limited') {
+        setAdminUsersNotice({ tone: 'danger', text: '后台写操作过于频繁，请稍后再试。' })
+      } else {
+        setAdminUsersNotice({ tone: 'danger', text: guardedError(error, '用户更新失败。') })
+      }
     } finally {
       setAdminUserSubmitting(false)
     }

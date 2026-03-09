@@ -33,6 +33,21 @@
 - `POST /api/v1/challenges/{challengeID}/instances/me/renew`
 - `POST /api/v1/challenges/{challengeID}/submissions`
 
+
+### 认证与提交限流错误语义
+
+以下接口在限流命中时会返回 `429 Too Many Requests`：
+
+- `POST /api/v1/auth/register` -> `register_rate_limited`
+- `POST /api/v1/auth/login` -> `login_rate_limited`
+- `POST /api/v1/challenges/{challengeID}/submissions` -> `submission_rate_limited`
+- 后台关键写接口 -> `admin_rate_limited`
+
+说明：
+
+- 当前默认使用 Redis 维护共享限流状态
+- 当 Redis 不可用时，服务会回退到进程内内存限流
+
 ### 动态实例错误语义
 
 动态实例相关接口在冲突场景下会返回 `409 Conflict`，并使用稳定错误码区分原因：

@@ -28,6 +28,17 @@ services:
       INSTANCE_SWEEPER_POLL_INTERVAL: 30s
       DOCKER_SOCKET_PATH: /var/run/docker.sock
       PUBLIC_BASE_URL: http://localhost:8080
+      REDIS_ADDR: redis:6379
+      REDIS_DB: 0
+      REDIS_KEY_PREFIX: ctf:
+      LOGIN_RATE_LIMIT_WINDOW_SECONDS: 60
+      LOGIN_RATE_LIMIT_MAX: 10
+      REGISTER_RATE_LIMIT_WINDOW_SECONDS: 300
+      REGISTER_RATE_LIMIT_MAX: 5
+      SUBMISSION_RATE_LIMIT_WINDOW_SECONDS: 60
+      SUBMISSION_RATE_LIMIT_MAX: 10
+      ADMIN_WRITE_RATE_LIMIT_WINDOW_SECONDS: 60
+      ADMIN_WRITE_RATE_LIMIT_MAX: 30
     volumes:
       - ..:/app
       - /var/run/docker.sock:/var/run/docker.sock

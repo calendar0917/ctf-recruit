@@ -21,6 +21,7 @@
 - `APP_ENV` 固定为 `development`
 - `JWT_SECRET` 使用开发占位值 `dev-only-insecure-jwt-secret`
 - 默认迁移不再自动创建管理员；如需本地默认账号，需要额外执行 `scripts/dev-seed.sh`
+- 限流默认走 Redis；若 `REDIS_ADDR` 为空会自动回退到进程内内存限流
 
 ## 生产骨架
 
@@ -40,6 +41,7 @@
 - API 运行在 `APP_ENV=production`
 - `JWT_SECRET`、`POSTGRES_PASSWORD`、`PUBLIC_BASE_URL` 必须显式提供
 - 附件目录持久化到 volume
+- 登录、注册、Flag 提交和后台关键写接口默认通过 Redis 做共享限流
 - 仍保留 Docker Socket 挂载给动态题运行时使用
 
 ## 生产初始化流程
@@ -50,6 +52,7 @@
 export POSTGRES_PASSWORD='replace-with-strong-db-password'
 export JWT_SECRET='replace-with-long-random-secret'
 export PUBLIC_BASE_URL='https://ctf.example.edu'
+export REDIS_PASSWORD=''
 ```
 
 2. 启动生产依赖和应用：
@@ -83,6 +86,35 @@ docker compose -f deploy/docker-compose.prod.yml exec -T \
 - `bootstrap-admin` 是一次性初始化入口，不应在日常运维流程中反复执行
 - 默认迁移不会再生成任何已知管理员口令
 - `scripts/dev-seed.sh` 只用于本地开发，不能进入生产流程
+
+## 限流配置
+
+当前已接入 Redis 共享限流的入口：
+
+- 登录
+- 注册
+- Flag 提交
+- 后台关键写接口
+
+当前可用环境变量：
+
+- `REDIS_ADDR`
+- `REDIS_PASSWORD`
+- `REDIS_DB`
+- `REDIS_KEY_PREFIX`
+- `LOGIN_RATE_LIMIT_WINDOW_SECONDS`
+- `LOGIN_RATE_LIMIT_MAX`
+- `REGISTER_RATE_LIMIT_WINDOW_SECONDS`
+- `REGISTER_RATE_LIMIT_MAX`
+- `SUBMISSION_RATE_LIMIT_WINDOW_SECONDS`
+- `SUBMISSION_RATE_LIMIT_MAX`
+- `ADMIN_WRITE_RATE_LIMIT_WINDOW_SECONDS`
+- `ADMIN_WRITE_RATE_LIMIT_MAX`
+
+说明：
+
+- 生产环境建议保持 `REDIS_ADDR` 指向 Compose 内的 `redis:6379` 或专用 Redis 实例
+- 若 Redis 不可用，API 会回退到进程内内存限流并记录日志，但这只适合作为临时降级手段
 
 ## 赛前彩排
 
