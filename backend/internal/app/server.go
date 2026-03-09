@@ -619,6 +619,10 @@ func (s *Server) handleAdminCreateChallenge(w http.ResponseWriter, r *http.Reque
 	}
 	challenge, err := s.admin.CreateChallenge(r.Context(), input)
 	if err != nil {
+		if admin.IsInvalidChallengeInput(err) {
+			httpx.WriteError(w, http.StatusBadRequest, "invalid_challenge_input", err.Error())
+			return
+		}
 		logError("admin.challenge.create.failed", map[string]any{"error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "create_failed", "failed to create challenge")
 		return
@@ -658,6 +662,10 @@ func (s *Server) handleAdminUpdateChallenge(w http.ResponseWriter, r *http.Reque
 	if err != nil {
 		if errors.Is(err, admin.ErrResourceNotFound) {
 			httpx.WriteError(w, http.StatusNotFound, "challenge_not_found", err.Error())
+			return
+		}
+		if admin.IsInvalidChallengeInput(err) {
+			httpx.WriteError(w, http.StatusBadRequest, "invalid_challenge_input", err.Error())
 			return
 		}
 		logError("admin.challenge.update.failed", map[string]any{"error": err.Error()})
@@ -1009,14 +1017,14 @@ func (s *Server) requirePermission(permission string, next http.Handler) http.Ha
 }
 
 type contestRequirement struct {
-	announcementsVisible  bool
-	challengeListVisible  bool
+	announcementsVisible   bool
+	challengeListVisible   bool
 	challengeDetailVisible bool
-	attachmentVisible     bool
-	scoreboardVisible     bool
-	submissionAllowed     bool
-	runtimeAllowed        bool
-	registrationAllowed   bool
+	attachmentVisible      bool
+	scoreboardVisible      bool
+	submissionAllowed      bool
+	runtimeAllowed         bool
+	registrationAllowed    bool
 }
 
 func (s *Server) requireContestPhase(w http.ResponseWriter, r *http.Request, requirement contestRequirement) (contest.Phase, bool) {

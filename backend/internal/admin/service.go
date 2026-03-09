@@ -2,12 +2,15 @@ package admin
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"ctf/backend/internal/game"
 )
 
 type Service struct {
@@ -34,10 +37,20 @@ func (s *Service) Challenge(ctx context.Context, challengeID int64) (ChallengeDe
 }
 
 func (s *Service) CreateChallenge(ctx context.Context, input UpsertChallengeInput) (ChallengeSummary, error) {
+	normalized, err := game.ValidateFlagTypeConfig(input.FlagType, input.FlagValue)
+	if err != nil {
+		return ChallengeSummary{}, fmt.Errorf("%w: %v", ErrInvalidChallengeInput, err)
+	}
+	input.FlagType = normalized
 	return s.repo.CreateChallenge(ctx, input)
 }
 
 func (s *Service) UpdateChallenge(ctx context.Context, challengeID int64, input UpsertChallengeInput) (ChallengeSummary, error) {
+	normalized, err := game.ValidateFlagTypeConfig(input.FlagType, input.FlagValue)
+	if err != nil {
+		return ChallengeSummary{}, fmt.Errorf("%w: %v", ErrInvalidChallengeInput, err)
+	}
+	input.FlagType = normalized
 	return s.repo.UpdateChallenge(ctx, challengeID, input)
 }
 
@@ -168,4 +181,11 @@ func sanitizeFilename(name string) string {
 		return "attachment.bin"
 	}
 	return name
+}
+
+func IsInvalidChallengeInput(err error) bool {
+	if errors.Is(err, ErrInvalidChallengeInput) {
+		return true
+	}
+	return errors.Is(err, game.ErrInvalidFlagStrategy)
 }

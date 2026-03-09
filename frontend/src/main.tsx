@@ -90,6 +90,7 @@ const views: Array<{ id: View; label: string; note: string }> = [
 
 const categoryOptions = ['web', 'pwn', 'misc', 'crypto', 'reverse']
 const difficultyOptions = ['easy', 'normal', 'hard']
+const flagTypeOptions = ['static', 'case_insensitive', 'regex']
 const boardDifficultyOptions: BoardDifficultyFilter[] = ['all', 'easy', 'normal', 'hard']
 const userRoleOptions = ['player', 'admin']
 const userStatusOptions = ['active', 'disabled']
@@ -2349,18 +2350,39 @@ function App(): React.JSX.Element {
                 </label>
                 <label className="field">
                   <span>判题类型</span>
-                  <input
+                  <select
                     onChange={(event) => setAdminChallengeDraft((current) => ({ ...current, flag_type: event.target.value }))}
                     value={adminChallengeDraft.flag_type}
-                  />
+                  >
+                    {flagTypeOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label className="field">
-                  <span>Flag</span>
+                  <span>{adminChallengeDraft.flag_type === 'regex' ? '正则模式' : 'Flag'}</span>
                   <input
                     onChange={(event) => setAdminChallengeDraft((current) => ({ ...current, flag_value: event.target.value }))}
+                    placeholder={adminChallengeDraft.flag_type === 'regex' ? '^flag\{welcome(-[0-9]{2})?\}$' : 'flag{welcome}'}
                     value={adminChallengeDraft.flag_value}
                   />
                 </label>
+                <div className="detail-list compact-list wide-field">
+                  <div className="detail-row">
+                    <span>static</span>
+                    <strong>严格区分大小写，全字符串相等</strong>
+                  </div>
+                  <div className="detail-row">
+                    <span>case_insensitive</span>
+                    <strong>忽略大小写，并会去掉首尾空白</strong>
+                  </div>
+                  <div className="detail-row">
+                    <span>regex</span>
+                    <strong>按 Go 正则表达式匹配提交内容</strong>
+                  </div>
+                </div>
                 <label className="toggle-field">
                   <input
                     checked={adminChallengeDraft.visible}

@@ -943,6 +943,34 @@ func TestAdminUpdateChallengePersistsRuntimeConfigPayload(t *testing.T) {
 	}
 }
 
+func TestAdminCreateChallengeRejectsInvalidFlagType(t *testing.T) {
+	server, _ := newTestServer(t)
+	adminToken := issueAdminToken(t, server)
+	body := []byte(`{"slug":"regex-demo","title":"Regex Demo","category_slug":"web","description":"demo","points":100,"difficulty":"easy","flag_type":"script","flag_value":"flag{demo}","dynamic_enabled":false,"visible":true,"sort_order":10}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/challenges", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	res := httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", res.Code)
+	}
+	assertAPIErrorCode(t, res.Body.Bytes(), "invalid_challenge_input")
+}
+
+func TestAdminUpdateChallengeRejectsInvalidRegexFlagType(t *testing.T) {
+	server, _ := newTestServer(t)
+	adminToken := issueAdminToken(t, server)
+	body := []byte(`{"slug":"web-welcome","title":"Welcome Panel","category_slug":"web","description":"updated","points":100,"difficulty":"easy","flag_type":"regex","flag_value":"^(broken$","dynamic_enabled":true,"visible":true,"sort_order":10}`)
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/admin/challenges/1", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	res := httptest.NewRecorder()
+	server.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", res.Code)
+	}
+	assertAPIErrorCode(t, res.Body.Bytes(), "invalid_challenge_input")
+}
+
 func TestAdminWriteRateLimitEndpoint(t *testing.T) {
 	server, _ := newTestServer(t)
 	adminToken := issueAdminToken(t, server)

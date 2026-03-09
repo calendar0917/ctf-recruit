@@ -8,12 +8,16 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"ctf/backend/internal/game"
 )
 
 type fakeRepo struct {
-	users     []UserRecord
-	auditLogs []AuditLogRecord
-	instances []InstanceRecord
+	users                 []UserRecord
+	auditLogs             []AuditLogRecord
+	instances             []InstanceRecord
+	createdChallengeInput UpsertChallengeInput
+	updatedChallengeInput UpsertChallengeInput
 }
 
 type fakeManager struct {
@@ -35,11 +39,13 @@ func (r *fakeRepo) ListChallenges(context.Context) ([]ChallengeSummary, error) {
 func (r *fakeRepo) GetChallenge(context.Context, int64) (ChallengeDetail, error) {
 	return ChallengeDetail{ID: 1, Slug: "web-welcome", RuntimeConfig: RuntimeConfig{Enabled: true, ImageName: "ctf/web-welcome:dev"}}, nil
 }
-func (r *fakeRepo) CreateChallenge(context.Context, UpsertChallengeInput) (ChallengeSummary, error) {
-	return ChallengeSummary{ID: 2, Slug: "new-challenge"}, nil
+func (r *fakeRepo) CreateChallenge(_ context.Context, input UpsertChallengeInput) (ChallengeSummary, error) {
+	r.createdChallengeInput = input
+	return ChallengeSummary{ID: 2, Slug: input.Slug}, nil
 }
-func (r *fakeRepo) UpdateChallenge(context.Context, int64, UpsertChallengeInput) (ChallengeSummary, error) {
-	return ChallengeSummary{ID: 1, Slug: "web-welcome"}, nil
+func (r *fakeRepo) UpdateChallenge(_ context.Context, _ int64, input UpsertChallengeInput) (ChallengeSummary, error) {
+	r.updatedChallengeInput = input
+	return ChallengeSummary{ID: 1, Slug: input.Slug}, nil
 }
 func (r *fakeRepo) CreateAttachment(_ context.Context, _ int64, filename, _, contentType string, sizeBytes int64) (Attachment, error) {
 	return Attachment{ID: 1, Filename: filename, ContentType: contentType, SizeBytes: sizeBytes}, nil
@@ -105,6 +111,43 @@ func TestChallenge(t *testing.T) {
 	}
 	if challenge.RuntimeConfig.ImageName != "ctf/web-welcome:dev" {
 		t.Fatalf("unexpected challenge: %+v", challenge)
+	}
+}
+
+func TestCreateChallengeNormalizesSupportedFlagType(t *testing.T) {
+	repo := &fakeRepo{}
+	service := NewService(repo, t.TempDir())
+
+	_, err := service.CreateChallenge(context.Background(), UpsertChallengeInput{
+		Slug:         "welcome",
+		Title:        "Welcome",
+		CategorySlug: "web",
+		Difficulty:   "easy",
+		FlagType:     " CASE_INSENSITIVE ",
+		FlagValue:    "Flag{Welcome}",
+	})
+	if err != nil {
+		t.Fatalf("create challenge: %v", err)
+	}
+	if repo.createdChallengeInput.FlagType != game.FlagTypeCaseInsensitive {
+		t.Fatalf("expected normalized flag type, got %q", repo.createdChallengeInput.FlagType)
+	}
+}
+
+func TestCreateChallengeRejectsInvalidRegexFlagType(t *testing.T) {
+	repo := &fakeRepo{}
+	service := NewService(repo, t.TempDir())
+
+	_, err := service.CreateChallenge(context.Background(), UpsertChallengeInput{
+		Slug:         "welcome",
+		Title:        "Welcome",
+		CategorySlug: "web",
+		Difficulty:   "easy",
+		FlagType:     game.FlagTypeRegex,
+		FlagValue:    "^(broken$",
+	})
+	if !errors.Is(err, ErrInvalidChallengeInput) {
+		t.Fatalf("expected invalid challenge input, got %v", err)
 	}
 }
 

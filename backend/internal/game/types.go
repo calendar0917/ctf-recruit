@@ -7,8 +7,15 @@ import (
 )
 
 var (
-	ErrChallengeNotFound  = errors.New("challenge not found")
-	ErrAttachmentNotFound = errors.New("challenge attachment not found")
+	ErrChallengeNotFound   = errors.New("challenge not found")
+	ErrAttachmentNotFound  = errors.New("challenge attachment not found")
+	ErrInvalidFlagStrategy = errors.New("invalid flag strategy")
+)
+
+const (
+	FlagTypeStatic          = "static"
+	FlagTypeCaseInsensitive = "case_insensitive"
+	FlagTypeRegex           = "regex"
 )
 
 type Announcement struct {
@@ -34,6 +41,7 @@ type Challenge struct {
 	Points      int          `json:"points"`
 	Difficulty  string       `json:"difficulty"`
 	Description string       `json:"description"`
+	FlagType    string       `json:"flag_type,omitempty"`
 	Dynamic     bool         `json:"dynamic"`
 	Attachments []Attachment `json:"attachments"`
 }
@@ -70,13 +78,13 @@ type SubmitResult struct {
 }
 
 type ScoreboardSolve struct {
-	ChallengeID    int64      `json:"challenge_id"`
-	ChallengeSlug  string     `json:"challenge_slug"`
-	ChallengeTitle string     `json:"challenge_title"`
-	Category       string     `json:"category"`
-	Difficulty     string     `json:"difficulty"`
-	AwardedPoints  int        `json:"awarded_points"`
-	SolvedAt       time.Time  `json:"solved_at"`
+	ChallengeID    int64     `json:"challenge_id"`
+	ChallengeSlug  string    `json:"challenge_slug"`
+	ChallengeTitle string    `json:"challenge_title"`
+	Category       string    `json:"category"`
+	Difficulty     string    `json:"difficulty"`
+	AwardedPoints  int       `json:"awarded_points"`
+	SolvedAt       time.Time `json:"solved_at"`
 }
 
 type ScoreboardEntry struct {

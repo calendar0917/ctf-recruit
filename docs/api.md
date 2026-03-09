@@ -109,10 +109,11 @@
 - `GET /api/v1/me` 返回当前登录用户信息
 - `GET /api/v1/challenges/{challengeID}` 返回题目详情与附件元数据
 - `POST /api/v1/challenges/{challengeID}/submissions` 返回提交结果、是否首次解题和得分
+- 当前 `flag_type` 已支持 `static`、`case_insensitive`、`regex` 三种判题策略
 - 动态实例接口返回实例状态、访问地址和过期时间
 - 管理接口当前已覆盖题目、附件、公告、提交记录、实例、用户和审计日志的基础能力
 
 ## 后续计划中但尚未完成的能力
 
 - 更细粒度的权限模型
-- 与 `flag_type` 对应的更丰富判题接口语义
+- 超出 `static`、`case_insensitive`、`regex` 的更复杂判题语义

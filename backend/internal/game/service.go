@@ -1,6 +1,11 @@
 package game
 
-import "context"
+import (
+	"context"
+	"fmt"
+	"regexp"
+	"strings"
+)
 
 type Service struct {
 	repo Repository
@@ -37,7 +42,10 @@ func (s *Service) SubmitFlag(ctx context.Context, userID int64, challengeRef, su
 		return SubmitResult{}, err
 	}
 
-	correct := submittedFlag == flagValue
+	correct, err := evaluateFlag(challenge.FlagType, flagValue, submittedFlag)
+	if err != nil {
+		return SubmitResult{}, err
+	}
 	submissionID, _, err := s.repo.CreateSubmission(ctx, challenge.ID, userID, submittedFlag, correct, sourceIP)
 	if err != nil {
 		return SubmitResult{}, err
@@ -82,4 +90,57 @@ func (s *Service) Scoreboard(ctx context.Context) ([]ScoreboardEntry, error) {
 		entries[i].Rank = i + 1
 	}
 	return entries, nil
+}
+
+func ValidateFlagTypeConfig(flagType, expected string) (string, error) {
+	normalized := normalizeFlagType(flagType)
+	switch normalized {
+	case FlagTypeStatic, FlagTypeCaseInsensitive:
+		return normalized, nil
+	case FlagTypeRegex:
+		if _, err := compileFlagRegex(expected); err != nil {
+			return "", err
+		}
+		return normalized, nil
+	default:
+		return "", fmt.Errorf("%w: unsupported flag_type %q", ErrInvalidFlagStrategy, flagType)
+	}
+}
+
+func evaluateFlag(flagType, expected, submitted string) (bool, error) {
+	normalized, err := ValidateFlagTypeConfig(flagType, expected)
+	if err != nil {
+		return false, err
+	}
+
+	switch normalized {
+	case FlagTypeStatic:
+		return submitted == expected, nil
+	case FlagTypeCaseInsensitive:
+		return strings.EqualFold(strings.TrimSpace(submitted), strings.TrimSpace(expected)), nil
+	case FlagTypeRegex:
+		re, err := compileFlagRegex(expected)
+		if err != nil {
+			return false, err
+		}
+		return re.MatchString(submitted), nil
+	default:
+		return false, fmt.Errorf("%w: unsupported flag_type %q", ErrInvalidFlagStrategy, flagType)
+	}
+}
+
+func normalizeFlagType(value string) string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	if normalized == "" {
+		return FlagTypeStatic
+	}
+	return normalized
+}
+
+func compileFlagRegex(pattern string) (*regexp.Regexp, error) {
+	re, err := regexp.Compile(strings.TrimSpace(pattern))
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid regex pattern", ErrInvalidFlagStrategy)
+	}
+	return re, nil
 }

@@ -2,21 +2,22 @@ package game
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 )
 
 type fakeRepo struct {
-	challenge          Challenge
-	flag               string
-	solved             bool
-	announcements      []Announcement
-	submissions        []UserSubmission
-	solves             []UserSolve
-	scoreboard         []ScoreboardEntry
-	attachment         Attachment
-	attachmentPath     string
-	attachmentVisible  bool
+	challenge         Challenge
+	flag              string
+	solved            bool
+	announcements     []Announcement
+	submissions       []UserSubmission
+	solves            []UserSolve
+	scoreboard        []ScoreboardEntry
+	attachment        Attachment
+	attachmentPath    string
+	attachmentVisible bool
 }
 
 func (r *fakeRepo) ListAnnouncements(context.Context) ([]Announcement, error) {
@@ -67,7 +68,7 @@ func (r *fakeRepo) ListScoreboard(context.Context) ([]ScoreboardEntry, error) {
 
 func TestSubmitFlagCreatesSolveOnFirstCorrectSubmission(t *testing.T) {
 	service := NewService(&fakeRepo{
-		challenge: Challenge{ID: 1, Slug: "web-welcome", Points: 100},
+		challenge: Challenge{ID: 1, Slug: "web-welcome", Points: 100, FlagType: FlagTypeStatic},
 		flag:      "flag{welcome}",
 	})
 
@@ -82,7 +83,7 @@ func TestSubmitFlagCreatesSolveOnFirstCorrectSubmission(t *testing.T) {
 
 func TestSubmitFlagReturnsIncorrectForWrongFlag(t *testing.T) {
 	service := NewService(&fakeRepo{
-		challenge: Challenge{ID: 1, Slug: "web-welcome", Points: 100},
+		challenge: Challenge{ID: 1, Slug: "web-welcome", Points: 100, FlagType: FlagTypeStatic},
 		flag:      "flag{welcome}",
 	})
 
@@ -92,6 +93,60 @@ func TestSubmitFlagReturnsIncorrectForWrongFlag(t *testing.T) {
 	}
 	if result.Correct || result.Solved {
 		t.Fatalf("unexpected result: %+v", result)
+	}
+}
+
+func TestSubmitFlagSupportsCaseInsensitiveStrategy(t *testing.T) {
+	service := NewService(&fakeRepo{
+		challenge: Challenge{ID: 1, Slug: "web-welcome", Points: 100, FlagType: FlagTypeCaseInsensitive},
+		flag:      "Flag{WelCome}",
+	})
+
+	result, err := service.SubmitFlag(context.Background(), 7, "web-welcome", "flag{welcome}", "127.0.0.1")
+	if err != nil {
+		t.Fatalf("submit flag: %v", err)
+	}
+	if !result.Correct {
+		t.Fatalf("expected case insensitive flag to match, got %+v", result)
+	}
+}
+
+func TestSubmitFlagSupportsRegexStrategy(t *testing.T) {
+	service := NewService(&fakeRepo{
+		challenge: Challenge{ID: 1, Slug: "web-welcome", Points: 100, FlagType: FlagTypeRegex},
+		flag:      `^flag\{welcome(-[0-9]{2})?\}$`,
+	})
+
+	result, err := service.SubmitFlag(context.Background(), 7, "web-welcome", "flag{welcome-42}", "127.0.0.1")
+	if err != nil {
+		t.Fatalf("submit flag: %v", err)
+	}
+	if !result.Correct {
+		t.Fatalf("expected regex flag to match, got %+v", result)
+	}
+}
+
+func TestSubmitFlagRejectsInvalidRegexStrategy(t *testing.T) {
+	service := NewService(&fakeRepo{
+		challenge: Challenge{ID: 1, Slug: "web-welcome", Points: 100, FlagType: FlagTypeRegex},
+		flag:      `^(broken$`,
+	})
+
+	_, err := service.SubmitFlag(context.Background(), 7, "web-welcome", "flag{welcome}", "127.0.0.1")
+	if !errors.Is(err, ErrInvalidFlagStrategy) {
+		t.Fatalf("expected invalid flag strategy error, got %v", err)
+	}
+}
+
+func TestSubmitFlagRejectsUnknownFlagStrategy(t *testing.T) {
+	service := NewService(&fakeRepo{
+		challenge: Challenge{ID: 1, Slug: "web-welcome", Points: 100, FlagType: "script"},
+		flag:      "flag{welcome}",
+	})
+
+	_, err := service.SubmitFlag(context.Background(), 7, "web-welcome", "flag{welcome}", "127.0.0.1")
+	if !errors.Is(err, ErrInvalidFlagStrategy) {
+		t.Fatalf("expected invalid flag strategy error, got %v", err)
 	}
 }
 

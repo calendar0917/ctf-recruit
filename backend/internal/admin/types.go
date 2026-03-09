@@ -7,7 +7,10 @@ import (
 	"time"
 )
 
-var ErrResourceNotFound = errors.New("resource not found")
+var (
+	ErrResourceNotFound      = errors.New("resource not found")
+	ErrInvalidChallengeInput = errors.New("invalid challenge input")
+)
 
 type RuntimeConfig struct {
 	Enabled            bool              `json:"enabled"`
