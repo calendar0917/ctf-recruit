@@ -38,7 +38,6 @@ type Notice = {
 }
 
 type BoardDifficultyFilter = 'all' | 'easy' | 'normal' | 'hard'
-type BoardSortMode = 'recommended' | 'difficulty' | 'points-asc' | 'points-desc' | 'title'
 type AdminChallengeStatusFilter = 'all' | 'draft' | 'review' | 'ready' | 'published'
 
 type AdminChallengeDraft = {
@@ -82,12 +81,12 @@ type AppError = Error & {
 
 const TOKEN_STORAGE_KEY = 'ctf.frontend.token'
 
-const views: Array<{ id: View; label: string; note: string }> = [
-  { id: 'briefing', label: '总览', note: 'Overview' },
-  { id: 'board', label: '题目', note: 'Challenges' },
-  { id: 'runtime', label: '实例', note: 'Runtime' },
-  { id: 'scoreboard', label: '排行榜', note: 'Scoreboard' },
-  { id: 'admin', label: '管理', note: 'Admin' },
+const views: Array<{ id: View; label: string }> = [
+  { id: 'briefing', label: '总览' },
+  { id: 'board', label: '题目' },
+  { id: 'runtime', label: '实例' },
+  { id: 'scoreboard', label: '排行榜' },
+  { id: 'admin', label: '管理' },
 ]
 
 const categoryOptions = ['web', 'pwn', 'misc', 'crypto', 'reverse']
@@ -455,7 +454,6 @@ function App(): React.JSX.Element {
 
   const [challengeSearch, setChallengeSearch] = useState('')
   const [boardDifficultyFilter, setBoardDifficultyFilter] = useState<BoardDifficultyFilter>('all')
-  const [boardSortMode, setBoardSortMode] = useState<BoardSortMode>('recommended')
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({})
   const [selectedChallengeId, setSelectedChallengeId] = useState('')
   const [challengeDetail, setChallengeDetail] = useState<PublicChallengeDetail | null>(null)
@@ -1105,21 +1103,9 @@ function App(): React.JSX.Element {
       return true
     })
 
-    const sortedItems = [...visibleItems].sort((left, right) => {
-      if (boardSortMode === 'difficulty') {
-        return getDifficultyRank(left.difficulty) - getDifficultyRank(right.difficulty) || left.points - right.points || left.title.localeCompare(right.title)
-      }
-      if (boardSortMode === 'points-asc') {
-        return left.points - right.points || getDifficultyRank(left.difficulty) - getDifficultyRank(right.difficulty) || left.title.localeCompare(right.title)
-      }
-      if (boardSortMode === 'points-desc') {
-        return right.points - left.points || getDifficultyRank(left.difficulty) - getDifficultyRank(right.difficulty) || left.title.localeCompare(right.title)
-      }
-      if (boardSortMode === 'title') {
-        return left.title.localeCompare(right.title)
-      }
-      return left.points - right.points || getDifficultyRank(left.difficulty) - getDifficultyRank(right.difficulty) || left.title.localeCompare(right.title)
-    })
+    const sortedItems = [...visibleItems].sort((left, right) =>
+      left.points - right.points || getDifficultyRank(left.difficulty) - getDifficultyRank(right.difficulty) || left.title.localeCompare(right.title),
+    )
 
     for (const item of sortedItems) {
       const current = groups.get(item.category) ?? []
@@ -1127,9 +1113,11 @@ function App(): React.JSX.Element {
       groups.set(item.category, current)
     }
     return Array.from(groups.entries()).map(([category, items]) => ({ category, items }))
-  }, [boardDifficultyFilter, boardSortMode, challengeList, challengeSearch])
+  }, [boardDifficultyFilter, challengeList, challengeSearch])
 
   const totalScore = useMemo(() => mySolves.reduce((sum, item) => sum + item.awarded_points, 0), [mySolves])
+
+  const recentSolvedChallengeIds = useMemo(() => mySolves.slice(0, 4).map((item) => String(item.challenge_id)), [mySolves])
 
   const selectedChallengeSolve = useMemo(
     () => mySolves.find((item) => String(item.challenge_id) === selectedChallengeId) ?? null,
@@ -1837,7 +1825,7 @@ function App(): React.JSX.Element {
           </div>
         </section>
 
-        <div className="board-shell focused-board-shell page-enter page-enter-2">
+        <div className="board-shell player-board-shell page-enter page-enter-2">
           <Panel eyebrow="题目列表" title="先选题，再进入题面" subtitle="仅保留检索和难度筛选。" className="rail-panel challenge-rail-panel player-side-panel">
             <div className="board-list-toolbar">
               <label className="field compact-field board-search-field">
@@ -1864,6 +1852,25 @@ function App(): React.JSX.Element {
                 <span>{visibleBoardChallengeCount} 题</span>
                 <span>{boardDifficultyFilter === 'all' ? '全部难度' : formatDifficultyLabel(boardDifficultyFilter)}</span>
               </div>
+
+              {authUser && recentSolvedChallengeIds.length > 0 ? (
+                <div className="recent-progress-strip">
+                  <span>最近解出</span>
+                  <div className="badge-row wrap-actions">
+                    {recentSolvedChallengeIds.map((challengeId) => {
+                      const challenge = challengeList.find((item) => item.id === challengeId)
+                      if (!challenge) {
+                        return null
+                      }
+                      return (
+                        <button className="badge recent-progress-badge" key={challenge.id} onClick={() => setSelectedChallengeId(challenge.id)} type="button">
+                          {challenge.title}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             <div className="accordion-stack board-accordion-stack">
@@ -1891,7 +1898,7 @@ function App(): React.JSX.Element {
                     <div className="challenge-card-list">
                       {group.items.map((item) => (
                         <button
-                          className={selectedChallengeId === item.id ? `challenge-card difficulty-${item.difficulty} active` : `challenge-card difficulty-${item.difficulty}`}
+                          className={selectedChallengeId === item.id ? `challenge-card challenge-card-player difficulty-${item.difficulty} active` : `challenge-card challenge-card-player difficulty-${item.difficulty}`}
                           key={item.id}
                           onClick={() => setSelectedChallengeId(item.id)}
                           type="button"
@@ -1899,6 +1906,10 @@ function App(): React.JSX.Element {
                           <div className="challenge-card-head">
                             <strong>{item.title}</strong>
                             <span>{item.points} pts</span>
+                          </div>
+                          <div className="challenge-card-subline">
+                            <span>{item.category}</span>
+                            <small>{selectedChallengeId === item.id ? '当前题目' : solvedChallengeIds.has(item.id) ? '已完成' : '可开始'}</small>
                           </div>
                           <div className="badge-row board-badge-row">
                             <span className={`badge difficulty-pill difficulty-${item.difficulty}`}>{formatDifficultyLabel(item.difficulty)}</span>
@@ -1915,7 +1926,7 @@ function App(): React.JSX.Element {
             </div>
           </Panel>
 
-          <div className="board-main-column focused-main-column">
+          <div className="board-main-column player-board-column">
             <Panel
               key={selectedChallengeId || 'empty'}
               eyebrow="题面"
@@ -1941,7 +1952,7 @@ function App(): React.JSX.Element {
               {!challengeDetailLoading && !challengeDetail ? <div className="empty-state">从左侧选择一题进入题目详情。</div> : null}
               {!challengeDetailLoading && challengeDetail ? (
                 <div className="detail-stack board-main-stack">
-                  <div className="challenge-meta-grid focused-meta-grid">
+                  <div className="challenge-meta-grid player-meta-grid">
                     <div className="meta-chip">
                       <span>分类</span>
                       <strong>{challengeDetail.category}</strong>
@@ -1960,7 +1971,7 @@ function App(): React.JSX.Element {
                     </div>
                   </div>
 
-                  <article className="statement-card statement-card-feature statement-card-focused">
+                  <article className="statement-card statement-card-feature player-statement-card">
                     <div className="statement-topline">
                       <div>
                         <span className="section-tag">题面</span>
@@ -1999,11 +2010,11 @@ function App(): React.JSX.Element {
               ) : null}
             </Panel>
 
-            <div className={showBoardRuntimePanel ? 'board-action-grid focused-action-grid' : 'board-action-grid single-action-grid'}>
-              <Panel eyebrow="提交" title="直接提交 Flag" subtitle="把当前题目的输入、反馈和结果放在同一个区块中。" className="primary-action-panel focused-primary-action-panel">
+            <div className={showBoardRuntimePanel ? 'board-action-grid player-action-grid' : 'board-action-grid single-action-grid'}>
+              <Panel eyebrow="提交" title="直接提交 Flag" subtitle="把当前题目的输入、反馈和结果放在同一个区块中。" className="primary-action-panel player-primary-action-panel">
                 <NoticeBanner notice={submitNotice} />
                 <div className="primary-action-layout">
-                  <div className="primary-action-intro">
+                  <div className="primary-action-intro player-action-intro">
                     <div className="primary-action-copy">
                       <span className="section-tag">当前题目</span>
                       <h3>{selectedChallengeSummary?.title ?? '尚未选择题目'}</h3>
@@ -2027,7 +2038,7 @@ function App(): React.JSX.Element {
                       <label className="field">
                         <span>Flag</span>
                         <input
-                          id="flag-input"
+                          id="flag-input" inputMode="text" autoCapitalize="none" autoCorrect="off" spellCheck={false}
                           onChange={(event) => setFlagInput(event.target.value)}
                           placeholder="flag{...}"
                           value={flagInput}
@@ -2193,6 +2204,17 @@ function App(): React.JSX.Element {
                 <div className="empty-state">从左侧选择动态题后，可以在这里启动、续期或回收实例。</div>
               ) : (
                 <div className="runtime-focus-stack">
+                  <div className="runtime-context-card">
+                    <div>
+                      <span className="section-tag">关联题目</span>
+                      <h3>{selectedChallengeSummary.title}</h3>
+                      <p className="hint-text">题面、附件和提交通道仍保留在题目页，实例页只负责环境操作。</p>
+                    </div>
+                    <button className="ghost-button" onClick={() => setView('board')} type="button">
+                      返回当前题目
+                    </button>
+                  </div>
+
                   <div className="runtime-metrics-grid runtime-status-grid">
                     <div className="runtime-metric">
                       <span>状态</span>
@@ -2332,13 +2354,14 @@ function App(): React.JSX.Element {
 
               {scoreboard.map((item) => {
                 const expanded = Boolean(expandedRanks[item.user_id])
+                const isCurrentUser = authUser?.id === item.user_id
                 return (
-                  <div className={expanded ? 'scoreboard-table-entry expanded' : 'scoreboard-table-entry'} key={item.user_id}>
+                  <div className={expanded ? (isCurrentUser ? 'scoreboard-table-entry expanded current-user' : 'scoreboard-table-entry expanded') : isCurrentUser ? 'scoreboard-table-entry current-user' : 'scoreboard-table-entry'} key={item.user_id}>
                     <div className="scoreboard-table-row">
                       <strong className="scoreboard-rank-cell">#{item.rank}</strong>
                       <div className="scoreboard-player-cell">
                         <strong>{item.display_name || item.username}</strong>
-                        <small>@{item.username}</small>
+                        <small>{isCurrentUser ? '@' + item.username + ' · 我' : '@' + item.username}</small>
                       </div>
                       <div className="scoreboard-value-cell">
                         <strong>{item.score}</strong>
@@ -2369,11 +2392,11 @@ function App(): React.JSX.Element {
                                 <strong>{solve.challenge_title}</strong>
                                 <span>{solve.challenge_slug}</span>
                               </div>
-                              <div className="badge-row wrap-actions">
-                                <span className="badge">{solve.category}</span>
-                                <span className={`badge difficulty-${solve.difficulty}`}>{formatDifficultyLabel(solve.difficulty)}</span>
-                                <span className="badge">{solve.awarded_points} pts</span>
-                                <span className="badge">{formatDateTime(solve.solved_at)}</span>
+                              <div className="scoreboard-solve-meta">
+                                <span>{solve.category}</span>
+                                <span>{formatDifficultyLabel(solve.difficulty)}</span>
+                                <span>{solve.awarded_points} pts</span>
+                                <span>{formatDateTime(solve.solved_at)}</span>
                               </div>
                             </div>
                           ))
