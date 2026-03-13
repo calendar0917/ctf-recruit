@@ -35,8 +35,15 @@ func (m *testManager) Start(_ context.Context, req runtime.StartRequest) (runtim
 		ContainerID:   "test-container",
 		ContainerName: "test-name",
 		HostIP:        "127.0.0.1",
-		HostPort:      18081,
+		HostPort:      defaultedTestPort(req.HostPort, 18081),
 	}, nil
+}
+
+func defaultedTestPort(value int, fallback int) int {
+	if value > 0 {
+		return value
+	}
+	return fallback
 }
 
 func (m *testManager) Stop(_ context.Context, containerID string) error {
@@ -272,7 +279,7 @@ func newTestServer(t *testing.T) (*Server, *testRuntimeRepo) {
 	adminService := admin.NewServiceWithManager(adminRepo, cfg.AttachmentStorageDir, manager)
 	contestService := contest.NewService(contestRepo)
 	gameService := game.NewService(gameRepo)
-	runtimeService := runtime.NewService("http://localhost:8080", manager, runtimeRepo)
+	runtimeService := runtime.NewService(runtime.ServiceConfig{PublicBaseURL: "http://localhost:8080", RuntimeBaseURL: "http://localhost:8080", PortMin: 20000, PortMax: 20010}, manager, runtimeRepo)
 	server := NewServerForTests(cfg, adminService, authService, contestService, gameService, runtimeService)
 	if limiter, ok := server.limiters.Submission.(*memoryRateLimiter); ok {
 		limiter.now = func() time.Time { return now }
@@ -374,6 +381,13 @@ func (r *testRuntimeRepo) ListActiveInstances(context.Context) ([]runtime.Instan
 		return nil, nil
 	}
 	return []runtime.InstanceRecord{*r.instance}, nil
+}
+
+func (r *testRuntimeRepo) ListActiveHostPorts(context.Context) ([]int, error) {
+	if r.instance == nil {
+		return nil, nil
+	}
+	return []int{r.instance.Instance.HostPort}, nil
 }
 
 func (r *testUserRepo) CreateUser(_ context.Context, params auth.CreateUserParams) (auth.User, error) {
@@ -839,6 +853,16 @@ func TestRegisterRateLimitEndpoint(t *testing.T) {
 		t.Fatalf("expected 429, got %d", secondRes.Code)
 	}
 	assertAPIErrorCode(t, secondRes.Body.Bytes(), "register_rate_limited")
+}
+
+func TestRequestSourceIPPrefersRealIPHeader(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
+	r.RemoteAddr = "127.0.0.1:1234"
+	r.Header.Set("X-Real-IP", "203.0.113.7")
+	r.Header.Set("X-Forwarded-For", "8.8.8.8")
+	if got := requestSourceIP(r); got != "203.0.113.7" {
+		t.Fatalf("expected X-Real-IP to be used, got %q", got)
+	}
 }
 
 func TestLoginRateLimitEndpoint(t *testing.T) {

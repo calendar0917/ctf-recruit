@@ -60,12 +60,18 @@ func NewServer(cfg config.Config) (*Server, error) {
 	metrics := newMetricsRegistry()
 
 	return &Server{
-		cfg:      cfg,
-		admin:    admin.NewServiceWithManager(adminRepo, cfg.AttachmentStorageDir, manager),
-		auth:     auth.NewService(userRepo, tokens),
-		contest:  contest.NewService(contestRepo),
-		game:     game.NewService(gameRepo),
-		runtime:  runtime.NewService(cfg.PublicBaseURL, manager, runtimeRepo),
+		cfg:     cfg,
+		admin:   admin.NewServiceWithManager(adminRepo, cfg.AttachmentStorageDir, manager),
+		auth:    auth.NewService(userRepo, tokens),
+		contest: contest.NewService(contestRepo),
+		game:    game.NewService(gameRepo),
+		runtime: runtime.NewService(runtime.ServiceConfig{
+			PublicBaseURL:  cfg.PublicBaseURL,
+			RuntimeBaseURL: cfg.RuntimePublicBaseURL,
+			BindAddr:       cfg.RuntimeBindAddr,
+			PortMin:        cfg.RuntimePortMin,
+			PortMax:        cfg.RuntimePortMax,
+		}, manager, runtimeRepo),
 		limiters: limiters,
 		metrics:  metrics,
 		db:       db,
@@ -1078,6 +1084,8 @@ func (s *Server) writeRuntimeError(w http.ResponseWriter, err error) {
 		httpx.WriteError(w, http.StatusConflict, "instance_capacity_reached", err.Error())
 	case errors.Is(err, runtime.ErrInstanceCooldownActive):
 		httpx.WriteError(w, http.StatusConflict, "instance_cooldown_active", err.Error())
+	case errors.Is(err, runtime.ErrInstancePortExhausted):
+		httpx.WriteError(w, http.StatusConflict, "instance_port_exhausted", "no available instance ports")
 	default:
 		logError("runtime.error", map[string]any{"error": err.Error()})
 		httpx.WriteError(w, http.StatusBadGateway, "runtime_error", fmt.Sprintf("%v", err))
@@ -1290,10 +1298,9 @@ func adminActorFromContext(ctx context.Context) (admin.Actor, bool) {
 }
 
 func requestSourceIP(r *http.Request) string {
-	if forwarded := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); forwarded != "" {
-		parts := strings.Split(forwarded, ",")
-		if len(parts) > 0 {
-			return strings.TrimSpace(parts[0])
+	if realIP := strings.TrimSpace(r.Header.Get("X-Real-IP")); realIP != "" {
+		if parsed := net.ParseIP(realIP); parsed != nil {
+			return parsed.String()
 		}
 	}
 	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))

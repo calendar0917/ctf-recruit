@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"ctf/backend/internal/runtime"
@@ -49,7 +51,14 @@ ORDER BY c.id ASC
 }
 
 func (r *RuntimeRepository) GetChallengeConfig(ctx context.Context, challengeRef string) (runtime.RuntimeConfigRecord, error) {
-	const query = `
+	// Treat all-digit refs as IDs first to avoid ambiguity when slugs are numeric.
+	var (
+		query string
+		arg   any = challengeRef
+	)
+	if strings.TrimSpace(challengeRef) != "" && strings.IndexFunc(challengeRef, func(r rune) bool { return r < '0' || r > '9' }) == -1 {
+		if id, err := strconv.ParseInt(challengeRef, 10, 64); err == nil {
+			query = `
 SELECT
     c.id,
     c.slug,
@@ -72,9 +81,40 @@ SELECT
 FROM challenges c
 JOIN categories cat ON cat.id = c.category_id
 LEFT JOIN challenge_runtime_configs rc ON rc.challenge_id = c.id AND rc.enabled = TRUE
-WHERE c.status = 'published' AND (c.id::text = $1 OR lower(c.slug) = lower($1))
+WHERE c.status = 'published' AND c.id = $1
 LIMIT 1
 `
+			arg = id
+		}
+	}
+	if query == "" {
+		query = `
+SELECT
+    c.id,
+    c.slug,
+    c.title,
+    cat.slug,
+    c.points,
+    c.dynamic_enabled,
+    rc.id,
+    rc.image_name,
+    rc.exposed_protocol,
+    rc.container_port,
+    rc.default_ttl_seconds,
+    rc.max_renew_count,
+    rc.memory_limit_mb,
+    rc.cpu_limit_millicores,
+    rc.max_active_instances,
+    rc.user_cooldown_seconds,
+    COALESCE(rc.env_json, '{}'::jsonb),
+    COALESCE(rc.command_json, '[]'::jsonb)
+FROM challenges c
+JOIN categories cat ON cat.id = c.category_id
+LEFT JOIN challenge_runtime_configs rc ON rc.challenge_id = c.id AND rc.enabled = TRUE
+WHERE c.status = 'published' AND lower(c.slug) = lower($1)
+LIMIT 1
+`
+	}
 
 	var (
 		challengeID        int64
@@ -97,7 +137,7 @@ LIMIT 1
 		commandJSON        []byte
 	)
 
-	err := r.db.QueryRowContext(ctx, query, challengeRef).Scan(
+	err := r.db.QueryRowContext(ctx, query, arg).Scan(
 		&challengeID,
 		&slug,
 		&title,
@@ -457,6 +497,33 @@ ORDER BY ci.id ASC
 		return nil, fmt.Errorf("iterate active instances: %w", err)
 	}
 	return items, nil
+}
+
+func (r *RuntimeRepository) ListActiveHostPorts(ctx context.Context) ([]int, error) {
+	const query = `
+SELECT ci.host_port
+FROM challenge_instances ci
+WHERE ci.status IN ('creating', 'running') AND ci.host_port > 0
+ORDER BY ci.host_port ASC
+`
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("list active host ports: %w", err)
+	}
+	defer rows.Close()
+
+	ports := make([]int, 0)
+	for rows.Next() {
+		var port int
+		if err := rows.Scan(&port); err != nil {
+			return nil, fmt.Errorf("scan host port: %w", err)
+		}
+		ports = append(ports, port)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate host ports: %w", err)
+	}
+	return ports, nil
 }
 
 func (r *RuntimeRepository) ListExpiredInstances(ctx context.Context, now time.Time) ([]runtime.InstanceRecord, error) {

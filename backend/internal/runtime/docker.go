@@ -22,6 +22,10 @@ type DockerManager struct {
 	client     *http.Client
 }
 
+type DockerManagerConfig struct {
+	BindAddr string
+}
+
 type createContainerRequest struct {
 	Image        string                    `json:"Image"`
 	Env          []string                  `json:"Env,omitempty"`
@@ -70,12 +74,18 @@ type listContainerSummary struct {
 }
 
 func NewDockerManager(socketPath string) *DockerManager {
+	return NewDockerManagerWithConfig(socketPath, DockerManagerConfig{})
+}
+
+func NewDockerManagerWithConfig(socketPath string, cfg DockerManagerConfig) *DockerManager {
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 			var dialer net.Dialer
 			return dialer.DialContext(ctx, "unix", socketPath)
 		},
 	}
+
+	_ = cfg
 
 	return &DockerManager{
 		apiVersion: strings.TrimSpace(os.Getenv("DOCKER_API_VERSION")),
@@ -89,6 +99,15 @@ func NewDockerManager(socketPath string) *DockerManager {
 func (m *DockerManager) Start(ctx context.Context, req StartRequest) (StartedContainer, error) {
 	portKey := fmt.Sprintf("%d/%s", req.Config.ContainerPort, networkProtocol(req.Config.ExposedProtocol))
 	containerName := buildContainerName(req)
+
+	bindAddr := strings.TrimSpace(req.BindAddr)
+	if bindAddr == "" {
+		bindAddr = "127.0.0.1"
+	}
+	hostPort := ""
+	if req.HostPort > 0 {
+		hostPort = strconv.Itoa(req.HostPort)
+	}
 
 	payload := createContainerRequest{
 		Image: req.Config.ImageName,
@@ -108,7 +127,7 @@ func (m *DockerManager) Start(ctx context.Context, req StartRequest) (StartedCon
 			Memory:     int64(req.Config.MemoryLimitMB) * 1024 * 1024,
 			NanoCPUs:   int64(req.Config.CPUMilli) * 1_000_000,
 			PortBindings: map[string][]portBinding{
-				portKey: {{HostIP: "127.0.0.1", HostPort: ""}},
+				portKey: {{HostIP: bindAddr, HostPort: hostPort}},
 			},
 		},
 	}
@@ -157,6 +176,9 @@ func (m *DockerManager) Start(ctx context.Context, req StartRequest) (StartedCon
 	bindings := inspected.NetworkSettings.Ports[portKey]
 	if len(bindings) == 0 {
 		return StartedContainer{}, fmt.Errorf("container %s has no published port for %s", created.ID, portKey)
+	}
+	if req.HostPort > 0 && mustAtoi(bindings[0].HostPort) != req.HostPort {
+		return StartedContainer{}, fmt.Errorf("container %s published port %s does not match requested %d", created.ID, bindings[0].HostPort, req.HostPort)
 	}
 
 	return StartedContainer{

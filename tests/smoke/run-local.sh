@@ -18,11 +18,14 @@ cd "$ROOT_DIR"
 : "${JWT_SECRET:=dev-only-insecure-jwt-secret}"
 : "${HTTP_ADDR:=:8080}"
 : "${PUBLIC_BASE_URL:=http://127.0.0.1:8080}"
+: "${RUNTIME_PUBLIC_BASE_URL:=$PUBLIC_BASE_URL}"
+: "${RUNTIME_PORT_MIN:=20000}"
+: "${RUNTIME_PORT_MAX:=20499}"
 : "${APP_ENV:=development}"
 : "${ADMIN_EMAIL:=admin@ctf.local}"
 : "${ADMIN_PASSWORD:=Admin123!}"
 
-export DATABASE_URL JWT_SECRET HTTP_ADDR PUBLIC_BASE_URL APP_ENV ADMIN_EMAIL ADMIN_PASSWORD
+export DATABASE_URL JWT_SECRET HTTP_ADDR PUBLIC_BASE_URL RUNTIME_PUBLIC_BASE_URL RUNTIME_PORT_MIN RUNTIME_PORT_MAX APP_ENV ADMIN_EMAIL ADMIN_PASSWORD
 
 command -v docker >/dev/null 2>&1 || { echo 'missing docker' >&2; exit 1; }
 command -v psql >/dev/null 2>&1 || { echo 'missing psql' >&2; exit 1; }
@@ -34,6 +37,19 @@ scripts/build-web-welcome-image.sh
 
 printf '[smoke-local] starting postgres and redis\n'
 docker compose -f deploy/docker-compose.yml up -d postgres redis
+
+printf '[smoke-local] waiting for postgres\n'
+for _ in $(seq 1 60); do
+  if psql "$DATABASE_URL" -Atqc 'select 1' >/dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+done
+psql "$DATABASE_URL" -Atqc 'select 1' >/dev/null 2>&1 || {
+  docker compose -f deploy/docker-compose.yml logs --tail=200 postgres >&2 || true
+  echo '[smoke-local] postgres did not become ready' >&2
+  exit 1
+}
 
 printf '[smoke-local] applying migrations and development seed\n'
 scripts/apply-migrations.sh
@@ -48,6 +64,9 @@ printf '[smoke-local] starting api\n'
   DATABASE_URL="$DATABASE_URL" \
   JWT_SECRET="$JWT_SECRET" \
   PUBLIC_BASE_URL="$PUBLIC_BASE_URL" \
+  RUNTIME_PUBLIC_BASE_URL="$RUNTIME_PUBLIC_BASE_URL" \
+  RUNTIME_PORT_MIN="$RUNTIME_PORT_MIN" \
+  RUNTIME_PORT_MAX="$RUNTIME_PORT_MAX" \
   go run ./cmd/api
 ) >/tmp/ctf-smoke-api.log 2>&1 &
 API_PID="$!"

@@ -23,6 +23,10 @@ type Config struct {
 	InstanceSweeperPollInterval      string
 	DockerSocketPath                 string
 	PublicBaseURL                    string
+	RuntimePublicBaseURL             string
+	RuntimePortMin                   int
+	RuntimePortMax                   int
+	RuntimeBindAddr                  string
 	AttachmentStorageDir             string
 	RedisAddr                        string
 	RedisPassword                    string
@@ -48,6 +52,10 @@ func Load() Config {
 		InstanceSweeperPollInterval:      getEnv("INSTANCE_SWEEPER_POLL_INTERVAL", "30s"),
 		DockerSocketPath:                 getEnv("DOCKER_SOCKET_PATH", "/var/run/docker.sock"),
 		PublicBaseURL:                    getEnv("PUBLIC_BASE_URL", "http://localhost:8080"),
+		RuntimePublicBaseURL:             getEnv("RUNTIME_PUBLIC_BASE_URL", getEnv("PUBLIC_BASE_URL", "http://localhost:8080")),
+		RuntimePortMin:                   getIntEnv("RUNTIME_PORT_MIN", 0),
+		RuntimePortMax:                   getIntEnv("RUNTIME_PORT_MAX", 0),
+		RuntimeBindAddr:                  getEnv("RUNTIME_BIND_ADDR", "127.0.0.1"),
 		AttachmentStorageDir:             getEnv("ATTACHMENT_STORAGE_DIR", "/tmp/ctf-attachments"),
 		RedisAddr:                        getEnv("REDIS_ADDR", "redis:6379"),
 		RedisPassword:                    getEnv("REDIS_PASSWORD", ""),
@@ -75,6 +83,28 @@ func (c Config) Validate() error {
 	}
 	if secret == defaultDevJWTSecret || secret == legacyDefaultJWTSecret {
 		return fmt.Errorf("JWT_SECRET must not use a development default when APP_ENV=%s", normalizeAppEnv(c.AppEnv))
+	}
+	if err := validateRuntimePortRange(c.RuntimePortMin, c.RuntimePortMax); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateRuntimePortRange(minPort, maxPort int) error {
+	if minPort == 0 && maxPort == 0 {
+		return nil
+	}
+	if minPort <= 0 || maxPort <= 0 {
+		return fmt.Errorf("RUNTIME_PORT_MIN and RUNTIME_PORT_MAX must be positive when set")
+	}
+	if minPort > maxPort {
+		return fmt.Errorf("RUNTIME_PORT_MIN must be <= RUNTIME_PORT_MAX")
+	}
+	if minPort < 1024 {
+		return fmt.Errorf("RUNTIME_PORT_MIN must be >= 1024")
+	}
+	if maxPort > 65535 {
+		return fmt.Errorf("RUNTIME_PORT_MAX must be <= 65535")
 	}
 	return nil
 }

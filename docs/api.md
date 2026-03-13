@@ -60,6 +60,8 @@
 - `instance_renew_limit_reached`：实例已达到最大续期次数
 - `instance_capacity_reached`：题目已达到配置的总并发实例上限
 - `instance_cooldown_active`：用户仍处于该题实例创建冷却期内
+- `instance_port_exhausted`：实例端口池已耗尽（需要运维扩容端口段或回收实例）
+- `instance_port_exhausted`：实例端口池已耗尽
 
 说明：
 

@@ -228,6 +228,27 @@ if [[ "$REQUIRE_DYNAMIC_IMAGE" == "1" ]]; then
   docker image inspect ctf/web-welcome:dev >/dev/null 2>&1 || die "missing docker image ctf/web-welcome:dev, run scripts/build-web-welcome-image.sh first"
 fi
 
+fetch_instance_url() {
+  local file="$1"
+  if [[ "$HAS_JQ" == "1" ]]; then
+    jq -er '.access_url // empty' "$file"
+    return
+  fi
+  python3 - "$file" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+with open(path, 'r', encoding='utf-8') as fh:
+    data = json.load(fh)
+value = data.get('access_url')
+if value:
+    print(value)
+    sys.exit(0)
+sys.exit(1)
+PY
+}
+
 log "checking health and readiness"
 health_body="$(api_call health GET /api/v1/health)"
 expect_status "$health_body" 200 health
@@ -282,6 +303,12 @@ log "starting challenge instance"
 instance_create_body="$(api_call instance_create POST "/api/v1/challenges/${challenge_id}/instances/me" '' "$player_token")"
 expect_status "$instance_create_body" 201 instance_create
 json_get "$instance_create_body" '.status == "running"' >/dev/null || die 'instance was not reported as running'
+
+if [[ "${CHECK_INSTANCE_URL:-1}" == "1" ]]; then
+  instance_url="$(fetch_instance_url "$instance_create_body")" || die 'instance response missing access_url'
+  log "checking instance url ${instance_url}"
+  curl -fsS --max-time 5 "${instance_url}" >/dev/null 2>&1 || die "failed to reach instance url: ${instance_url}"
+fi
 
 log "loading active instance and renewing"
 instance_get_body="$(api_call instance_get GET "/api/v1/challenges/${challenge_id}/instances/me" '' "$player_token")"

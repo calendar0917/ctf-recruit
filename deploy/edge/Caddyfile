@@ -1,0 +1,25 @@
+{
+    email admin@yulinsec.cn
+}
+
+ctf.yulinsec.cn {
+    encode zstd gzip
+
+    # Forward everything to the internal gateway (via frp TCP tunnel).
+    reverse_proxy 127.0.0.1:18080
+
+    header {
+        # Trust boundary: edge sets the real client IP.
+        X-Real-IP {remote_ip}
+        # Deliberately do not add/append X-Forwarded-For here.
+    }
+
+    log {
+        output stdout
+        format console
+    }
+}
+
+# inst.yulinsec.cn is used for dynamic instances as http://inst.yulinsec.cn:<port>
+# The port-range is forwarded by frp (TCP), not via HTTP reverse proxy.
+

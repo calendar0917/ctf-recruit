@@ -28,6 +28,12 @@ services:
       INSTANCE_SWEEPER_POLL_INTERVAL: 30s
       DOCKER_SOCKET_PATH: /var/run/docker.sock
       PUBLIC_BASE_URL: http://localhost:8080
+      # Optional: used when dynamic instances are exposed on a different domain.
+      RUNTIME_PUBLIC_BASE_URL: ${RUNTIME_PUBLIC_BASE_URL:-http://localhost:8080}
+      # Optional: allocate instance host ports from a fixed range (handy for frp and firewalls).
+      RUNTIME_PORT_MIN: ${RUNTIME_PORT_MIN:-0}
+      RUNTIME_PORT_MAX: ${RUNTIME_PORT_MAX:-0}
+      RUNTIME_BIND_ADDR: ${RUNTIME_BIND_ADDR:-127.0.0.1}
       REDIS_ADDR: redis:6379
       REDIS_DB: 0
       REDIS_KEY_PREFIX: "ctf:"

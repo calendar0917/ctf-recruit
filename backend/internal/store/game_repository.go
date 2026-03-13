@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"ctf/backend/internal/game"
@@ -54,19 +56,39 @@ ORDER BY pinned DESC, published_at DESC NULLS LAST, created_at DESC
 }
 
 func (r *GameRepository) GetChallenge(ctx context.Context, challengeRef string) (game.Challenge, string, error) {
-	const challengeQuery = `
+	// Treat all-digit refs as IDs first to avoid ambiguity when slugs are numeric.
+	// Without this, a slug like "1" can shadow challenge id=1 depending on query plan.
+	var (
+		challengeQuery string
+		arg            any = challengeRef
+	)
+	if strings.TrimSpace(challengeRef) != "" && strings.IndexFunc(challengeRef, func(r rune) bool { return r < '0' || r > '9' }) == -1 {
+		if id, err := strconv.ParseInt(challengeRef, 10, 64); err == nil {
+			challengeQuery = `
 SELECT c.id, c.slug, c.title, cat.slug, c.points, c.difficulty, c.description, c.flag_type, c.dynamic_enabled, c.flag_value
 FROM challenges c
 JOIN categories cat ON cat.id = c.category_id
-WHERE c.status = 'published' AND (c.id::text = $1 OR lower(c.slug) = lower($1))
+WHERE c.status = 'published' AND c.id = $1
 LIMIT 1
 `
+			arg = id
+		}
+	}
+	if challengeQuery == "" {
+		challengeQuery = `
+SELECT c.id, c.slug, c.title, cat.slug, c.points, c.difficulty, c.description, c.flag_type, c.dynamic_enabled, c.flag_value
+FROM challenges c
+JOIN categories cat ON cat.id = c.category_id
+WHERE c.status = 'published' AND lower(c.slug) = lower($1)
+LIMIT 1
+`
+	}
 
 	var (
 		challenge game.Challenge
 		flagValue string
 	)
-	err := r.db.QueryRowContext(ctx, challengeQuery, challengeRef).Scan(
+	err := r.db.QueryRowContext(ctx, challengeQuery, arg).Scan(
 		&challenge.ID,
 		&challenge.Slug,
 		&challenge.Title,

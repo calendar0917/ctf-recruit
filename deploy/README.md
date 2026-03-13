@@ -113,6 +113,10 @@ docker compose -f deploy/docker-compose.prod.yml exec -T \
 - `REDIS_PASSWORD`
 - `REDIS_DB`
 - `REDIS_KEY_PREFIX`
+- `RUNTIME_PUBLIC_BASE_URL`
+- `RUNTIME_PORT_MIN`
+- `RUNTIME_PORT_MAX`
+- `RUNTIME_BIND_ADDR`
 - `LOGIN_RATE_LIMIT_WINDOW_SECONDS`
 - `LOGIN_RATE_LIMIT_MAX`
 - `REGISTER_RATE_LIMIT_WINDOW_SECONDS`
@@ -210,5 +214,14 @@ tests/smoke/run-local.sh
 - 数据库备份与恢复手册
 - 结构化日志和指标采集
 - 动态题宿主机和主站流量的更严格隔离
+
+## 反向代理与源 IP
+
+当前 API 的限流与审计会优先使用 `X-Real-IP` 作为源 IP（若可解析为合法 IP）。
+
+因此生产环境需要保证：
+
+- 对外的最外层网关必须覆盖写入 `X-Real-IP`（不能信任客户端自带的 `X-Forwarded-For`）
+- API 不应直接暴露到公网
 
 具体优先级以 [开发基线与升级路线](/home/calendar/code/ctf/docs/development-baseline.md) 为准。

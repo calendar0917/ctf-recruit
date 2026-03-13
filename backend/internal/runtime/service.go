@@ -5,24 +5,48 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 )
 
 type Service struct {
-	manager       Manager
-	repo          Repository
-	publicBaseURL string
-	now           func() time.Time
-	mu            sync.Mutex
+	manager Manager
+	repo    Repository
+	cfg     ServiceConfig
+	now     func() time.Time
+	mu      sync.Mutex
 }
 
-func NewService(publicBaseURL string, manager Manager, repo Repository) *Service {
+func NewService(cfg ServiceConfig, manager Manager, repo Repository) *Service {
+	cfg.PublicBaseURL = strings.TrimSpace(cfg.PublicBaseURL)
+	if cfg.PublicBaseURL == "" {
+		cfg.PublicBaseURL = "http://localhost:8080"
+	}
+	cfg.RuntimeBaseURL = strings.TrimSpace(cfg.RuntimeBaseURL)
+	if cfg.RuntimeBaseURL == "" {
+		cfg.RuntimeBaseURL = cfg.PublicBaseURL
+	}
+	cfg.BindAddr = strings.TrimSpace(cfg.BindAddr)
+	if cfg.BindAddr == "" {
+		cfg.BindAddr = "127.0.0.1"
+	}
+	if cfg.PortMin < 0 {
+		cfg.PortMin = 0
+	}
+	if cfg.PortMax < 0 {
+		cfg.PortMax = 0
+	}
+	if cfg.PortMin > 0 && cfg.PortMax > 0 && cfg.PortMin > cfg.PortMax {
+		cfg.PortMin = 0
+		cfg.PortMax = 0
+	}
+
 	return &Service{
-		manager:       manager,
-		repo:          repo,
-		publicBaseURL: publicBaseURL,
-		now:           time.Now,
+		manager: manager,
+		repo:    repo,
+		cfg:     cfg,
+		now:     time.Now,
 	}
 }
 
@@ -52,7 +76,7 @@ func (s *Service) StartInstance(ctx context.Context, userID int64, challengeRef 
 
 	existing, err := s.repo.GetActiveInstance(ctx, userID, cfg.ID)
 	if err == nil {
-		existing.Instance.AccessURL = buildAccessURL(cfg.ExposedProtocol, s.publicBaseURL, existing.Instance.HostPort)
+		existing.Instance.AccessURL = buildAccessURL(cfg.ExposedProtocol, s.cfg.RuntimeBaseURL, existing.Instance.HostPort)
 		return existing.Instance, false, nil
 	}
 	if !errors.Is(err, ErrRepositoryNotFound) {
@@ -82,11 +106,7 @@ func (s *Service) StartInstance(ctx context.Context, userID int64, challengeRef 
 		}
 	}
 
-	started, err := s.manager.Start(ctx, StartRequest{
-		ChallengeID: cfg.ID,
-		UserID:      userID,
-		Config:      cfg,
-	})
+	started, hostPort, err := s.startContainer(ctx, userID, cfg)
 	if err != nil {
 		return Instance{}, false, err
 	}
@@ -96,8 +116,8 @@ func (s *Service) StartInstance(ctx context.Context, userID int64, challengeRef 
 		ChallengeID:   cfg.ID,
 		UserID:        userID,
 		Status:        "running",
-		AccessURL:     buildAccessURL(cfg.ExposedProtocol, s.publicBaseURL, started.HostPort),
-		HostPort:      started.HostPort,
+		AccessURL:     buildAccessURL(cfg.ExposedProtocol, s.cfg.RuntimeBaseURL, hostPort),
+		HostPort:      hostPort,
 		RenewCount:    0,
 		StartedAt:     now,
 		ExpiresAt:     now.Add(cfg.TTL),
@@ -111,13 +131,13 @@ func (s *Service) StartInstance(ctx context.Context, userID int64, challengeRef 
 		_ = s.manager.Stop(context.Background(), started.ContainerID)
 
 		if existing, lookupErr := s.repo.GetActiveInstance(ctx, userID, cfg.ID); lookupErr == nil {
-			existing.Instance.AccessURL = buildAccessURL(cfg.ExposedProtocol, s.publicBaseURL, existing.Instance.HostPort)
+			existing.Instance.AccessURL = buildAccessURL(cfg.ExposedProtocol, s.cfg.RuntimeBaseURL, existing.Instance.HostPort)
 			return existing.Instance, false, nil
 		}
 		return Instance{}, false, err
 	}
 
-	saved.Instance.AccessURL = buildAccessURL(cfg.ExposedProtocol, s.publicBaseURL, saved.Instance.HostPort)
+	saved.Instance.AccessURL = buildAccessURL(cfg.ExposedProtocol, s.cfg.RuntimeBaseURL, saved.Instance.HostPort)
 	return saved.Instance, true, nil
 }
 
@@ -142,7 +162,7 @@ func (s *Service) GetInstance(ctx context.Context, userID int64, challengeRef st
 		}
 		return Instance{}, err
 	}
-	instanceRecord.Instance.AccessURL = buildAccessURL(cfg.ExposedProtocol, s.publicBaseURL, instanceRecord.Instance.HostPort)
+	instanceRecord.Instance.AccessURL = buildAccessURL(cfg.ExposedProtocol, s.cfg.RuntimeBaseURL, instanceRecord.Instance.HostPort)
 	return instanceRecord.Instance, nil
 }
 
@@ -189,7 +209,7 @@ func (s *Service) RenewInstance(ctx context.Context, userID int64, challengeRef 
 		}
 		return Instance{}, err
 	}
-	updated.Instance.AccessURL = buildAccessURL(cfg.ExposedProtocol, s.publicBaseURL, updated.Instance.HostPort)
+	updated.Instance.AccessURL = buildAccessURL(cfg.ExposedProtocol, s.cfg.RuntimeBaseURL, updated.Instance.HostPort)
 	return updated.Instance, nil
 }
 
@@ -229,7 +249,7 @@ func (s *Service) DeleteInstance(ctx context.Context, userID int64, challengeRef
 
 	instanceRecord.Instance.Status = "terminated"
 	instanceRecord.Instance.TerminatedAt = &now
-	instanceRecord.Instance.AccessURL = buildAccessURL(cfg.ExposedProtocol, s.publicBaseURL, instanceRecord.Instance.HostPort)
+	instanceRecord.Instance.AccessURL = buildAccessURL(cfg.ExposedProtocol, s.cfg.RuntimeBaseURL, instanceRecord.Instance.HostPort)
 	return instanceRecord.Instance, nil
 }
 
@@ -300,6 +320,61 @@ func (s *Service) Reconcile(ctx context.Context) (ReconcileReport, error) {
 	}
 
 	return report, nil
+}
+
+func (s *Service) startContainer(ctx context.Context, userID int64, cfg ChallengeConfig) (StartedContainer, int, error) {
+	if s.cfg.PortMin <= 0 || s.cfg.PortMax <= 0 || s.cfg.PortMin > s.cfg.PortMax {
+		started, err := s.manager.Start(ctx, StartRequest{
+			ChallengeID: cfg.ID,
+			UserID:      userID,
+			BindAddr:    s.cfg.BindAddr,
+			HostPort:    0,
+			Config:      cfg,
+		})
+		return started, started.HostPort, err
+	}
+
+	ports, err := s.repo.ListActiveHostPorts(ctx)
+	if err != nil {
+		return StartedContainer{}, 0, err
+	}
+	used := make(map[int]struct{}, len(ports))
+	for _, port := range ports {
+		if port > 0 {
+			used[port] = struct{}{}
+		}
+	}
+
+	for port := s.cfg.PortMin; port <= s.cfg.PortMax; port++ {
+		if _, ok := used[port]; ok {
+			continue
+		}
+		started, err := s.manager.Start(ctx, StartRequest{
+			ChallengeID: cfg.ID,
+			UserID:      userID,
+			BindAddr:    s.cfg.BindAddr,
+			HostPort:    port,
+			Config:      cfg,
+		})
+		if err != nil {
+			if isPortBindError(err) {
+				used[port] = struct{}{}
+				continue
+			}
+			return StartedContainer{}, 0, err
+		}
+		return started, started.HostPort, nil
+	}
+
+	return StartedContainer{}, 0, ErrInstancePortExhausted
+}
+
+func isPortBindError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "port is already allocated") || strings.Contains(msg, "address already in use")
 }
 
 func buildAccessURL(protocol, publicBaseURL string, hostPort int) string {

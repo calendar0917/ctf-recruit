@@ -14,8 +14,17 @@ var (
 	ErrInstanceRenewLimitReached = errors.New("instance renew limit reached")
 	ErrInstanceCapacityReached   = errors.New("instance capacity reached")
 	ErrInstanceCooldownActive    = errors.New("instance cooldown active")
+	ErrInstancePortExhausted     = errors.New("instance port exhausted")
 	ErrRepositoryNotFound        = errors.New("repository record not found")
 )
+
+type ServiceConfig struct {
+	PublicBaseURL  string
+	RuntimeBaseURL string
+	BindAddr       string
+	PortMin        int
+	PortMax        int
+}
 
 type ChallengeConfig struct {
 	ID                 string
@@ -93,6 +102,7 @@ type Repository interface {
 	TerminateInstance(context.Context, int64, time.Time) error
 	ListExpiredInstances(context.Context, time.Time) ([]InstanceRecord, error)
 	ListActiveInstances(context.Context) ([]InstanceRecord, error)
+	ListActiveHostPorts(context.Context) ([]int, error)
 	CountActiveInstances(context.Context, string) (int, error)
 	GetLatestInstance(context.Context, int64, string) (InstanceRecord, error)
 }
@@ -100,6 +110,8 @@ type Repository interface {
 type StartRequest struct {
 	ChallengeID string
 	UserID      int64
+	BindAddr    string
+	HostPort    int
 	Config      ChallengeConfig
 }
 

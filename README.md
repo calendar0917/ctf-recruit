@@ -83,6 +83,12 @@ docker compose -f deploy/docker-compose.yml up postgres redis api
 
 开发环境如需临时关闭 Redis 共享限流，可将 API 的 `REDIS_ADDR` 设为空，此时会自动回退到进程内内存限流。
 
+动态实例公网访问说明：
+
+- 动态实例的对外访问地址由 `RUNTIME_PUBLIC_BASE_URL` 决定，默认回退到 `PUBLIC_BASE_URL`
+- 如需通过固定端口池暴露实例（便于防火墙和 frp 端口段转发），可设置：`RUNTIME_PORT_MIN`、`RUNTIME_PORT_MAX`
+- 端口绑定地址可通过 `RUNTIME_BIND_ADDR` 控制（开发/内网场景通常使用 `127.0.0.1`）
+
 初始化数据库结构与公开示例数据：
 
 ```bash
@@ -105,6 +111,10 @@ scripts/dev-seed.sh
 export POSTGRES_PASSWORD='replace-with-strong-db-password'
 export JWT_SECRET='replace-with-long-random-secret'
 export PUBLIC_BASE_URL='https://ctf.example.edu'
+export RUNTIME_PUBLIC_BASE_URL='http://inst.example.edu'
+export RUNTIME_PORT_MIN='20000'
+export RUNTIME_PORT_MAX='20499'
+export RUNTIME_BIND_ADDR='127.0.0.1'
 export REDIS_PASSWORD=''
 make prod-compose-up
 ```
