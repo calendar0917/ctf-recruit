@@ -1224,51 +1224,51 @@ function App(): React.JSX.Element {
     }
   }
 
-  async function handleRuntimeAction(action: 'start' | 'renew' | 'delete') {
-    if (!token || !selectedChallengeSummary) {
-      setRuntimeNotice({ tone: 'neutral', text: '需要先登录才能操作动态实例。' })
-      return
-    }
-    setRuntimeLoading(true)
-    setRuntimeNotice(null)
-    try {
-      if (action === 'start') {
-        const instance = await api.startInstance(token, selectedChallengeSummary.id)
-        setRuntimeInstance(instance)
-        setRuntimeNotice({ tone: 'success', text: '实例已就绪，可以直接访问。' })
-      }
-      if (action === 'renew') {
-        const instance = await api.renewInstance(token, selectedChallengeSummary.id)
-        setRuntimeInstance(instance)
-        setRuntimeNotice({ tone: 'success', text: '实例已续期。' })
-      }
-      if (action === 'delete') {
-        await api.deleteInstance(token, selectedChallengeSummary.id)
-        setRuntimeInstance(null)
-        setRuntimeNotice({ tone: 'success', text: '实例已回收。' })
-      }
-	    } catch (error) {
-	      const code = readErrorCode(error)
-	      if (code === 'instance_not_found') {
-	        setRuntimeInstance(null)
-	        setRuntimeNotice({ tone: 'neutral', text: '当前没有活动实例。' })
-	      } else if (code === 'instance_capacity_reached') {
-	        setRuntimeNotice({ tone: 'danger', text: '当前题目实例配额已满，请稍后再试。' })
-	      } else if (code === 'instance_cooldown_active') {
-	        setRuntimeNotice({ tone: 'danger', text: '刚刚创建过实例，冷却中，请稍后再试。' })
-	      } else if (code === 'instance_port_exhausted') {
-	        setRuntimeNotice({ tone: 'danger', text: '当前实例端口资源已耗尽，请稍后再试或联系管理员。' })
-	      } else if (code === 'instance_renew_limit_reached') {
-	        setRuntimeNotice({ tone: 'danger', text: '实例已达到最大续期次数。' })
-	      } else if (code === 'runtime_config_missing') {
-	        setRuntimeNotice({ tone: 'danger', text: '运行配置不完整，无法拉起实例。' })
-	      } else {
-	        setRuntimeNotice({ tone: 'danger', text: guardedError(error, '实例操作失败。') })
-	      }
-	    } finally {
-      setRuntimeLoading(false)
-    }
-  }
+	async function handleRuntimeAction(action: 'start' | 'renew' | 'delete') {
+		if (!token || !selectedChallengeSummary) {
+			setRuntimeNotice({ tone: 'neutral', text: '需要先登录才能操作动态实例。' })
+			return
+		}
+		setRuntimeLoading(true)
+		setRuntimeNotice(null)
+		try {
+			if (action === 'start') {
+				const instance = await api.startInstance(token, selectedChallengeSummary.id)
+				setRuntimeInstance(instance)
+				setRuntimeNotice({ tone: 'success', text: '实例已就绪，可以直接访问。' })
+			}
+			if (action === 'renew') {
+				const instance = await api.renewInstance(token, selectedChallengeSummary.id)
+				setRuntimeInstance(instance)
+				setRuntimeNotice({ tone: 'success', text: '实例已续期。' })
+			}
+			if (action === 'delete') {
+				await api.deleteInstance(token, selectedChallengeSummary.id)
+				setRuntimeInstance(null)
+				setRuntimeNotice({ tone: 'success', text: '实例已回收。' })
+			}
+		} catch (error) {
+			const code = readErrorCode(error)
+			if (code === 'instance_not_found') {
+				setRuntimeInstance(null)
+				setRuntimeNotice({ tone: 'neutral', text: '当前没有活动实例。' })
+			} else if (code === 'instance_capacity_reached') {
+				setRuntimeNotice({ tone: 'danger', text: '当前题目实例配额已满，请稍后再试。' })
+			} else if (code === 'instance_cooldown_active') {
+				setRuntimeNotice({ tone: 'danger', text: '刚刚创建过实例，冷却中，请稍后再试。' })
+			} else if (code === 'instance_port_exhausted') {
+				setRuntimeNotice({ tone: 'danger', text: '当前实例端口资源已耗尽，请稍后再试或联系管理员。' })
+			} else if (code === 'instance_renew_limit_reached') {
+				setRuntimeNotice({ tone: 'danger', text: '实例已达到最大续期次数。' })
+			} else if (code === 'runtime_config_missing') {
+				setRuntimeNotice({ tone: 'danger', text: '运行配置不完整，无法拉起实例。' })
+			} else {
+				setRuntimeNotice({ tone: 'danger', text: guardedError(error, '实例操作失败。') })
+			}
+		} finally {
+			setRuntimeLoading(false)
+		}
+	}
 
   async function handleSaveAdminChallenge(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
