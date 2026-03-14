@@ -100,6 +100,16 @@ function formatDateTime(date: Date): string {
   }).format(date)
 }
 
+function formatDateTimeCompact(date: Date): string {
+  return new Intl.DateTimeFormat(undefined, {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date)
+}
+
 function resolveVisibleViews(phase: ContestPhase | null): Array<{ id: View; label: string; disabledReason?: string }> {
   return views.map((item) => {
     const gate = item.gatedByPhase
@@ -268,7 +278,7 @@ export function App(): React.JSX.Element {
   const [scoreboard, setScoreboard] = useState<ScoreboardEntry[]>([])
   const [scoreboardLoading, setScoreboardLoading] = useState(false)
 
-  const [scoreboardTrendScope, setScoreboardTrendScope] = useState<'top10' | 'top50' | 'all'>('top10')
+  const [scoreboardLeadersTopN, setScoreboardLeadersTopN] = useState<3 | 5 | 10>(5)
 
   const [mySolves, setMySolves] = useState<UserSolve[]>([])
   const [mySubmissions, setMySubmissions] = useState<UserSubmission[]>([])
@@ -610,6 +620,36 @@ export function App(): React.JSX.Element {
       void loadScoreboard()
     }
   }, [loadScoreboard, view])
+
+  const scoreboardByRank = useMemo(() => {
+    return [...scoreboard].sort((a, b) => a.rank - b.rank)
+  }, [scoreboard])
+
+  const scoreboardTop3 = useMemo(() => scoreboardByRank.slice(0, 3), [scoreboardByRank])
+
+  const scoreboardTotalSolves = useMemo(() => {
+    return scoreboard.reduce((sum, entry) => sum + entry.solves.length, 0)
+  }, [scoreboard])
+
+  const scoreboardLastSolveAt = useMemo(() => {
+    let latest: string | null = null
+    for (const entry of scoreboard) {
+      if (!entry.last_solve_at) continue
+      if (!latest) {
+        latest = entry.last_solve_at
+        continue
+      }
+      const curr = parseRfc3339(entry.last_solve_at)?.getTime() ?? 0
+      const prev = parseRfc3339(latest)?.getTime() ?? 0
+      if (curr > prev) latest = entry.last_solve_at
+    }
+    return latest
+  }, [scoreboard])
+
+  const myScoreboardEntry = useMemo(() => {
+    if (!authUser) return null
+    return scoreboardByRank.find((entry) => entry.user_id === authUser.id) ?? null
+  }, [authUser, scoreboardByRank])
 
   useEffect(() => {
     if (view === 'me' && token) {
@@ -1163,18 +1203,79 @@ export function App(): React.JSX.Element {
 
               {!contestPhase?.scoreboard_visible ? <div className="empty-state">排行榜未开放</div> : null}
               {contestPhase?.scoreboard_visible ? (
-                <div className="badge-row">
-                  <span className="badge">Entries {scoreboardLoading ? '…' : scoreboard.length}</span>
-                  {authUser ? <span className="badge">My {scoreboard.find((item) => item.user_id === authUser.id)?.score ?? '—'}</span> : null}
-                </div>
-              ) : null}
+                <div className="board-summary-grid" style={{ marginTop: 12 }}>
+                  <div className="detail-row">
+                    <div className="scoreboard-trend-head">
+                      <strong>Top {scoreboardLeadersTopN} 得分趋势</strong>
+                      <div className="badge-row">
+                        <PillButton active={scoreboardLeadersTopN === 3} label="Top 3" onClick={() => setScoreboardLeadersTopN(3)} />
+                        <PillButton active={scoreboardLeadersTopN === 5} label="Top 5" onClick={() => setScoreboardLeadersTopN(5)} />
+                        <PillButton active={scoreboardLeadersTopN === 10} label="Top 10" onClick={() => setScoreboardLeadersTopN(10)} />
+                      </div>
+                    </div>
 
-              {contestPhase?.scoreboard_visible && scoreboard.length ? (
-                <ScoreboardTrend
-                  items={scoreboard}
-                  scope={scoreboardTrendScope}
-                  onScopeChange={setScoreboardTrendScope}
-                />
+                    {scoreboardLoading && scoreboard.length === 0 ? <div className="empty-state small">加载趋势数据中…</div> : null}
+                    {!scoreboardLoading && scoreboard.length === 0 ? <div className="empty-state small">暂无趋势数据</div> : null}
+                    {scoreboard.length ? <ScoreboardLeadersChart entries={scoreboardByRank} topN={scoreboardLeadersTopN} /> : null}
+                    {scoreboard.length ? <div className="hint-text">按解题时间累计得分。</div> : null}
+                  </div>
+
+                  <div className="scoreboard-kpi-grid">
+                    <div className="runtime-metric">
+                      <span className="eyebrow">Leader</span>
+                      <strong>
+                        {scoreboardTop3[0]
+                          ? `#1 ${scoreboardTop3[0].display_name || scoreboardTop3[0].username}`
+                          : scoreboardLoading
+                            ? '…'
+                            : '—'}
+                      </strong>
+                      <small className="hint-text">
+                        {scoreboardTop3[0] ? `${scoreboardTop3[0].score} pts · ${scoreboardTop3[0].solves.length} solves` : '当前暂无领先者'}
+                      </small>
+                    </div>
+
+                    <div className="runtime-metric">
+                      <span className="eyebrow">My Rank</span>
+                      <strong>
+                        {myScoreboardEntry
+                          ? `#${myScoreboardEntry.rank}`
+                          : authUser
+                            ? scoreboardLoading
+                              ? '…'
+                              : '—'
+                            : 'Login'}
+                      </strong>
+                      <small className="hint-text">
+                        {myScoreboardEntry
+                          ? `${myScoreboardEntry.score} pts · ${myScoreboardEntry.solves.length} solves`
+                          : authUser
+                            ? '未上榜或暂无得分'
+                            : '登录后显示'}
+                      </small>
+                    </div>
+
+                    <div className="runtime-metric">
+                      <span className="eyebrow">Players</span>
+                      <strong>{scoreboardLoading && scoreboard.length === 0 ? '…' : scoreboard.length}</strong>
+                      <small className="hint-text">total solves {scoreboardTotalSolves}</small>
+                    </div>
+
+                    <div className="runtime-metric">
+                      <span className="eyebrow">Latest</span>
+                      <strong>
+                        {scoreboardLastSolveAt
+                          ? formatRelative(parseRfc3339(scoreboardLastSolveAt) ?? safeNow())
+                          : scoreboardLoading
+                            ? '…'
+                            : '—'}
+                      </strong>
+                      <small className="hint-text">
+                        {scoreboardLastSolveAt ? formatDateTime(parseRfc3339(scoreboardLastSolveAt) ?? safeNow()) : '暂无记录'}
+                      </small>
+                    </div>
+                  </div>
+                </div>
               ) : null}
             </section>
 
@@ -1321,12 +1422,179 @@ function ScoreboardRow(props: { entry: ScoreboardEntry; currentUserID: number | 
                 <span className="badge">{solve.category}</span>
                 <span className="badge">{solve.difficulty}</span>
                 <span className="badge badge-solid">+{solve.awarded_points}</span>
+                <span className="badge">{formatDateTimeCompact(parseRfc3339(solve.solved_at) ?? safeNow())}</span>
               </div>
             </div>
           ))}
         </div>
       ) : null}
     </article>
+  )
+}
+
+function ScoreboardLeadersChart(props: { entries: ScoreboardEntry[]; topN: 3 | 5 | 10 }): React.JSX.Element {
+  const leaders = useMemo(() => {
+    const ranked = [...props.entries].sort((a, b) => a.rank - b.rank)
+    const withSolves = ranked.filter((entry) => entry.solves.length > 0 || entry.score > 0)
+    const base = withSolves.length ? withSolves : ranked
+    return base.slice(0, props.topN)
+  }, [props.entries, props.topN])
+
+  const series = useMemo(() => {
+    return leaders.map((entry) => {
+      let total = 0
+      const points: Array<{ t: number; score: number }> = []
+      for (const solve of entry.solves) {
+        const t = parseRfc3339(solve.solved_at)?.getTime()
+        if (!t) continue
+        total += solve.awarded_points
+        points.push({ t, score: total })
+      }
+      return { entry, points, finalScore: total }
+    })
+  }, [leaders])
+
+  const domain = useMemo(() => {
+    const times = series.flatMap((item) => item.points.map((point) => point.t))
+    if (times.length < 2) return null
+    const uniqueTimes = new Set(times)
+    if (uniqueTimes.size < 2) return null
+    const min = Math.min(...times)
+    const max = Math.max(...times)
+    return { min, max }
+  }, [series])
+
+  const yMax = useMemo(() => {
+    const maxScore = Math.max(...series.map((item) => Math.max(item.entry.score, item.finalScore, 0)), 0)
+    return Math.max(1, maxScore)
+  }, [series])
+
+  if (!domain) {
+    return <div className="hint-text">趋势数据不足（至少需要两个不同时间点的解题记录）。</div>
+  }
+
+  const chartWidth = 640
+  const chartHeight = 180
+  const padX = 16
+  const padTop = 10
+  const padBottom = 20
+  const innerWidth = chartWidth - padX * 2
+  const innerHeight = chartHeight - padTop - padBottom
+  const span = Math.max(1, domain.max - domain.min)
+
+  const xOf = (t: number): number => padX + ((t - domain.min) / span) * innerWidth
+  const yOf = (score: number): number => padTop + innerHeight - (score / yMax) * innerHeight
+
+  const lineStyles: Array<{ stroke: string; dash?: string; opacity: number; width: number }> = [
+    { stroke: 'var(--cta)', opacity: 1, width: 2.6 },
+    { stroke: 'var(--muted)', dash: '6 3', opacity: 0.95, width: 2.2 },
+    { stroke: 'var(--muted)', dash: '3 3', opacity: 0.9, width: 2.1 },
+    { stroke: 'var(--muted)', dash: '2 4', opacity: 0.86, width: 2.0 },
+    { stroke: 'var(--muted)', dash: '8 4 2 4', opacity: 0.82, width: 2.0 },
+    { stroke: 'var(--muted)', dash: '10 6', opacity: 0.8, width: 1.9 },
+    { stroke: 'var(--muted)', dash: '4 6', opacity: 0.78, width: 1.9 },
+    { stroke: 'var(--muted)', dash: '2 6', opacity: 0.76, width: 1.9 },
+    { stroke: 'var(--muted)', dash: '12 6 3 6', opacity: 0.74, width: 1.8 },
+    { stroke: 'var(--muted)', dash: '1 5', opacity: 0.72, width: 1.8 },
+  ]
+
+  const buildStepPath = (points: Array<{ t: number; score: number }>): string => {
+    const startX = xOf(domain.min)
+    const startY = yOf(0)
+
+    let d = `M ${startX.toFixed(1)} ${startY.toFixed(1)}`
+    let prevScore = 0
+    for (const point of points) {
+      const x = xOf(point.t)
+      const yBefore = yOf(prevScore)
+      const yAfter = yOf(point.score)
+      d += ` L ${x.toFixed(1)} ${yBefore.toFixed(1)}`
+      d += ` L ${x.toFixed(1)} ${yAfter.toFixed(1)}`
+      prevScore = point.score
+    }
+
+    const endX = xOf(domain.max)
+    const endY = yOf(prevScore)
+    d += ` L ${endX.toFixed(1)} ${endY.toFixed(1)}`
+    return d
+  }
+
+  const rangeLeft = formatDateTimeCompact(new Date(domain.min))
+  const rangeRight = formatDateTimeCompact(new Date(domain.max))
+
+  return (
+    <div className="scoreboard-trend-block">
+      <svg className="scoreboard-sparkline" viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-label="top players score over time">
+        <g className="scoreboard-sparkline-grid">
+          {[0, 0.5, 1].map((ratio) => {
+            const y = padTop + innerHeight * ratio
+            return (
+              <line
+                key={ratio}
+                x1={padX}
+                y1={y}
+                x2={chartWidth - padX}
+                y2={y}
+              />
+            )
+          })}
+        </g>
+
+        {series.map((item, index) => {
+          const style = lineStyles[index % lineStyles.length]
+          const path = buildStepPath(item.points)
+          const endScore = item.points.length ? item.points[item.points.length - 1].score : 0
+          const endTime = item.points.length ? item.points[item.points.length - 1].t : domain.min
+          const cx = xOf(endTime)
+          const cy = yOf(endScore)
+
+          return (
+            <g key={item.entry.user_id} className="scoreboard-sparkline-series">
+              <path
+                d={path}
+                className="scoreboard-sparkline-line"
+                stroke={style.stroke}
+                strokeWidth={style.width}
+                strokeDasharray={style.dash}
+                strokeOpacity={style.opacity}
+              />
+              <circle cx={cx} cy={cy} r={3.2} fill={style.stroke} opacity={style.opacity} />
+            </g>
+          )
+        })}
+      </svg>
+
+      <div className="scoreboard-range hint-text">
+        <span>{rangeLeft}</span>
+        <span>{rangeRight}</span>
+      </div>
+
+      <div className="scoreboard-legend">
+        {series.map((item, index) => {
+          const style = lineStyles[index % lineStyles.length]
+          const label = item.entry.display_name || item.entry.username
+          return (
+            <div key={item.entry.user_id} className="scoreboard-legend-item" title={`#${item.entry.rank} ${label}`}>
+              <svg className="scoreboard-legend-sample" viewBox="0 0 24 10" aria-hidden="true">
+                <line
+                  x1="1"
+                  y1="5"
+                  x2="23"
+                  y2="5"
+                  stroke={style.stroke}
+                  strokeWidth="2.6"
+                  strokeDasharray={style.dash}
+                  strokeOpacity={style.opacity}
+                  strokeLinecap="round"
+                />
+              </svg>
+              <span className="scoreboard-legend-name">#{item.entry.rank} {label}</span>
+              <span className="scoreboard-legend-meta">{item.entry.score} pts</span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 

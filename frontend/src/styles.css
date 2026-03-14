@@ -1238,12 +1238,12 @@ textarea::placeholder {
 
 .scoreboard-personal-strip {
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin-bottom: 18px;
+  margin-bottom: 14px;
 }
 
 .scoreboard-table {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .scoreboard-table-header,
@@ -1274,7 +1274,7 @@ textarea::placeholder {
 }
 
 .scoreboard-table-row {
-  padding: 16px;
+  padding: 14px;
 }
 
 .scoreboard-rank-cell {
@@ -1306,14 +1306,14 @@ textarea::placeholder {
 }
 
 .scoreboard-row-details {
-  padding: 0 16px 16px;
+  padding: 0 14px 14px;
   border-top: 1px solid var(--line);
 }
 
 .scoreboard-table-solve {
   display: grid;
   gap: 10px;
-  padding: 14px 0;
+  padding: 12px 0;
   border-bottom: 1px solid var(--line);
 }
 
@@ -1546,6 +1546,94 @@ textarea::placeholder {
   border-radius: 999px;
   background: color-mix(in srgb, var(--cta) 55%, transparent);
   border: 1px solid color-mix(in srgb, var(--cta) 25%, transparent);
+}
+
+.scoreboard-trend-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.scoreboard-trend-block {
+  display: grid;
+  gap: 8px;
+}
+
+.scoreboard-sparkline {
+  width: 100%;
+  height: auto;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface-strong) 55%, transparent), var(--surface-soft));
+}
+
+.scoreboard-sparkline-grid line {
+  stroke: color-mix(in srgb, var(--line-strong) 70%, transparent);
+  stroke-width: 1;
+}
+
+.scoreboard-sparkline-line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.scoreboard-range {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.scoreboard-legend {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 10px;
+}
+
+.scoreboard-legend-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 9px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--surface-strong);
+}
+
+.scoreboard-legend-sample {
+  width: 24px;
+  height: 10px;
+}
+
+.scoreboard-legend-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scoreboard-legend-meta {
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.scoreboard-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (max-width: 720px) {
+  .scoreboard-legend {
+    grid-template-columns: 1fr;
+  }
+
+  .scoreboard-kpi-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .scoreboard-row-details {
