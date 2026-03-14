@@ -779,25 +779,25 @@ textarea::placeholder {
 }
 
 .statement-card {
-  padding: 22px;
+  padding: 16px;
   border-radius: var(--radius-lg);
   border: 1px solid var(--line);
-  background: linear-gradient(180deg, var(--surface-strong), var(--surface));
+  background: var(--surface-strong);
 }
 
 .statement-topline {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 14px;
-  margin-bottom: 12px;
+  gap: 10px;
+  margin-bottom: 10px;
 }
 
 .section-tag {
   display: inline-flex;
   padding: 6px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(3, 105, 161, 0.16);
+  border: 1px solid var(--line);
   color: var(--cta);
   font-size: 0.72rem;
   letter-spacing: 0.08em;

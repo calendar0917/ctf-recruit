@@ -99,7 +99,8 @@ function pickInitialView(phase: ContestPhase | null): View {
 
 function DifficultyBadge({ difficulty }: { difficulty: string }): React.JSX.Element {
   const cls = difficulty === 'easy' ? 'difficulty-easy' : difficulty === 'hard' ? 'difficulty-hard' : 'difficulty-normal'
-  return <span className={`badge ${cls}`}>{difficulty}</span>
+  const label = difficulty === 'easy' ? 'Easy' : difficulty === 'hard' ? 'Hard' : 'Normal'
+  return <span className={`badge ${cls}`}>{label}</span>
 }
 
 function PillButton(props: {
@@ -229,6 +230,7 @@ export function App(): React.JSX.Element {
   const [challenges, setChallenges] = useState<PublicChallengeSummary[]>([])
   const [challengesLoading, setChallengesLoading] = useState(false)
   const [challengeFilter, setChallengeFilter] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState<string>('')
   const [activeChallengeID, setActiveChallengeID] = useState<string>('')
   const [activeChallenge, setActiveChallenge] = useState<DemoChallengeDetail | null>(null)
   const [challengeLoading, setChallengeLoading] = useState(false)
@@ -434,16 +436,24 @@ export function App(): React.JSX.Element {
 
   const filteredChallenges = useMemo(() => {
     const query = challengeFilter.trim().toLowerCase()
-    if (!query) return challenges
+    const selectedCategory = categoryFilter.trim().toLowerCase()
+
     return challenges.filter((item) => {
-      return (
-        item.title.toLowerCase().includes(query) ||
-        item.slug.toLowerCase().includes(query) ||
-        item.category.toLowerCase().includes(query) ||
-        item.difficulty.toLowerCase().includes(query)
-      )
+      if (selectedCategory && item.category.toLowerCase() !== selectedCategory) {
+        return false
+      }
+      if (!query) return true
+      return item.title.toLowerCase().includes(query) || item.slug.toLowerCase().includes(query) || item.difficulty.toLowerCase().includes(query)
     })
-  }, [challengeFilter, challenges])
+  }, [categoryFilter, challengeFilter, challenges])
+
+  const availableCategories = useMemo(() => {
+    const unique = new Set<string>()
+    for (const item of challenges) {
+      if (item.category.trim()) unique.add(item.category)
+    }
+    return Array.from(unique).sort((a, b) => a.localeCompare(b))
+  }, [challenges])
 
   const submitFlag = useCallback(async () => {
     if (!token || !activeChallenge) {
@@ -906,6 +916,17 @@ export function App(): React.JSX.Element {
                     <span>搜索</span>
                     <input value={challengeFilter} onChange={(event) => setChallengeFilter(event.target.value)} placeholder="web / crypto / easy / welcome" />
                   </label>
+                  <label className="field">
+                    <span>分类</span>
+                    <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
+                      <option value="">全部</option>
+                      {availableCategories.map((category) => (
+                        <option key={category} value={category}>
+                          {category}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <div className="board-filter-meta">{challengesLoading ? '加载中…' : `${filteredChallenges.length}/${challenges.length}`}</div>
                 </div>
 
@@ -919,15 +940,12 @@ export function App(): React.JSX.Element {
                       className={`challenge-card challenge-card-player ${activeChallengeID === item.id ? 'active' : ''}`}
                       onClick={() => setActiveChallengeID(item.id)}
                     >
-                      <div className="challenge-card-head badge-row">
-                        <span className="badge">{item.category}</span>
-                        <DifficultyBadge difficulty={item.difficulty} />
-                        {item.dynamic ? <span className="badge badge-solid">Dynamic</span> : <span className="badge">Static</span>}
-                      </div>
                       <strong>{item.title}</strong>
                       <div className="challenge-card-subline">
+                        <small>
+                          {item.category} · <DifficultyBadge difficulty={item.difficulty} /> · {item.points} pts{item.dynamic ? ' · Dyn' : ''}
+                        </small>
                         <small>{item.slug}</small>
-                        <small>{item.points} pts</small>
                       </div>
                     </button>
                   ))}
@@ -954,32 +972,26 @@ export function App(): React.JSX.Element {
                       </div>
                       <p className="statement-text">{activeChallenge ? activeChallenge.description : challengeLoading ? '加载中…' : '请选择题目。'}</p>
 
-                      {activeChallenge ? (
-                        <div className="detail-stack" style={{ marginTop: 16 }}>
+                      {activeChallenge && contestPhase?.attachment_visible && activeChallenge.attachments.length ? (
+                        <div className="detail-stack" style={{ marginTop: 12 }}>
                           <strong>附件</strong>
-                          {!contestPhase?.attachment_visible ? (
-                            <div className="empty-state">当前阶段未开放附件。</div>
-                          ) : activeChallenge.attachments.length ? (
-                            <div className="attachment-list">
-                              {activeChallenge.attachments.map((item) => (
-                                <a
-                                  key={item.id}
-                                  className="attachment-row"
-                                  href={`/api/v1/challenges/${activeChallenge.id}/attachments/${item.id}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                >
-                                  <div style={{ display: 'grid', gap: 2 }}>
-                                    <strong>{item.filename}</strong>
-                                    <small className="hint-text">{item.content_type}</small>
-                                  </div>
-                                  <span className="badge">{formatBytes(item.size_bytes)}</span>
-                                </a>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="empty-state">无附件</div>
-                          )}
+                          <div className="attachment-list">
+                            {activeChallenge.attachments.map((item) => (
+                              <a
+                                key={item.id}
+                                className="attachment-row"
+                                href={`/api/v1/challenges/${activeChallenge.id}/attachments/${item.id}`}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                <div style={{ display: 'grid', gap: 2 }}>
+                                  <strong>{item.filename}</strong>
+                                  <small className="hint-text">{item.content_type}</small>
+                                </div>
+                                <span className="badge">{formatBytes(item.size_bytes)}</span>
+                              </a>
+                            ))}
+                          </div>
                         </div>
                       ) : null}
                     </article>
@@ -1101,16 +1113,16 @@ export function App(): React.JSX.Element {
                           </div>
                         </div>
 
-                        <div className="runtime-help-grid">
-                          <div className="detail-row">
+                        <details className="detail-row">
+                          <summary style={{ cursor: 'pointer' }}>
                             <strong>常见失败原因</strong>
-                            <div className="hint-text" style={{ marginTop: 8 }}>
-                              <div>· instance_capacity_reached：题目并发上限</div>
-                              <div>· instance_cooldown_active：用户冷却中</div>
-                              <div>· instance_port_exhausted：端口池耗尽</div>
-                            </div>
+                          </summary>
+                          <div className="hint-text" style={{ marginTop: 8 }}>
+                            <div>· instance_capacity_reached：题目并发上限</div>
+                            <div>· instance_cooldown_active：用户冷却中</div>
+                            <div>· instance_port_exhausted：端口池耗尽</div>
                           </div>
-                        </div>
+                        </details>
                       </div>
                     </section>
                   ) : null}
