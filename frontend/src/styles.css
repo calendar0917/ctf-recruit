@@ -9,9 +9,9 @@
   --radius-md: 14px;
   --radius-sm: 12px;
 
-  --shadow-lg: 0 30px 90px rgba(0, 0, 0, 0.55);
-  --shadow-md: 0 18px 54px rgba(0, 0, 0, 0.45);
-  --shadow-sm: 0 10px 28px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 16px 44px rgba(0, 0, 0, 0.42);
+  --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.34);
+  --shadow-sm: 0 8px 18px rgba(0, 0, 0, 0.24);
 
   /* Default theme: dark (comfortable for long sessions). */
   color-scheme: dark;
@@ -27,14 +27,14 @@
   --muted: rgba(148, 163, 184, 0.9);
 
   --line: rgba(148, 163, 184, 0.16);
-  --line-strong: rgba(96, 165, 250, 0.36);
+  --line-strong: rgba(96, 165, 250, 0.28);
 
   --primary: #e5e7eb;
   --secondary: rgba(148, 163, 184, 0.9);
 
   --cta: #60a5fa;
-  --cta-strong: #3b82f6;
-  --cta-bg: rgba(96, 165, 250, 0.14);
+  --cta-strong: #60a5fa;
+  --cta-bg: rgba(96, 165, 250, 0.1);
 
   --success: #22c55e;
   --success-bg: rgba(34, 197, 94, 0.14);
@@ -45,8 +45,8 @@
   --warning: #fbbf24;
   --warning-bg: rgba(251, 191, 36, 0.14);
 
-  --badge-bg: rgba(2, 6, 23, 0.42);
-  --focus-ring: rgba(96, 165, 250, 0.32);
+  --badge-bg: rgba(2, 6, 23, 0.28);
+  --focus-ring: rgba(96, 165, 250, 0.26);
 
   --brand-filter: brightness(0) invert(1) opacity(0.86);
 }
@@ -108,10 +108,7 @@ html {
 body {
   color: var(--ink);
   font-family: var(--font-sans);
-  background:
-    radial-gradient(circle at 16% 18%, rgba(96, 165, 250, 0.16), transparent 46%),
-    radial-gradient(circle at 82% 72%, rgba(34, 197, 94, 0.12), transparent 48%),
-    linear-gradient(180deg, var(--bg) 0%, var(--bg-alt) 100%);
+  background: linear-gradient(180deg, var(--bg) 0%, var(--bg-alt) 100%);
 }
 
 body::before,
@@ -120,18 +117,7 @@ body::after {
   position: fixed;
   inset: 0;
   pointer-events: none;
-}
-
-body::before {
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-  background-size: 88px 88px;
-  mask-image: radial-gradient(circle at center, black, transparent 76%);
-}
-
-body::after {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 220px);
+  display: none;
 }
 
 button,
@@ -241,7 +227,7 @@ img {
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 34%, transparent 65%, rgba(96, 165, 250, 0.08));
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.04), transparent 40%, transparent 70%, rgba(255, 255, 255, 0.03));
 }
 
 .topbar {
@@ -398,7 +384,7 @@ img {
 .hero-stat-card:hover,
 .capability-card:hover {
   transform: translateY(-1px);
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
 }
 
 .nav-pill.active,
