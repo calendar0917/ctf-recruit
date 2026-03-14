@@ -9,25 +9,32 @@
   --radius-md: 14px;
   --radius-sm: 12px;
 
+  /* density */
+  --space-1: 8px;
+  --space-2: 12px;
+  --space-3: 16px;
+  --space-4: 20px;
+  --space-5: 24px;
+
   --shadow-lg: 0 16px 44px rgba(0, 0, 0, 0.42);
   --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.34);
   --shadow-sm: 0 8px 18px rgba(0, 0, 0, 0.24);
 
   /* Default theme: dark (comfortable for long sessions). */
   color-scheme: dark;
-  --bg: #070b14;
-  --bg-alt: #0b1220;
-  --surface: rgba(15, 23, 42, 0.7);
-  --surface-strong: rgba(15, 23, 42, 0.86);
-  --surface-soft: rgba(15, 23, 42, 0.5);
+  --bg: #0b1220;
+  --bg-alt: #0f172a;
+  --surface-strong: #0f172a;
+  --surface: #111c2f;
+  --surface-soft: rgba(15, 23, 42, 0.44);
   --surface-dark: #020617;
 
   --ink: #e5e7eb;
   --ink-soft: rgba(229, 231, 235, 0.86);
   --muted: rgba(148, 163, 184, 0.9);
 
-  --line: rgba(148, 163, 184, 0.14);
-  --line-strong: rgba(148, 163, 184, 0.22);
+  --line: rgba(148, 163, 184, 0.16);
+  --line-strong: rgba(148, 163, 184, 0.26);
 
   --primary: #e5e7eb;
   --secondary: rgba(148, 163, 184, 0.9);
@@ -87,6 +94,11 @@
   --focus-ring: rgba(3, 105, 161, 0.18);
 
   --brand-filter: saturate(0) brightness(0.25);
+
+  /* light mode: reduce shadow to keep it clean */
+  --shadow-lg: 0 16px 40px rgba(15, 23, 42, 0.07);
+  --shadow-md: 0 12px 28px rgba(15, 23, 42, 0.06);
+  --shadow-sm: 0 8px 16px rgba(15, 23, 42, 0.05);
 }
 
 * {
@@ -205,7 +217,7 @@ img {
 .app-shell {
   width: min(1440px, calc(100vw - 28px));
   margin: 0 auto;
-  padding: 18px 0 40px;
+  padding: 14px 0 28px;
 }
 
 .topbar,
@@ -216,7 +228,7 @@ img {
   border: 1px solid var(--line);
   background: var(--surface-strong);
   box-shadow: var(--shadow-lg);
-  backdrop-filter: blur(16px);
+  backdrop-filter: none;
 }
 
 .topbar::before,
@@ -234,10 +246,10 @@ img {
   position: sticky;
   top: 16px;
   z-index: 20;
-  padding: 18px 20px;
+  padding: 14px 16px;
   display: grid;
   grid-template-columns: minmax(0, 320px) minmax(0, 1fr) auto;
-  gap: 16px;
+  gap: 12px;
   align-items: center;
 }
 
@@ -257,11 +269,11 @@ img {
 .auth-layout,
 .board-main-column {
   display: grid;
-  gap: 18px;
+  gap: 14px;
 }
 
 .page-shell {
-  margin-top: 18px;
+  margin-top: 14px;
 }
 
 .topbar {
@@ -477,15 +489,15 @@ img {
 }
 
 .panel {
-  padding: 22px;
+  padding: 18px;
 }
 
 .panel-head {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 18px;
+  gap: 12px;
+  margin-bottom: 14px;
 }
 
 .panel-head h2,
@@ -509,7 +521,7 @@ img {
 .capability-card,
 .meta-chip,
 .runtime-metric {
-  padding: 16px;
+  padding: 14px;
   border-radius: var(--radius-md);
   border: 1px solid var(--line);
   background: var(--surface-soft);
@@ -617,7 +629,7 @@ img {
 .table-row {
   display: grid;
   gap: 8px;
-  padding: 16px;
+  padding: 14px;
   color: var(--ink);
   text-decoration: none;
 }
