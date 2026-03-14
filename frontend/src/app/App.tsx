@@ -24,10 +24,10 @@ type View = 'briefing' | 'board' | 'scoreboard' | 'me'
 const TOKEN_STORAGE_KEY = 'ctf.frontend.token'
 
 const views: Array<{ id: View; label: string; gatedByPhase?: keyof ContestPhase }> = [
-  { id: 'briefing', label: 'Briefing' },
-  { id: 'board', label: 'Challenges', gatedByPhase: 'challenge_list_visible' },
-  { id: 'scoreboard', label: 'Scoreboard', gatedByPhase: 'scoreboard_visible' },
-  { id: 'me', label: 'My', gatedByPhase: 'challenge_list_visible' },
+  { id: 'briefing', label: '概览' },
+  { id: 'board', label: '题目', gatedByPhase: 'challenge_list_visible' },
+  { id: 'scoreboard', label: '排行榜', gatedByPhase: 'scoreboard_visible' },
+  { id: 'me', label: '我的', gatedByPhase: 'challenge_list_visible' },
 ]
 
 function clamp(n: number, min: number, max: number): number {
@@ -680,13 +680,13 @@ export function App(): React.JSX.Element {
     const start = parseRfc3339(contestInfo?.starts_at)
     const end = parseRfc3339(contestInfo?.ends_at)
     if (!start && !end) return null
-    const now = new Date()
-    return (
-      <div className="badge-row">
-        {start ? <span className="badge">Start {formatDateTime(start)} ({formatRelative(start, now)})</span> : null}
-        {end ? <span className="badge">End {formatDateTime(end)} ({formatRelative(end, now)})</span> : null}
-      </div>
-    )
+    const now = safeNow()
+
+    const startText = start ? `${formatDateTime(start)} (${formatRelative(start, now)})` : ''
+    const endText = end ? `${formatDateTime(end)} (${formatRelative(end, now)})` : ''
+    const text = start && end ? `${startText} → ${endText}` : start ? startText : endText
+
+    return <span className="badge">{text}</span>
   }, [contestInfo?.ends_at, contestInfo?.starts_at])
 
   return (
@@ -759,45 +759,26 @@ export function App(): React.JSX.Element {
         {view === 'briefing' ? (
           <section className="view-stack">
             <section className="panel panel-hero page-enter">
-              <SectionHeader eyebrow="Briefing" title="先做题，再做花哨" subtitle={contestPhase?.message ?? contestInfo?.description ?? '比赛信息加载中…'}>
+              <SectionHeader eyebrow="概览" title={contestInfo?.title ?? 'CTF Recruit Platform'} subtitle={contestPhase?.message ?? contestInfo?.description ?? '比赛信息加载中…'}>
                 {contestStatusBadge}
               </SectionHeader>
-              {contestWindow}
-              <div className="card-list player-mini-grid">
-                <div className="hero-stat-card">
-                  <span className="capability-value">题目列表</span>
-                  <strong>{contestPhase?.challenge_list_visible ? '开放' : '未开放'}</strong>
-                  <small>根据阶段动态控制</small>
-                </div>
-                <div className="hero-stat-card">
-                  <span className="capability-value">提交 Flag</span>
-                  <strong>{contestPhase?.submission_allowed ? '允许' : '关闭'}</strong>
-                  <small>提交入口在题目详情</small>
-                </div>
-                <div className="hero-stat-card">
-                  <span className="capability-value">动态实例</span>
-                  <strong>{contestPhase?.runtime_allowed ? '开放' : '未开放'}</strong>
-                  <small>动态题才显示控制面板</small>
-                </div>
-                <div className="hero-stat-card">
-                  <span className="capability-value">排行榜</span>
-                  <strong>{contestPhase?.scoreboard_visible ? '公开' : '未公开'}</strong>
-                  <small>按阶段控制可见性</small>
-                </div>
+
+              <div className="badge-row">
+                {contestWindow}
+                <span className="badge">
+                  题目 {contestPhase?.challenge_list_visible ? '开放' : '关闭'} · 提交 {contestPhase?.submission_allowed ? '开放' : '关闭'} · 实例{' '}
+                  {contestPhase?.runtime_allowed ? '开放' : '关闭'} · 榜单 {contestPhase?.scoreboard_visible ? '开放' : '关闭'}
+                </span>
               </div>
             </section>
 
             <section className="panel announcement-subpanel page-enter page-enter-1">
-              <SectionHeader eyebrow="Announcements" title="公告" subtitle={contestPhase?.announcement_visible ? '重要变更会置顶展示。' : '当前阶段未开放公告。'} />
+              <SectionHeader eyebrow="公告" title="公告" subtitle={contestPhase?.announcement_visible ? undefined : '当前阶段未开放公告。'} />
               {contestPhase?.announcement_visible ? <AnnouncementList items={announcements} loading={announcementsLoading} /> : <div className="empty-state">公告未开放</div>}
             </section>
 
             <section className="panel page-enter page-enter-2">
-              <SectionHeader
-                eyebrow="Access"
-                title={authUser ? '已登录' : '登录 / 注册'}
-                subtitle={authUser ? '可以直接去 Challenges 做题。' : '为了聚焦做题：登录模块保持最少干扰。'}
-              />
+              <SectionHeader eyebrow="账号" title={authUser ? '已登录' : '登录 / 注册'} subtitle={authUser ? undefined : '仅保留必要字段，避免打断做题。'} />
               <NoticeBanner notice={authNotice} />
               {authUser ? (
                 <div className="wrap-actions">
@@ -917,40 +898,15 @@ export function App(): React.JSX.Element {
 
         {view === 'board' ? (
           <section className="player-focused-board page-enter">
-            <section className="panel panel-hero board-hero-compact">
-              <SectionHeader
-                eyebrow="Challenges"
-                title="题目面板"
-                subtitle={contestPhase?.challenge_detail_visible ? '左侧筛选 + 右侧做题；所有操作围绕做题。' : '当前阶段仅开放题目列表，详情未开放。'}
-              >
-                <span className="badge">{challengesLoading ? 'loading…' : `${challenges.length} total`}</span>
-              </SectionHeader>
-              <div className="board-summary-grid card-list capability-grid">
-                <div className="summary-card">
-                  <span className="capability-value">Focus</span>
-                  <strong>题目列表 → 详情 → 提交</strong>
-                  <small>最短路径设计</small>
-                </div>
-                <div className="summary-card">
-                  <span className="capability-value">Phase</span>
-                  <strong>{contestPhase?.status ?? 'unknown'}</strong>
-                  <small>{contestPhase?.message ?? '—'}</small>
-                </div>
-              </div>
-            </section>
-
             <div className="player-board-shell workspace-grid">
               <aside className="panel rail-panel player-side-panel">
-                <SectionHeader eyebrow="Browse" title="题目列表" subtitle="输入关键词快速定位。" />
+                <SectionHeader eyebrow="题目" title="题目列表" subtitle={undefined} />
                 <div className="board-list-toolbar">
                   <label className="field">
                     <span>搜索</span>
                     <input value={challengeFilter} onChange={(event) => setChallengeFilter(event.target.value)} placeholder="web / crypto / easy / welcome" />
                   </label>
-                  <div className="board-filter-meta">
-                    <div>阶段 gating：{contestPhase?.challenge_list_visible ? 'list on' : 'list off'} / {contestPhase?.challenge_detail_visible ? 'detail on' : 'detail off'}</div>
-                    <div>{filteredChallenges.length} shown</div>
-                  </div>
+                  <div className="board-filter-meta">{challengesLoading ? '加载中…' : `${filteredChallenges.length}/${challenges.length}`}</div>
                 </div>
 
                 <div className="challenge-card-list">
@@ -1166,7 +1122,7 @@ export function App(): React.JSX.Element {
 
         {view === 'scoreboard' ? (
           <section className="view-stack page-enter">
-            <section className="panel panel-hero scoreboard-stage-hero">
+            <section className="panel scoreboard-stage-hero">
               <SectionHeader eyebrow="Scoreboard" title="排行榜" subtitle={contestPhase?.scoreboard_visible ? '默认展示 Top 50；点击展开查看解题细节。' : '当前阶段未公开排行榜。'}>
                 <button className="ghost-button" type="button" onClick={() => void loadScoreboard()} disabled={!contestPhase?.scoreboard_visible || scoreboardLoading}>
                   刷新
@@ -1175,22 +1131,9 @@ export function App(): React.JSX.Element {
 
               {!contestPhase?.scoreboard_visible ? <div className="empty-state">排行榜未开放</div> : null}
               {contestPhase?.scoreboard_visible ? (
-                <div className="scoreboard-personal-strip card-list">
-                  <div className="summary-card">
-                    <span className="eyebrow">My Score</span>
-                    <strong>{authUser ? (scoreboard.find((item) => item.user_id === authUser.id)?.score ?? '—') : '—'}</strong>
-                    <small>登录后展示更准确</small>
-                  </div>
-                  <div className="summary-card">
-                    <span className="eyebrow">Entries</span>
-                    <strong>{scoreboardLoading ? '…' : scoreboard.length}</strong>
-                    <small>公开榜单</small>
-                  </div>
-                  <div className="summary-card">
-                    <span className="eyebrow">Updated</span>
-                    <strong>{scoreboardLoading ? 'loading…' : 'just now'}</strong>
-                    <small>手动刷新</small>
-                  </div>
+                <div className="badge-row">
+                  <span className="badge">Entries {scoreboardLoading ? '…' : scoreboard.length}</span>
+                  {authUser ? <span className="badge">My {scoreboard.find((item) => item.user_id === authUser.id)?.score ?? '—'}</span> : null}
                 </div>
               ) : null}
             </section>
@@ -1222,7 +1165,7 @@ export function App(): React.JSX.Element {
 
         {view === 'me' ? (
           <section className="view-stack page-enter">
-            <section className="panel panel-hero player-hero">
+            <section className="panel player-hero">
               <SectionHeader eyebrow="My" title="我的进度" subtitle={authUser ? '复盘自己的提交和解题路径。' : '请先登录。'}>
                 <button className="ghost-button" type="button" onClick={() => void loadMyProgress()} disabled={!token || myLoading}>
                   刷新
@@ -1231,27 +1174,10 @@ export function App(): React.JSX.Element {
               <NoticeBanner notice={authNotice} />
               {!authUser ? <div className="empty-state">未登录</div> : null}
               {authUser ? (
-                <div className="player-summary-stack card-list player-mini-grid">
-                  <div className="hero-stat-card">
-                    <span className="eyebrow">Solves</span>
-                    <strong>{myLoading ? '…' : mySolves.length}</strong>
-                    <small>已解</small>
-                  </div>
-                  <div className="hero-stat-card">
-                    <span className="eyebrow">Submissions</span>
-                    <strong>{myLoading ? '…' : mySubmissions.length}</strong>
-                    <small>提交记录</small>
-                  </div>
-                  <div className="hero-stat-card hero-stat-card-strong">
-                    <span className="eyebrow">Focus</span>
-                    <strong>下一题</strong>
-                    <small>回到 Challenges 继续</small>
-                  </div>
-                  <div className="hero-stat-card">
-                    <span className="eyebrow">Role</span>
-                    <strong>{authUser.role}</strong>
-                    <small>{authUser.status}</small>
-                  </div>
+                <div className="badge-row">
+                  <span className="badge">Solves {myLoading ? '…' : mySolves.length}</span>
+                  <span className="badge">Submissions {myLoading ? '…' : mySubmissions.length}</span>
+                  <span className="badge">Role {authUser.role}</span>
                 </div>
               ) : null}
             </section>
@@ -1304,9 +1230,7 @@ export function App(): React.JSX.Element {
           </section>
         ) : null}
 
-        <footer style={{ marginTop: 24, color: 'var(--muted)', fontSize: 12, textAlign: 'center' }}>
-          Demo UI · focus on solving challenges · phase-aware gating
-        </footer>
+        <footer style={{ marginTop: 16, color: 'var(--muted)', fontSize: 12, textAlign: 'center' }}>focus on solving challenges</footer>
       </main>
     </div>
   )
