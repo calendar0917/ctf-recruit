@@ -1,0 +1,229 @@
+/* v2 baseline (data-dense, cyber console). */
+
+* {
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(circle at 20% 12%, rgba(0, 255, 65, 0.06), transparent 40%),
+    radial-gradient(circle at 70% 78%, rgba(255, 51, 51, 0.05), transparent 45%),
+    linear-gradient(180deg, #000, #050505);
+  color: var(--text);
+  font-family: var(--sans);
+  letter-spacing: 0.01em;
+}
+
+a {
+  color: inherit;
+}
+
+#root {
+  min-height: 100%;
+}
+
+.ds-shell {
+  width: min(1320px, calc(100vw - 28px));
+  margin: 0 auto;
+  padding: 18px 0 54px;
+}
+
+.ds-topbar {
+  position: sticky;
+  top: 14px;
+  z-index: 20;
+
+  display: grid;
+  grid-template-columns: minmax(0, 320px) 1fr auto;
+  gap: 14px;
+  align-items: center;
+
+  padding: 14px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, rgba(13, 13, 13, 0.9), rgba(7, 7, 7, 0.86));
+  box-shadow: var(--shadow-1);
+  backdrop-filter: blur(12px);
+}
+
+.ds-brand {
+  display: grid;
+  gap: 2px;
+}
+
+.ds-brand .eyebrow {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--primary-dim);
+  margin: 0;
+}
+
+.ds-brand h1 {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.ds-nav {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.ds-pill {
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease;
+}
+
+.ds-pill:hover {
+  border-color: var(--line-strong);
+  background: rgba(0, 255, 65, 0.06);
+}
+
+.ds-pill[aria-current='page'] {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.ds-session {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.ds-user {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.35);
+  min-width: 160px;
+}
+
+.ds-user strong {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.ds-user span {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.ds-btn {
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--text);
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  font-family: var(--mono);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+.ds-btn:hover {
+  border-color: var(--line-strong);
+  background: rgba(0, 255, 65, 0.06);
+}
+
+.ds-btn.primary {
+  border-color: rgba(0, 255, 65, 0.5);
+  background: rgba(0, 255, 65, 0.12);
+}
+
+.ds-btn.danger {
+  border-color: rgba(255, 51, 51, 0.5);
+  background: rgba(255, 51, 51, 0.08);
+}
+
+.ds-main {
+  margin-top: 16px;
+  display: grid;
+  gap: 16px;
+}
+
+.ds-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, rgba(13, 13, 13, 0.88), rgba(7, 7, 7, 0.84));
+  box-shadow: var(--shadow-1);
+}
+
+.ds-card-header {
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid rgba(0, 255, 65, 0.12);
+}
+
+.ds-card-header h2 {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 14px;
+  letter-spacing: 0.02em;
+}
+
+.ds-card-header p {
+  margin: 6px 0 0;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.ds-card-body {
+  padding: 14px;
+}
+
+.ds-notice {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.ds-notice[data-tone='danger'] {
+  border-color: rgba(255, 51, 51, 0.5);
+}
+
+.ds-notice[data-tone='ok'] {
+  border-color: rgba(34, 197, 94, 0.5);
+}
+
+@media (max-width: 920px) {
+  .ds-topbar {
+    grid-template-columns: 1fr;
+    justify-items: start;
+  }
+
+  .ds-nav {
+    justify-content: start;
+  }
+
+  .ds-session {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .ds-user {
+    min-width: unset;
+    flex: 1;
+  }
+}
