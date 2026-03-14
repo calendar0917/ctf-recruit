@@ -1012,7 +1012,7 @@ export function App(): React.JSX.Element {
                       </div>
                     ) : null}
                     <div className="primary-action-layout">
-                      <div className="primary-action-intro player-action-intro">
+                      <div className="primary-action-intro single-action-grid">
                         <div className="primary-action-copy">
                           <TextInput
                             label="Flag"
@@ -1024,11 +1024,6 @@ export function App(): React.JSX.Element {
                           <div className="hint-text" style={{ marginTop: 10 }}>
                             建议：复制粘贴，避免手输错误。提交频率过高会触发限流。
                           </div>
-                        </div>
-                        <div className="primary-action-status">
-                          <span>Submission</span>
-                          <strong>{contestPhase?.submission_allowed ? 'Open' : 'Closed'}</strong>
-                          <span style={{ fontSize: 12, opacity: 0.8 }}>{submissionLoading ? 'working…' : 'ready'}</span>
                         </div>
                       </div>
 
@@ -1253,6 +1248,29 @@ function ScoreboardRow(props: { entry: ScoreboardEntry; currentUserID: number | 
   const entry = props.entry
   const isCurrent = props.currentUserID != null && entry.user_id === props.currentUserID
 
+  const trend = useMemo(() => {
+    if (!entry.solves.length) return null
+    const timestamps = entry.solves
+      .map((solve) => parseRfc3339(solve.solved_at))
+      .filter((item): item is Date => Boolean(item))
+      .map((item) => item.getTime())
+      .sort((a, b) => a - b)
+    if (timestamps.length < 2) return null
+
+    const buckets = 12
+    const min = timestamps[0]
+    const max = timestamps[timestamps.length - 1]
+    const span = Math.max(1, max - min)
+    const counts = Array.from({ length: buckets }, () => 0)
+    for (const t of timestamps) {
+      const idx = clamp(Math.floor(((t - min) / span) * (buckets - 1)), 0, buckets - 1)
+      counts[idx] += 1
+    }
+    const peak = Math.max(...counts)
+    const normalized = counts.map((value) => (peak ? value / peak : 0))
+    return { counts, normalized }
+  }, [entry.solves])
+
   return (
     <article className={`scoreboard-table-entry ${expanded ? 'expanded' : ''} ${isCurrent ? 'current-user' : ''}`}>
       <div className="scoreboard-table-row">
@@ -1282,6 +1300,23 @@ function ScoreboardRow(props: { entry: ScoreboardEntry; currentUserID: number | 
 
       {expanded ? (
         <div className="scoreboard-row-details">
+          {trend ? (
+            <div className="detail-row" style={{ display: 'grid', gap: 10 }}>
+              <strong>Trend</strong>
+              <div className="trend" role="img" aria-label="solve trend">
+                {trend.normalized.map((value, idx) => (
+                  <span
+                    // eslint-disable-next-line react/no-array-index-key
+                    key={idx}
+                    className="trend-bar"
+                    style={{ height: `${Math.round(8 + value * 20)}px` }}
+                    title={`${trend.counts[idx]} solves`}
+                  />
+                ))}
+              </div>
+              <div className="hint-text">按 solve 时间分桶（相对趋势）。</div>
+            </div>
+          ) : null}
           {entry.solves.length === 0 ? <div className="empty-state">暂无 solves</div> : null}
           {entry.solves.map((solve) => (
             <div key={`${solve.challenge_id}-${solve.solved_at}`} className="scoreboard-table-solve">

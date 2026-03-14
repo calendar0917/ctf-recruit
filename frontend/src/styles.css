@@ -925,6 +925,10 @@ textarea::placeholder {
   align-items: stretch;
 }
 
+.primary-action-intro.single-action-grid {
+  grid-template-columns: 1fr;
+}
+
 .primary-action-copy,
 .primary-action-status {
   padding: 16px;
@@ -937,9 +941,7 @@ textarea::placeholder {
 }
 
 .primary-action-status {
-  background: linear-gradient(145deg, color-mix(in srgb, var(--surface-dark) 92%, transparent), var(--surface-dark));
-  color: var(--ink);
-  align-content: center;
+  display: none;
 }
 
 .primary-action-status strong,
@@ -1530,6 +1532,20 @@ textarea::placeholder {
 
 .scoreboard-table-entry.expanded .scoreboard-table-row {
   padding-bottom: 12px;
+}
+
+.trend {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 32px;
+}
+
+.trend-bar {
+  width: 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--cta) 55%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cta) 25%, transparent);
 }
 
 .scoreboard-row-details {
