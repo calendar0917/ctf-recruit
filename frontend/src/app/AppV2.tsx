@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { api, type AuthUser, type ContestInfo, type ContestPhase } from '../api'
 import { NoticeBanner } from './components/NoticeBanner'
+import { Card } from './components/Card'
+import { BriefingPage } from './pages/BriefingPage'
 import { describeError, errorToNotice, isUnauthorized, type Notice } from './utils/errors'
 
 import './design-tokens.css'
@@ -164,33 +166,11 @@ export function AppV2(): React.JSX.Element {
 
       <main className="ds-main" id="main-content">
         <NoticeBanner notice={publicNotice} />
-        {contestPhase ? (
-          <div className="ds-card">
-            <div className="ds-card-header">
-              <h2>Phase</h2>
-              <p>{contestPhase.message}</p>
-            </div>
-            <div className="ds-card-body">
-              <div style={{ display: 'grid', gap: 10, fontFamily: 'var(--mono)', fontSize: 12 }}>
-                <div>announcement_visible: {String(contestPhase.announcement_visible)}</div>
-                <div>challenge_list_visible: {String(contestPhase.challenge_list_visible)}</div>
-                <div>submission_allowed: {String(contestPhase.submission_allowed)}</div>
-                <div>runtime_allowed: {String(contestPhase.runtime_allowed)}</div>
-                <div>scoreboard_visible: {String(contestPhase.scoreboard_visible)}</div>
-                <div>registration_allowed: {String(contestPhase.registration_allowed)}</div>
-              </div>
-            </div>
-          </div>
-        ) : null}
 
-        <div className="ds-card">
-          <div className="ds-card-header">
-            <h2>V2 Progress</h2>
-            <p>
-              This is the new shell + tokens. Next step: implement Briefing/Board/Scoreboard pages with the new design.
-            </p>
-          </div>
-          <div className="ds-card-body">
+        {view === 'briefing' ? <BriefingPage contest={contestInfo} phase={contestPhase} user={authUser} /> : null}
+
+        {view !== 'briefing' ? (
+          <Card title="WIP" subtitle="Pages will be rebuilt next">
             <NoticeBanner notice={authNotice} />
             <div style={{ display: 'grid', gap: 10, fontSize: 12, color: 'var(--text-dim)' }}>
               <div>Current view: {view}</div>
@@ -208,8 +188,8 @@ export function AppV2(): React.JSX.Element {
                 Demo contest_not_public
               </button>
             </div>
-          </div>
-        </div>
+          </Card>
+        ) : null}
       </main>
     </div>
   )
