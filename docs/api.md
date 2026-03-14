@@ -4,7 +4,8 @@
 
 ## 约定
 
-- 所有成功响应为 JSON（附件下载除外）。
+- 大部分成功响应为 JSON。
+  - 例外：`GET /api/v1/metrics` 为 `text/plain`；`GET /api/v1/challenges/{challengeID}/attachments/{attachmentID}` 为文件流。
 - 所有错误响应为 JSON：`{"error":"<code>","message":"<human-readable>"}`。
 - 需要认证的接口必须携带：`Authorization: Bearer <token>`。
 - 路由中出现的 `{challengeID}` 在玩家侧接口中既可为数字 ID，也可为 slug。
@@ -150,6 +151,7 @@
     "points": 100,
     "difficulty": "easy",
     "description": "...",
+    "flag_type": "static",
     "dynamic": true,
     "attachments": [
       {
@@ -167,6 +169,29 @@
 
 - `flag_value` 不会在公共接口返回（只在管理端返回）。
 - `flag_type` 当前会在题目详情接口返回（用于前端提示/校验），未来如需隐藏可再调整。
+
+### `POST /api/v1/challenges/{challengeID}/submissions`
+
+需要认证。
+
+请求：
+
+```json
+{"flag":"flag{...}"}
+```
+
+响应：
+
+```json
+{
+  "submission_id": 10,
+  "correct": true,
+  "solved": true,
+  "message": "flag accepted",
+  "awarded_points": 100,
+  "solved_at": "2026-03-14T00:00:00Z"
+}
+```
 
 ### `GET /api/v1/scoreboard`
 
@@ -255,6 +280,48 @@
 
 ```json
 {"user":{"id":2,"role":"player","username":"player","email":"player@example.com","display_name":"Player","status":"active","last_login_at":"2026-03-14T00:00:00Z"}}
+```
+
+### `GET /api/v1/me/submissions`
+
+响应：
+
+```json
+{
+  "items": [
+    {
+      "id": 10,
+      "challenge_id": 1,
+      "challenge_slug": "web-welcome",
+      "challenge_title": "Welcome Panel",
+      "category": "web",
+      "correct": true,
+      "submitted_at": "2026-03-14T00:00:00Z",
+      "source_ip": "203.0.113.10"
+    }
+  ]
+}
+```
+
+### `GET /api/v1/me/solves`
+
+响应：
+
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "challenge_id": 1,
+      "challenge_slug": "web-welcome",
+      "challenge_title": "Welcome Panel",
+      "category": "web",
+      "submission_id": 10,
+      "awarded_points": 100,
+      "solved_at": "2026-03-14T00:00:00Z"
+    }
+  ]
+}
 ```
 
 
