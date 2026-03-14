@@ -6,9 +6,11 @@ export function NoticeBanner({ notice }: { notice: Notice | null }): React.JSX.E
   if (!notice) {
     return null
   }
+
   const tone = notice.tone === 'ok' ? 'ok' : notice.tone === 'danger' ? 'danger' : 'neutral'
+  const toneClass = notice.tone === 'ok' ? 'notice-success' : notice.tone === 'danger' ? 'notice-danger' : ''
   return (
-    <div aria-live="polite" className="ds-notice" data-tone={tone}>
+    <div aria-live="polite" className={`notice ds-notice ${toneClass}`.trim()} data-tone={tone} role="status">
       {notice.text}
     </div>
   )
