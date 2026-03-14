@@ -13,6 +13,23 @@
 - `GET /api/v1/challenges` 返回的 `items[].id` 为字符串；而 `GET /api/v1/challenges/{challengeID}` 返回的 `challenge.id` 为数字。
   - 前端建议把“挑战引用”统一当作字符串处理。
 
+## 快速对接（前端从零开发建议）
+
+1. 先调用 `GET /api/v1/contest`，根据 `phase.*` 控制页面能力（未开放时直接禁用/隐藏入口）。
+2. 展示题库：`GET /api/v1/challenges`（注意 `items[].id` 是字符串）。
+3. 进入题面：`GET /api/v1/challenges/{challengeID}`（`{challengeID}` 可用上一步的 `id` 字段或 slug）。
+4. 登录/注册：
+   - 注册：`POST /api/v1/auth/register`（可能返回 `registration_closed` 或 `register_rate_limited`）
+   - 登录：`POST /api/v1/auth/login`（可能返回 `login_rate_limited` 或 `invalid_credentials`）
+5. 提交 Flag：`POST /api/v1/challenges/{challengeID}/submissions`（可能返回 `submission_closed` 或 `submission_rate_limited`）。
+6. 动态实例（如果题目 `dynamic=true`）：
+   - 创建：`POST /api/v1/challenges/{challengeID}/instances/me`
+   - 查询：`GET /api/v1/challenges/{challengeID}/instances/me`
+   - 续期：`POST /api/v1/challenges/{challengeID}/instances/me/renew`
+   - 回收：`DELETE /api/v1/challenges/{challengeID}/instances/me`
+
+建议：前端统一把服务端错误 `error` 当作稳定错误码处理（用 code 映射友好提示），不要依赖 `message` 文案做逻辑分支。
+
 本文档描述当前已实现的主要 API 面。
 
 ## 公共接口
