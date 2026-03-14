@@ -217,7 +217,7 @@ img {
 .app-shell {
   width: min(1440px, calc(100vw - 28px));
   margin: 0 auto;
-  padding: 14px 0 28px;
+  padding: 12px 0 22px;
 }
 
 .topbar,
@@ -244,12 +244,12 @@ img {
 
 .topbar {
   position: sticky;
-  top: 16px;
+  top: 12px;
   z-index: 20;
-  padding: 14px 16px;
+  padding: 12px 14px;
   display: grid;
   grid-template-columns: minmax(0, 320px) minmax(0, 1fr) auto;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
 }
 
@@ -269,11 +269,11 @@ img {
 .auth-layout,
 .board-main-column {
   display: grid;
-  gap: 14px;
+  gap: 12px;
 }
 
 .page-shell {
-  margin-top: 14px;
+  margin-top: 12px;
 }
 
 .topbar {
@@ -287,22 +287,22 @@ img {
 .brand-block {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
 }
 
 .brand-mark {
-  width: 68px;
-  height: 68px;
-  flex: 0 0 68px;
+  width: 56px;
+  height: 56px;
+  flex: 0 0 56px;
   display: grid;
   place-items: center;
-  border-radius: 20px;
+  border-radius: 16px;
   border: 1px solid var(--line);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
 }
 
 .brand-mark img {
-  width: 52px;
+  width: 44px;
   filter: var(--brand-filter);
 }
 
@@ -422,6 +422,14 @@ img {
   justify-content: center;
 }
 
+@media (max-width: 720px) {
+  .primary-button,
+  .ghost-button,
+  .link-button {
+    min-height: 42px;
+  }
+}
+
 .primary-button:disabled,
 .link-button:disabled {
   filter: saturate(0.9);
@@ -489,7 +497,7 @@ img {
 }
 
 .panel {
-  padding: 18px;
+  padding: 16px;
 }
 
 .panel-head {
@@ -497,7 +505,7 @@ img {
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .panel-head h2,
