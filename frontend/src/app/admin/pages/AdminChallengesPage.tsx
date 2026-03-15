@@ -72,11 +72,8 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
   const [authorCandidates, setAuthorCandidates] = useState<Array<{ id: number; username: string; display_name: string; email: string; role: string }>>([])
 
   const [importRoot, setImportRoot] = useState('../challenges')
-  const [importPath, setImportPath] = useState('')
   const [importAttachmentDir, setImportAttachmentDir] = useState('')
 
-  const [buildTemplate, setBuildTemplate] = useState('web-welcome')
-  const [buildTag, setBuildTag] = useState('')
   const [buildResult, setBuildResult] = useState<{ stdout: string; stderr: string; exit_code: number; duration_ms: number; command: string[]; error?: string } | null>(null)
 
   const [meRole, setMeRole] = useState('')
@@ -188,8 +185,6 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
       setDraft(nextDraft)
       setLastSavedDraft(nextDraft)
       setDirtyFields(new Set())
-      setBuildTemplate(ch.slug)
-      setBuildTag(ch.runtime_config?.image_name ?? '')
 
       // Keep authors in a separate state so admin can edit without having to patch challenge detail schema.
       setAuthors(ch.authors ?? [])
@@ -322,28 +317,6 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
     }
   }
 
-  const importChallenges = async (): Promise<void> => {
-    if (!canDoServerLocal) {
-      setNotice({ tone: 'neutral', text: '当前账号无权限执行 server-local 导入（仅 admin/ops）。' })
-      return
-    }
-    setSaving(true)
-    setNotice(null)
-    try {
-      const response = await api.adminImportChallenges(props.token, {
-        root: importRoot.trim() || undefined,
-        path: importPath.trim() || undefined,
-        attachment_dir: importAttachmentDir.trim() || undefined,
-      })
-      setNotice({ tone: 'ok', text: `已导入 ${response.result.imported} 个 challenge：${response.result.slugs.slice(0, 6).join(', ')}${response.result.slugs.length > 6 ? '…' : ''}` })
-      await loadList()
-    } catch (error) {
-      setNotice(errorToNotice(error, '导入失败。'))
-    } finally {
-      setSaving(false)
-    }
-  }
-
   const importForActiveChallenge = async (): Promise<void> => {
     if (!canDoServerLocal) {
       setNotice({ tone: 'neutral', text: '当前账号无权限执行 server-local 导入（仅 admin/ops）。' })
@@ -373,36 +346,6 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
       }
     } catch (error) {
       setNotice(errorToNotice(error, '导入失败。'))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const buildImage = async (): Promise<void> => {
-    if (!canDoServerLocal) {
-      setNotice({ tone: 'neutral', text: '当前账号无权限构建镜像。' })
-      return
-    }
-    if (!buildTemplate.trim()) {
-      setNotice({ tone: 'neutral', text: '请填写 template。' })
-      return
-    }
-    setSaving(true)
-    setNotice(null)
-    setBuildResult(null)
-    try {
-      const response = await api.adminBuildChallengeImage(props.token, {
-        template: buildTemplate.trim(),
-        tag: buildTag.trim() || undefined,
-      })
-      setBuildResult({ ...response.result, error: response.error })
-      if (response.result.exit_code === 0) {
-        setNotice({ tone: 'ok', text: '镜像构建完成。' })
-      } else {
-        setNotice({ tone: 'danger', text: '镜像构建失败，请查看输出。' })
-      }
-    } catch (error) {
-      setNotice(errorToNotice(error, '镜像构建失败。'))
     } finally {
       setSaving(false)
     }
@@ -518,23 +461,18 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
 
         <details className="detail-row" style={{ marginTop: 12 }}>
           <summary style={{ cursor: 'pointer' }}>
-            <strong>导入 / 构建（工具箱）</strong>
+            <strong>导入 / 构建</strong>
           </summary>
 
           <div className="hint-text" style={{ marginTop: 10 }}>
-            说明：本项目的“动态题”运行依赖 `runtime_config.image_name`（数据库），镜像构建只负责把 `templates/&lt;slug&gt;` 的 Dockerfile build 成该 tag。
+            说明：动态题运行依赖 `runtime_config.image_name`（数据库）。导入与构建都默认绑定当前题目的 slug。
           </div>
 
           <div className="form-grid" style={{ marginTop: 12 }}>
             <label className="field" style={{ gridColumn: '1 / -1' }}>
               <span>root</span>
-              <input value={importRoot} onChange={(e) => setImportRoot(e.target.value)} placeholder="./challenges" />
-              <small className="hint-text">扫描目录，自动发现所有 `challenge.yaml`。</small>
-            </label>
-            <label className="field" style={{ gridColumn: '1 / -1' }}>
-              <span>path（可选）</span>
-              <input value={importPath} onChange={(e) => setImportPath(e.target.value)} placeholder="challenges/templates/web-welcome/challenge.yaml" />
-              <small className="hint-text">填写则只导入单个 spec，优先级高于 root。</small>
+              <input value={importRoot} onChange={(e) => setImportRoot(e.target.value)} placeholder="../challenges" />
+              <small className="hint-text">用于定位 templates 目录（server-local）。</small>
             </label>
             <label className="field" style={{ gridColumn: '1 / -1' }}>
               <span>attachment_dir（可选）</span>
@@ -544,34 +482,8 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
           </div>
 
           <div className="wrap-actions" style={{ marginTop: 12 }}>
-            <button className="ghost-button" type="button" disabled={saving || !canDoServerLocal} onClick={() => void importChallenges()}>
-              {saving ? '导入中…' : '批量导入（按 root/path）'}
-            </button>
             <button className="primary-button" type="button" disabled={saving || !canDoServerLocal || !canImportForDraft} onClick={() => void importForActiveChallenge()}>
               {saving ? '导入中…' : `导入当前题（templates/${deriveTemplateFromDraft || '…'}/challenge.yaml）`}
-            </button>
-          </div>
-
-          <div className="divider-line" style={{ marginTop: 14 }}>
-            <span>镜像</span>
-          </div>
-
-          <div className="form-grid" style={{ marginTop: 12 }}>
-            <label className="field" style={{ gridColumn: '1 / -1' }}>
-              <span>template</span>
-              <input value={buildTemplate} onChange={(e) => setBuildTemplate(e.target.value)} placeholder="web-welcome" />
-              <small className="hint-text">工具箱模式：手动指定 templates 目录名（不绑定题目）。</small>
-            </label>
-            <label className="field" style={{ gridColumn: '1 / -1' }}>
-              <span>tag（可选）</span>
-              <input value={buildTag} onChange={(e) => setBuildTag(e.target.value)} placeholder="ctf/web-welcome:dev" />
-              <small className="hint-text">不填则默认 `ctf/&lt;template&gt;:dev`。</small>
-            </label>
-          </div>
-
-          <div className="wrap-actions" style={{ marginTop: 12 }}>
-            <button className="ghost-button" type="button" disabled={saving || !canDoServerLocal} onClick={() => void buildImage()}>
-              {saving ? '构建中…' : '构建（工具箱）'}
             </button>
             <button className="primary-button" type="button" disabled={saving || !canDoServerLocal || !canBuildForDraft} onClick={() => void buildImageForActiveChallenge()}>
               {saving ? '构建中…' : `构建当前题（${(draft.runtime_config?.image_name ?? '').trim() || '请先填 image_name'}）`}
