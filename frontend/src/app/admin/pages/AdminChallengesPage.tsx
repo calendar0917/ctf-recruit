@@ -5,6 +5,15 @@ import { NoticeBanner } from '../../components/NoticeBanner'
 import type { Notice } from '../../utils/errors'
 import { errorToNotice } from '../../utils/errors'
 
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB']
+  const idx = Math.min(units.length - 1, Math.max(0, Math.floor(Math.log(bytes) / Math.log(1024))))
+  const value = bytes / 1024 ** idx
+  const fixed = value >= 10 || idx === 0 ? 0 : 1
+  return `${value.toFixed(fixed)} ${units[idx]}`
+}
+
 const CHALLENGE_STATUSES = ['draft', 'review', 'ready', 'published'] as const
 const DIFFICULTIES = ['easy', 'normal', 'hard'] as const
 
@@ -897,7 +906,7 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
                       <strong>{item.filename}</strong>
                       <small className="hint-text">{item.content_type}</small>
                     </div>
-                    <span className="badge">{Math.round((item.size_bytes / 1024) * 10) / 10} KB</span>
+                    <span className="badge">{formatBytes(item.size_bytes)}</span>
                   </a>
                 ))}
               </div>
