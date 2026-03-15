@@ -534,10 +534,10 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
           </div>
 
           <div className="wrap-actions" style={{ marginTop: 12 }}>
-            <button className="ghost-button" type="button" disabled={saving} onClick={() => void importChallenges()}>
+            <button className="ghost-button" type="button" disabled={saving || !canDoServerLocal} onClick={() => void importChallenges()}>
               {saving ? '导入中…' : '批量导入（按 root/path）'}
             </button>
-            <button className="primary-button" type="button" disabled={saving || !canImportForDraft} onClick={() => void importForActiveChallenge()}>
+            <button className="primary-button" type="button" disabled={saving || !canDoServerLocal || !canImportForDraft} onClick={() => void importForActiveChallenge()}>
               {saving ? '导入中…' : `导入当前题（templates/${deriveTemplateFromDraft || '…'}/challenge.yaml）`}
             </button>
           </div>
@@ -560,10 +560,10 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
           </div>
 
           <div className="wrap-actions" style={{ marginTop: 12 }}>
-            <button className="ghost-button" type="button" disabled={saving} onClick={() => void buildImage()}>
+            <button className="ghost-button" type="button" disabled={saving || !canDoServerLocal} onClick={() => void buildImage()}>
               {saving ? '构建中…' : '构建（工具箱）'}
             </button>
-            <button className="primary-button" type="button" disabled={saving || !canBuildForDraft} onClick={() => void buildImageForActiveChallenge()}>
+            <button className="primary-button" type="button" disabled={saving || !canDoServerLocal || !canBuildForDraft} onClick={() => void buildImageForActiveChallenge()}>
               {saving ? '构建中…' : `构建当前题（${(draft.runtime_config?.image_name ?? '').trim() || '请先填 image_name'}）`}
             </button>
           </div>
