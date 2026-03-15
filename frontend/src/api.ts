@@ -482,4 +482,15 @@ export const api = {
       token,
     )
   },
+
+  adminBuildChallengeImage(token: string, payload: { template: string; tag?: string }) {
+    return request<{ result: { command: string[]; duration_ms: number; exit_code: number; stdout: string; stderr: string }; error?: string }>(
+      '/api/v1/admin/challenges/build-image',
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+      token,
+    )
+  },
 }

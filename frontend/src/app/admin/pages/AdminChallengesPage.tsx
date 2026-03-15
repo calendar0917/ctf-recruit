@@ -53,6 +53,10 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
   const [importPath, setImportPath] = useState('')
   const [importAttachmentDir, setImportAttachmentDir] = useState('')
 
+  const [buildTemplate, setBuildTemplate] = useState('web-welcome')
+  const [buildTag, setBuildTag] = useState('')
+  const [buildResult, setBuildResult] = useState<{ stdout: string; stderr: string; exit_code: number; duration_ms: number; command: string[]; error?: string } | null>(null)
+
   const loadList = async (): Promise<void> => {
     setLoading(true)
     setNotice(null)
@@ -172,6 +176,32 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
     }
   }
 
+  const buildImage = async (): Promise<void> => {
+    if (!buildTemplate.trim()) {
+      setNotice({ tone: 'neutral', text: '请填写 template。' })
+      return
+    }
+    setSaving(true)
+    setNotice(null)
+    setBuildResult(null)
+    try {
+      const response = await api.adminBuildChallengeImage(props.token, {
+        template: buildTemplate.trim(),
+        tag: buildTag.trim() || undefined,
+      })
+      setBuildResult({ ...response.result, error: response.error })
+      if (response.result.exit_code === 0) {
+        setNotice({ tone: 'ok', text: '镜像构建完成。' })
+      } else {
+        setNotice({ tone: 'danger', text: '镜像构建失败，请查看输出。' })
+      }
+    } catch (error) {
+      setNotice(errorToNotice(error, '镜像构建失败。'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <section className="player-board-shell workspace-grid admin-grid">
       <aside className="panel rail-panel">
@@ -234,6 +264,40 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
               {saving ? '导入中…' : '开始导入'}
             </button>
           </div>
+        </details>
+
+        <details className="detail-row" style={{ marginTop: 12 }}>
+          <summary style={{ cursor: 'pointer' }}>
+            <strong>构建镜像（server-exec）</strong>
+          </summary>
+          <div className="hint-text" style={{ marginTop: 10 }}>
+            受限执行：只允许构建 `../challenges/templates/&lt;template&gt;` 下的 Dockerfile。
+          </div>
+          <div className="form-grid" style={{ marginTop: 12 }}>
+            <label className="field" style={{ gridColumn: '1 / -1' }}>
+              <span>template</span>
+              <input value={buildTemplate} onChange={(e) => setBuildTemplate(e.target.value)} placeholder="web-welcome" />
+              <small className="hint-text">对应 templates 目录名。</small>
+            </label>
+            <label className="field" style={{ gridColumn: '1 / -1' }}>
+              <span>tag（可选）</span>
+              <input value={buildTag} onChange={(e) => setBuildTag(e.target.value)} placeholder="ctf/web-welcome:dev" />
+              <small className="hint-text">不填则默认 `ctf/&lt;template&gt;:dev`。</small>
+            </label>
+          </div>
+          <div className="wrap-actions" style={{ marginTop: 12 }}>
+            <button className="primary-button" type="button" disabled={saving} onClick={() => void buildImage()}>
+              {saving ? '构建中…' : '开始构建'}
+            </button>
+          </div>
+
+          {buildResult ? (
+            <div className="detail-stack" style={{ marginTop: 12 }}>
+              <div className="hint-text">exit_code {buildResult.exit_code} · {buildResult.duration_ms}ms</div>
+              <pre className="code-block">{(buildResult.stdout || '').trim() || '(no stdout)'}</pre>
+              <pre className="code-block">{(buildResult.stderr || '').trim() || '(no stderr)'}</pre>
+            </div>
+          ) : null}
         </details>
 
         <div className="challenge-card-list" style={{ marginTop: 12 }}>
