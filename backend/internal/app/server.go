@@ -140,6 +140,10 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/admin/audit-logs", s.requirePermission("audit:read", http.HandlerFunc(s.handleAdminAuditLogs)))
 	mux.Handle("POST /api/v1/admin/challenges/import", s.requirePermission("instance:write", http.HandlerFunc(s.handleAdminImportChallenges)))
 	mux.Handle("POST /api/v1/admin/challenges/build-image", s.requirePermission("instance:write", http.HandlerFunc(s.handleAdminBuildChallengeImage)))
+	mux.Handle("POST /api/v1/admin/challenges/{challengeID}/instances/me", s.requirePermission("instance:write", http.HandlerFunc(s.handleAdminCreateMyInstance)))
+	mux.Handle("GET /api/v1/admin/challenges/{challengeID}/instances/me", s.requirePermission("instance:read", http.HandlerFunc(s.handleAdminGetMyInstance)))
+	mux.Handle("POST /api/v1/admin/challenges/{challengeID}/instances/me/renew", s.requirePermission("instance:write", http.HandlerFunc(s.handleAdminRenewMyInstance)))
+	mux.Handle("DELETE /api/v1/admin/challenges/{challengeID}/instances/me", s.requirePermission("instance:write", http.HandlerFunc(s.handleAdminDeleteMyInstance)))
 	return loggingMiddleware(s.metrics, mux)
 }
 
@@ -1117,6 +1121,66 @@ func (s *Server) handleAdminAuditLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (s *Server) handleAdminCreateMyInstance(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
+		return
+	}
+	instance, created, err := s.runtime.StartInstance(r.Context(), userID, r.PathValue("challengeID"))
+	if err != nil {
+		s.writeRuntimeError(w, err)
+		return
+	}
+	status := http.StatusCreated
+	if !created {
+		status = http.StatusOK
+	}
+	writeInstanceResponse(w, status, instance)
+}
+
+func (s *Server) handleAdminGetMyInstance(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
+		return
+	}
+	instance, err := s.runtime.GetInstance(r.Context(), userID, r.PathValue("challengeID"))
+	if err != nil {
+		s.writeRuntimeError(w, err)
+		return
+	}
+	writeInstanceResponse(w, http.StatusOK, instance)
+}
+
+func (s *Server) handleAdminRenewMyInstance(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
+		return
+	}
+	instance, err := s.runtime.RenewInstance(r.Context(), userID, r.PathValue("challengeID"))
+	if err != nil {
+		s.writeRuntimeError(w, err)
+		return
+	}
+	writeInstanceResponse(w, http.StatusOK, instance)
+}
+
+func (s *Server) handleAdminDeleteMyInstance(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
+		return
+	}
+	instance, err := s.runtime.DeleteInstance(r.Context(), userID, r.PathValue("challengeID"))
+	if err != nil {
+		s.writeRuntimeError(w, err)
+		return
+	}
+	writeInstanceResponse(w, http.StatusOK, instance)
 }
 
 func (s *Server) writeRuntimeError(w http.ResponseWriter, err error) {

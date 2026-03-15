@@ -426,6 +426,10 @@
 - `POST /api/v1/admin/challenges/import`
 - `POST /api/v1/admin/challenges/build-image`
 - `GET /api/v1/admin/challenges/{challengeID}/attachments/{attachmentID}`
+- `POST /api/v1/admin/challenges/{challengeID}/instances/me`
+- `GET /api/v1/admin/challenges/{challengeID}/instances/me`
+- `POST /api/v1/admin/challenges/{challengeID}/instances/me/renew`
+- `DELETE /api/v1/admin/challenges/{challengeID}/instances/me`
 
 ## 管理接口返回结构（节选）
 
@@ -554,6 +558,32 @@
 ### `GET /api/v1/admin/challenges/{challengeID}/attachments/{attachmentID}`
 
 后台专用附件下载（用于校验/排障，不受 public phase 限制）。需要 Bearer Token + 后台权限。
+
+### 管理端动态实例验证闭环
+
+以下接口用于赛前/运维验证镜像与运行配置是否可用：
+
+- 不受比赛 phase 限制（区别于选手端 `/api/v1/challenges/{challengeID}/instances/me`）
+- 仍需要后台权限（`instance:read` / `instance:write`）
+- 返回结构与选手端实例接口一致
+
+#### `POST /api/v1/admin/challenges/{challengeID}/instances/me`
+
+说明：启动或复用当前账号在该题下的实例。
+
+响应：201 创建或 200 复用。
+
+#### `GET /api/v1/admin/challenges/{challengeID}/instances/me`
+
+说明：查询当前账号在该题下的活动实例。
+
+#### `POST /api/v1/admin/challenges/{challengeID}/instances/me/renew`
+
+说明：续期当前账号在该题下的活动实例。
+
+#### `DELETE /api/v1/admin/challenges/{challengeID}/instances/me`
+
+说明：回收当前账号在该题下的活动实例。
 
 ## 当前约定
 

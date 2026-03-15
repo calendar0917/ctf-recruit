@@ -255,6 +255,17 @@ export type AdminInstance = {
   container_id: string
 }
 
+export type AdminMyRuntimeInstance = {
+  challenge_id: string
+  status: string
+  access_url?: string
+  host_port?: number
+  renew_count: number
+  started_at: string
+  expires_at: string
+  terminated_at?: string | null
+}
+
 export type AdminUser = {
   id: number
   role: string
@@ -492,5 +503,18 @@ export const api = {
       },
       token,
     )
+  },
+
+  adminGetMyInstance(token: string, challengeID: number) {
+    return request<AdminMyRuntimeInstance>(`/api/v1/admin/challenges/${challengeID}/instances/me`, undefined, token)
+  },
+  adminStartMyInstance(token: string, challengeID: number) {
+    return request<AdminMyRuntimeInstance>(`/api/v1/admin/challenges/${challengeID}/instances/me`, { method: 'POST' }, token)
+  },
+  adminRenewMyInstance(token: string, challengeID: number) {
+    return request<AdminMyRuntimeInstance>(`/api/v1/admin/challenges/${challengeID}/instances/me/renew`, { method: 'POST' }, token)
+  },
+  adminDeleteMyInstance(token: string, challengeID: number) {
+    return request<AdminMyRuntimeInstance>(`/api/v1/admin/challenges/${challengeID}/instances/me`, { method: 'DELETE' }, token)
   },
 }

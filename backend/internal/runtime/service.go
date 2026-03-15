@@ -18,6 +18,15 @@ type Service struct {
 	mu      sync.Mutex
 }
 
+func (s *Service) buildAccessURL(cfg ChallengeConfig, hostIP string, hostPort int) string {
+	base := s.cfg.RuntimeBaseURL
+	if strings.TrimSpace(hostIP) != "" && strings.Contains(base, "localhost") {
+		// In local dev, docker port bindings are commonly exposed on 127.0.0.1.
+		base = strings.ReplaceAll(base, "localhost", hostIP)
+	}
+	return buildAccessURL(cfg.ExposedProtocol, base, hostPort)
+}
+
 func NewService(cfg ServiceConfig, manager Manager, repo Repository) *Service {
 	cfg.PublicBaseURL = strings.TrimSpace(cfg.PublicBaseURL)
 	if cfg.PublicBaseURL == "" {
@@ -76,7 +85,7 @@ func (s *Service) StartInstance(ctx context.Context, userID int64, challengeRef 
 
 	existing, err := s.repo.GetActiveInstance(ctx, userID, cfg.ID)
 	if err == nil {
-		existing.Instance.AccessURL = buildAccessURL(cfg.ExposedProtocol, s.cfg.RuntimeBaseURL, existing.Instance.HostPort)
+		existing.Instance.AccessURL = s.buildAccessURL(cfg, existing.Instance.HostIP, existing.Instance.HostPort)
 		return existing.Instance, false, nil
 	}
 	if !errors.Is(err, ErrRepositoryNotFound) {
@@ -116,7 +125,7 @@ func (s *Service) StartInstance(ctx context.Context, userID int64, challengeRef 
 		ChallengeID:   cfg.ID,
 		UserID:        userID,
 		Status:        "running",
-		AccessURL:     buildAccessURL(cfg.ExposedProtocol, s.cfg.RuntimeBaseURL, hostPort),
+		AccessURL:     s.buildAccessURL(cfg, started.HostIP, hostPort),
 		HostPort:      hostPort,
 		RenewCount:    0,
 		StartedAt:     now,
@@ -131,13 +140,13 @@ func (s *Service) StartInstance(ctx context.Context, userID int64, challengeRef 
 		_ = s.manager.Stop(context.Background(), started.ContainerID)
 
 		if existing, lookupErr := s.repo.GetActiveInstance(ctx, userID, cfg.ID); lookupErr == nil {
-			existing.Instance.AccessURL = buildAccessURL(cfg.ExposedProtocol, s.cfg.RuntimeBaseURL, existing.Instance.HostPort)
+			existing.Instance.AccessURL = s.buildAccessURL(cfg, existing.Instance.HostIP, existing.Instance.HostPort)
 			return existing.Instance, false, nil
 		}
 		return Instance{}, false, err
 	}
 
-	saved.Instance.AccessURL = buildAccessURL(cfg.ExposedProtocol, s.cfg.RuntimeBaseURL, saved.Instance.HostPort)
+	saved.Instance.AccessURL = s.buildAccessURL(cfg, saved.Instance.HostIP, saved.Instance.HostPort)
 	return saved.Instance, true, nil
 }
 
@@ -162,7 +171,7 @@ func (s *Service) GetInstance(ctx context.Context, userID int64, challengeRef st
 		}
 		return Instance{}, err
 	}
-	instanceRecord.Instance.AccessURL = buildAccessURL(cfg.ExposedProtocol, s.cfg.RuntimeBaseURL, instanceRecord.Instance.HostPort)
+	instanceRecord.Instance.AccessURL = s.buildAccessURL(cfg, instanceRecord.Instance.HostIP, instanceRecord.Instance.HostPort)
 	return instanceRecord.Instance, nil
 }
 
@@ -209,7 +218,7 @@ func (s *Service) RenewInstance(ctx context.Context, userID int64, challengeRef 
 		}
 		return Instance{}, err
 	}
-	updated.Instance.AccessURL = buildAccessURL(cfg.ExposedProtocol, s.cfg.RuntimeBaseURL, updated.Instance.HostPort)
+	updated.Instance.AccessURL = s.buildAccessURL(cfg, updated.Instance.HostIP, updated.Instance.HostPort)
 	return updated.Instance, nil
 }
 
@@ -249,7 +258,7 @@ func (s *Service) DeleteInstance(ctx context.Context, userID int64, challengeRef
 
 	instanceRecord.Instance.Status = "terminated"
 	instanceRecord.Instance.TerminatedAt = &now
-	instanceRecord.Instance.AccessURL = buildAccessURL(cfg.ExposedProtocol, s.cfg.RuntimeBaseURL, instanceRecord.Instance.HostPort)
+	instanceRecord.Instance.AccessURL = s.buildAccessURL(cfg, instanceRecord.Instance.HostIP, instanceRecord.Instance.HostPort)
 	return instanceRecord.Instance, nil
 }
 

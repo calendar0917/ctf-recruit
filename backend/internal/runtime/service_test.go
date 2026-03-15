@@ -218,7 +218,7 @@ func (r *fakeRepository) ListActiveInstances(context.Context) ([]InstanceRecord,
 func TestStartInstanceIsIdempotentPerUserAndChallenge(t *testing.T) {
 	manager := &fakeManager{}
 	repo := newFakeRepository()
-	service := NewService(ServiceConfig{PublicBaseURL: "http://localhost:8080"}, manager, repo)
+	service := NewService(ServiceConfig{PublicBaseURL: "http://localhost:8080", RuntimeBaseURL: "http://localhost:8080"}, manager, repo)
 
 	first, created, err := service.StartInstance(context.Background(), 42, "1")
 	if err != nil {
@@ -246,7 +246,7 @@ func TestStartInstanceIsIdempotentPerUserAndChallenge(t *testing.T) {
 func TestRenewInstanceExtendsExpiryAndCountsRenewals(t *testing.T) {
 	manager := &fakeManager{}
 	repo := newFakeRepository()
-	service := NewService(ServiceConfig{PublicBaseURL: "http://localhost:8080"}, manager, repo)
+	service := NewService(ServiceConfig{PublicBaseURL: "http://localhost:8080", RuntimeBaseURL: "http://localhost:8080"}, manager, repo)
 	baseTime := time.Date(2025, time.March, 8, 9, 0, 0, 0, time.UTC)
 	service.now = func() time.Time { return baseTime }
 
@@ -275,7 +275,7 @@ func TestRenewInstanceFailsWhenRenewLimitReached(t *testing.T) {
 	manager := &fakeManager{}
 	repo := newFakeRepository()
 	repo.challenge.Challenge.MaxRenewCount = 0
-	service := NewService(ServiceConfig{PublicBaseURL: "http://localhost:8080"}, manager, repo)
+	service := NewService(ServiceConfig{PublicBaseURL: "http://localhost:8080", RuntimeBaseURL: "http://localhost:8080"}, manager, repo)
 	service.now = func() time.Time { return time.Date(2025, time.March, 8, 9, 0, 0, 0, time.UTC) }
 
 	if _, _, err := service.StartInstance(context.Background(), 7, "1"); err != nil {
@@ -289,7 +289,7 @@ func TestRenewInstanceFailsWhenRenewLimitReached(t *testing.T) {
 func TestSweepExpiredStopsContainers(t *testing.T) {
 	manager := &fakeManager{}
 	repo := newFakeRepository()
-	service := NewService(ServiceConfig{PublicBaseURL: "http://localhost:8080"}, manager, repo)
+	service := NewService(ServiceConfig{PublicBaseURL: "http://localhost:8080", RuntimeBaseURL: "http://localhost:8080"}, manager, repo)
 	baseTime := time.Date(2025, time.March, 8, 9, 0, 0, 0, time.UTC)
 	service.now = func() time.Time { return baseTime }
 
@@ -320,7 +320,7 @@ func TestSweepExpiredStopsContainers(t *testing.T) {
 func TestDeleteInstanceStopsContainerAndRemovesRecord(t *testing.T) {
 	manager := &fakeManager{}
 	repo := newFakeRepository()
-	service := NewService(ServiceConfig{PublicBaseURL: "http://localhost:8080"}, manager, repo)
+	service := NewService(ServiceConfig{PublicBaseURL: "http://localhost:8080", RuntimeBaseURL: "http://localhost:8080"}, manager, repo)
 	service.now = func() time.Time { return time.Date(2025, time.March, 8, 9, 0, 0, 0, time.UTC) }
 
 	instance, created, err := service.StartInstance(context.Background(), 7, "1")
@@ -352,7 +352,7 @@ func TestDeleteInstanceStopsContainerAndRemovesRecord(t *testing.T) {
 func TestReconcileTerminatesMissingDatabaseRecords(t *testing.T) {
 	manager := &fakeManager{missingIDs: map[string]bool{"container-1": true}}
 	repo := newFakeRepository()
-	service := NewService(ServiceConfig{PublicBaseURL: "http://localhost:8080"}, manager, repo)
+	service := NewService(ServiceConfig{PublicBaseURL: "http://localhost:8080", RuntimeBaseURL: "http://localhost:8080"}, manager, repo)
 	service.now = func() time.Time { return time.Date(2025, time.March, 8, 9, 0, 0, 0, time.UTC) }
 
 	if _, _, err := service.StartInstance(context.Background(), 7, "1"); err != nil {
@@ -381,7 +381,7 @@ func TestReconcileStopsOrphanManagedContainers(t *testing.T) {
 		},
 	}
 	repo := newFakeRepository()
-	service := NewService(ServiceConfig{PublicBaseURL: "http://localhost:8080"}, manager, repo)
+	service := NewService(ServiceConfig{PublicBaseURL: "http://localhost:8080", RuntimeBaseURL: "http://localhost:8080"}, manager, repo)
 
 	report, err := service.Reconcile(context.Background())
 	if err != nil {
@@ -405,7 +405,7 @@ func TestStartInstanceFailsWhenChallengeCapacityReached(t *testing.T) {
 	manager := &fakeManager{}
 	repo := newFakeRepository()
 	repo.challenge.Challenge.MaxActiveInstances = 1
-	service := NewService(ServiceConfig{PublicBaseURL: "http://localhost:8080"}, manager, repo)
+	service := NewService(ServiceConfig{PublicBaseURL: "http://localhost:8080", RuntimeBaseURL: "http://localhost:8080"}, manager, repo)
 	service.now = func() time.Time { return time.Date(2025, time.March, 8, 9, 0, 0, 0, time.UTC) }
 
 	if _, _, err := service.StartInstance(context.Background(), 7, "1"); err != nil {
@@ -420,7 +420,7 @@ func TestStartInstanceFailsWhenUserCooldownActive(t *testing.T) {
 	manager := &fakeManager{}
 	repo := newFakeRepository()
 	repo.challenge.Challenge.UserCooldown = 10 * time.Minute
-	service := NewService(ServiceConfig{PublicBaseURL: "http://localhost:8080"}, manager, repo)
+	service := NewService(ServiceConfig{PublicBaseURL: "http://localhost:8080", RuntimeBaseURL: "http://localhost:8080"}, manager, repo)
 	baseTime := time.Date(2025, time.March, 8, 9, 0, 0, 0, time.UTC)
 	service.now = func() time.Time { return baseTime }
 

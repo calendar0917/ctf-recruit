@@ -76,6 +76,17 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
 
   const [buildResult, setBuildResult] = useState<{ stdout: string; stderr: string; exit_code: number; duration_ms: number; command: string[]; error?: string } | null>(null)
 
+  const [myInstance, setMyInstance] = useState<null | {
+    status: string
+    access_url?: string
+    host_port?: number
+    renew_count: number
+    started_at: string
+    expires_at: string
+    terminated_at?: string | null
+  }>(null)
+  const [myInstanceLoading, setMyInstanceLoading] = useState(false)
+
   const [meRole, setMeRole] = useState('')
 
   const markDirty = (key: string): void => {
@@ -190,10 +201,69 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
       setAuthors(ch.authors ?? [])
 
       setAttachments(ch.attachments ?? [])
+
+      setMyInstance(null)
     } catch (error) {
       setNotice(errorToNotice(error, '题目详情加载失败。'))
     } finally {
       setDetailLoading(false)
+    }
+  }
+
+  const loadMyInstance = async (): Promise<void> => {
+    if (!activeID) return
+    setMyInstanceLoading(true)
+    setNotice(null)
+    try {
+      const response = await api.adminGetMyInstance(props.token, activeID)
+      setMyInstance(response)
+    } catch (error) {
+      setMyInstance(null)
+      setNotice(errorToNotice(error, '实例查询失败。'))
+    } finally {
+      setMyInstanceLoading(false)
+    }
+  }
+
+  const startMyInstance = async (): Promise<void> => {
+    if (!activeID) return
+    setMyInstanceLoading(true)
+    setNotice(null)
+    try {
+      const response = await api.adminStartMyInstance(props.token, activeID)
+      setMyInstance(response)
+    } catch (error) {
+      setNotice(errorToNotice(error, '实例创建失败。'))
+    } finally {
+      setMyInstanceLoading(false)
+    }
+  }
+
+  const renewMyInstance = async (): Promise<void> => {
+    if (!activeID) return
+    setMyInstanceLoading(true)
+    setNotice(null)
+    try {
+      const response = await api.adminRenewMyInstance(props.token, activeID)
+      setMyInstance(response)
+    } catch (error) {
+      setNotice(errorToNotice(error, '实例续期失败。'))
+    } finally {
+      setMyInstanceLoading(false)
+    }
+  }
+
+  const deleteMyInstance = async (): Promise<void> => {
+    if (!activeID) return
+    setMyInstanceLoading(true)
+    setNotice(null)
+    try {
+      const response = await api.adminDeleteMyInstance(props.token, activeID)
+      setMyInstance(response)
+    } catch (error) {
+      setNotice(errorToNotice(error, '实例删除失败。'))
+    } finally {
+      setMyInstanceLoading(false)
     }
   }
 
@@ -825,6 +895,44 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
                 >
                   构建当前题镜像
                 </button>
+              </div>
+            </div>
+
+            <div className="divider-line" style={{ marginTop: 14 }}>
+              <span>验证闭环</span>
+            </div>
+
+            <div className="detail-row" style={{ marginTop: 12 }}>
+              <div className="badge-row">
+                <span className="badge">status {myInstance?.status ?? '—'}</span>
+                {myInstance?.host_port ? <span className="badge badge-accent">:{myInstance.host_port}</span> : null}
+                <span className="badge">renew {myInstance?.renew_count ?? 0}</span>
+              </div>
+
+              {myInstance?.access_url ? (
+                <div className="wrap-actions" style={{ marginTop: 12 }}>
+                  <a className="primary-button" href={myInstance.access_url} target="_blank" rel="noreferrer">
+                    打开实例
+                  </a>
+                </div>
+              ) : null}
+
+              <div className="wrap-actions" style={{ marginTop: 12 }}>
+                <button className="ghost-button" type="button" disabled={myInstanceLoading || !canDoServerLocal} onClick={() => void loadMyInstance()}>
+                  {myInstanceLoading ? '加载中…' : '查询实例'}
+                </button>
+                <button className="primary-button" type="button" disabled={myInstanceLoading || !canDoServerLocal} onClick={() => void startMyInstance()}>
+                  {myInstanceLoading ? '启动中…' : '启动/复用'}
+                </button>
+                <button className="ghost-button" type="button" disabled={myInstanceLoading || !canDoServerLocal} onClick={() => void renewMyInstance()}>
+                  续期
+                </button>
+                <button className="ghost-button danger-button" type="button" disabled={myInstanceLoading || !canDoServerLocal} onClick={() => void deleteMyInstance()}>
+                  删除
+                </button>
+              </div>
+              <div className="hint-text" style={{ marginTop: 10 }}>
+                管理端验证不受比赛 phase 限制：用于赛前检查镜像/端口/TTL/配额是否正常。
               </div>
             </div>
           </section>
