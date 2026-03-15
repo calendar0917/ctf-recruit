@@ -17,9 +17,13 @@ import {
 import { NoticeBanner } from './components/NoticeBanner'
 import { describeError, errorToNotice, isUnauthorized, type Notice } from './utils/errors'
 
+import { AdminShell, type AdminView } from './admin/components/AdminShell'
+import { canAccessAdmin } from './admin/utils/permissions'
+import { AdminContestPage } from './admin/pages/AdminContestPage'
+
 import brandMark from '../assets/yulin-long.svg'
 
-type View = 'briefing' | 'board' | 'scoreboard' | 'me'
+type View = 'briefing' | 'board' | 'scoreboard' | 'me' | 'admin'
 
 const TOKEN_STORAGE_KEY = 'ctf.frontend.token'
 
@@ -28,6 +32,7 @@ const views: Array<{ id: View; label: string; gatedByPhase?: keyof ContestPhase 
   { id: 'board', label: '题目', gatedByPhase: 'challenge_list_visible' },
   { id: 'scoreboard', label: '排行榜', gatedByPhase: 'scoreboard_visible' },
   { id: 'me', label: '我的', gatedByPhase: 'challenge_list_visible' },
+  { id: 'admin', label: '管理' },
 ]
 
 function clamp(n: number, min: number, max: number): number {
@@ -253,6 +258,10 @@ export function App(): React.JSX.Element {
 
   const [view, setView] = useState<View>(() => pickInitialView(null))
   const visibleViews = useMemo(() => resolveVisibleViews(contestPhase), [contestPhase])
+  const visibleViewsWithAdmin = useMemo(() => {
+    if (!canAccessAdmin(authUser)) return visibleViews.filter((item) => item.id !== 'admin')
+    return visibleViews
+  }, [authUser, visibleViews])
 
   const [publicNotice, setPublicNotice] = useState<Notice | null>(null)
   const [authNotice, setAuthNotice] = useState<Notice | null>(null)
@@ -283,6 +292,8 @@ export function App(): React.JSX.Element {
   const [mySolves, setMySolves] = useState<UserSolve[]>([])
   const [mySubmissions, setMySubmissions] = useState<UserSubmission[]>([])
   const [myLoading, setMyLoading] = useState(false)
+
+  const [adminView, setAdminView] = useState<AdminView>('contest')
 
   const clearSession = useCallback((message?: string) => {
     setToken('')
@@ -749,6 +760,15 @@ export function App(): React.JSX.Element {
     }
   }, [applyAuthResponse, contestPhase?.registration_allowed, registerDisplayName, registerEmail, registerPassword, registerUsername])
 
+  const adminAllowed = useMemo(() => canAccessAdmin(authUser), [authUser])
+
+  useEffect(() => {
+    if (view === 'admin' && !adminAllowed) {
+      setView('briefing')
+      setPublicNotice({ tone: 'neutral', text: '该账号没有管理面板权限。' })
+    }
+  }, [adminAllowed, view])
+
   const contestStatusBadge = contestInfo?.status ? <span className="badge badge-accent">{contestInfo.status}</span> : null
 
   const contestWindow = useMemo(() => {
@@ -782,7 +802,7 @@ export function App(): React.JSX.Element {
         </div>
 
         <nav className="main-nav" aria-label="Primary">
-          {visibleViews.map((item) => (
+          {visibleViewsWithAdmin.map((item) => (
             <PillButton
               key={item.id}
               active={view === item.id}
@@ -1369,6 +1389,28 @@ export function App(): React.JSX.Element {
               </section>
             ) : null}
           </section>
+        ) : null}
+
+        {view === 'admin' ? (
+          <AdminShell
+            user={authUser as AuthUser}
+            view={adminView}
+            onViewChange={setAdminView}
+            notice={authNotice}
+            actions={
+              <button className="ghost-button" type="button" onClick={() => setView('briefing')}>
+                返回
+              </button>
+            }
+          >
+            {!token || !authUser ? <div className="empty-state">请先登录</div> : null}
+            {token && authUser ? (
+              <>
+                {adminView === 'contest' ? <AdminContestPage token={token} /> : null}
+                {adminView !== 'contest' ? <div className="empty-state">该模块建设中…</div> : null}
+              </>
+            ) : null}
+          </AdminShell>
         ) : null}
 
         <footer style={{ marginTop: 16, color: 'var(--muted)', fontSize: 12, textAlign: 'center' }}>focus on solving challenges</footer>

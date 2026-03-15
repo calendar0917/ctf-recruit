@@ -25,6 +25,11 @@ export function isUnauthorized(error: unknown): boolean {
   return typed?.status === 401
 }
 
+export function isForbidden(error: unknown): boolean {
+  const typed = error as AppError | undefined
+  return typed?.status === 403
+}
+
 export function errorToNotice(error: unknown, fallback: string): Notice {
   const code = readErrorCode(error)
   if (code === 'contest_not_public') {
