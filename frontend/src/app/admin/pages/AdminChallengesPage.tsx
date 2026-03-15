@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 
-import { api, type AdminChallengeAuthor, type AdminChallengeInput, type AdminChallengeSummary } from '../../../api'
+import { api, type AdminAttachment, type AdminChallengeAuthor, type AdminChallengeInput, type AdminChallengeSummary } from '../../../api'
 import { NoticeBanner } from '../../components/NoticeBanner'
 import type { Notice } from '../../utils/errors'
 import { errorToNotice } from '../../utils/errors'
@@ -62,6 +62,8 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
   const [activeID, setActiveID] = useState<number | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [draft, setDraft] = useState<AdminChallengeInput>(defaultChallengeInput)
+
+  const [attachments, setAttachments] = useState<AdminAttachment[]>([])
 
   const [authors, setAuthors] = useState<AdminChallengeAuthor[]>([])
   const [authorsLoading, setAuthorsLoading] = useState(false)
@@ -191,6 +193,8 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
 
       // Keep authors in a separate state so admin can edit without having to patch challenge detail schema.
       setAuthors(ch.authors ?? [])
+
+      setAttachments(ch.attachments ?? [])
     } catch (error) {
       setNotice(errorToNotice(error, '题目详情加载失败。'))
     } finally {
@@ -199,6 +203,10 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
   }
 
   const loadAuthorCandidates = async (): Promise<void> => {
+    if (!canManageAuthors) {
+      setAuthorCandidates([])
+      return
+    }
     setUsersLoading(true)
     setNotice(null)
     try {
@@ -263,7 +271,7 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
   useEffect(() => {
     void loadAuthorCandidates()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [canManageAuthors])
 
   const save = async (): Promise<void> => {
     if (!activeID) return
@@ -455,9 +463,11 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
     return false
   }, [dirtyFields])
 
-  const attachments = useMemo(() => {
-    return (draft as any)?.attachments ?? []
-  }, [draft])
+  const attachmentSummary = useMemo(() => {
+    if (!attachments.length) return ''
+    const totalBytes = attachments.reduce((sum, item) => sum + (Number.isFinite(item.size_bytes) ? item.size_bytes : 0), 0)
+    return `${attachments.length} files · ${formatBytes(totalBytes)}`
+  }, [attachments])
 
   const filteredCandidates = useMemo(() => {
     const q = authorSearch.trim().toLowerCase()
@@ -914,7 +924,7 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
               <div>
                 <p className="eyebrow">Attachments</p>
                 <h2>附件</h2>
-                <p className="panel-subtitle">上传后会在选手端按 phase 控制显示。</p>
+                <p className="panel-subtitle">上传后会在选手端按 phase 控制显示。{attachmentSummary ? `当前：${attachmentSummary}` : ''}</p>
               </div>
               <div className="inline-actions">
                 <label className="ghost-button" style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
