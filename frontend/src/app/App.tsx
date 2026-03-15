@@ -1433,6 +1433,9 @@ function ScoreboardRow(props: { entry: ScoreboardEntry; currentUserID: number | 
 }
 
 function ScoreboardLeadersChart(props: { entries: ScoreboardEntry[]; topN: 3 | 5 | 10 }): React.JSX.Element {
+  const [hoverT, setHoverT] = useState<number | null>(null)
+  const [hoverLocked, setHoverLocked] = useState(false)
+
   const leaders = useMemo(() => {
     const ranked = [...props.entries].sort((a, b) => a.rank - b.rank)
     const withSolves = ranked.filter((entry) => entry.solves.length > 0 || entry.score > 0)
@@ -1454,15 +1457,20 @@ function ScoreboardLeadersChart(props: { entries: ScoreboardEntry[]; topN: 3 | 5
     })
   }, [leaders])
 
-  const domain = useMemo(() => {
+  const solveTimes = useMemo(() => {
     const times = series.flatMap((item) => item.points.map((point) => point.t))
+    const unique = Array.from(new Set(times))
+    unique.sort((a, b) => a - b)
+    return unique
+  }, [series])
+
+  const domain = useMemo(() => {
+    const times = solveTimes
     if (times.length < 2) return null
-    const uniqueTimes = new Set(times)
-    if (uniqueTimes.size < 2) return null
     const min = Math.min(...times)
     const max = Math.max(...times)
     return { min, max }
-  }, [series])
+  }, [solveTimes])
 
   const yMax = useMemo(() => {
     const maxScore = Math.max(...series.map((item) => Math.max(item.entry.score, item.finalScore, 0)), 0)
@@ -1485,17 +1493,35 @@ function ScoreboardLeadersChart(props: { entries: ScoreboardEntry[]; topN: 3 | 5
   const xOf = (t: number): number => padX + ((t - domain.min) / span) * innerWidth
   const yOf = (score: number): number => padTop + innerHeight - (score / yMax) * innerHeight
 
+  const findClosestTime = useCallback(
+    (t: number): number | null => {
+      if (!solveTimes.length) return null
+      let closest = solveTimes[0]
+      let best = Math.abs(closest - t)
+      for (let i = 1; i < solveTimes.length; i += 1) {
+        const candidate = solveTimes[i]
+        const diff = Math.abs(candidate - t)
+        if (diff < best) {
+          best = diff
+          closest = candidate
+        }
+      }
+      return closest
+    },
+    [solveTimes],
+  )
+
   const lineStyles: Array<{ stroke: string; dash?: string; opacity: number; width: number }> = [
-    { stroke: 'var(--cta)', opacity: 1, width: 2.6 },
-    { stroke: 'var(--muted)', dash: '6 3', opacity: 0.95, width: 2.2 },
-    { stroke: 'var(--muted)', dash: '3 3', opacity: 0.9, width: 2.1 },
-    { stroke: 'var(--muted)', dash: '2 4', opacity: 0.86, width: 2.0 },
-    { stroke: 'var(--muted)', dash: '8 4 2 4', opacity: 0.82, width: 2.0 },
-    { stroke: 'var(--muted)', dash: '10 6', opacity: 0.8, width: 1.9 },
-    { stroke: 'var(--muted)', dash: '4 6', opacity: 0.78, width: 1.9 },
-    { stroke: 'var(--muted)', dash: '2 6', opacity: 0.76, width: 1.9 },
-    { stroke: 'var(--muted)', dash: '12 6 3 6', opacity: 0.74, width: 1.8 },
-    { stroke: 'var(--muted)', dash: '1 5', opacity: 0.72, width: 1.8 },
+    { stroke: 'var(--series-1)', opacity: 1, width: 2.6 },
+    { stroke: 'var(--series-2)', opacity: 0.98, width: 2.4 },
+    { stroke: 'var(--series-3)', opacity: 0.96, width: 2.3 },
+    { stroke: 'var(--series-4)', opacity: 0.94, width: 2.2 },
+    { stroke: 'var(--series-5)', opacity: 0.92, width: 2.1 },
+    { stroke: 'var(--series-6)', opacity: 0.9, width: 2.0 },
+    { stroke: 'var(--series-7)', opacity: 0.88, width: 2.0 },
+    { stroke: 'var(--series-8)', opacity: 0.86, width: 1.9 },
+    { stroke: 'var(--series-9)', opacity: 0.84, width: 1.9 },
+    { stroke: 'var(--series-10)', opacity: 0.82, width: 1.9 },
   ]
 
   const buildStepPath = (points: Array<{ t: number; score: number }>): string => {
@@ -1522,9 +1548,75 @@ function ScoreboardLeadersChart(props: { entries: ScoreboardEntry[]; topN: 3 | 5
   const rangeLeft = formatDateTimeCompact(new Date(domain.min))
   const rangeRight = formatDateTimeCompact(new Date(domain.max))
 
+  const tooltip = useMemo(() => {
+    if (hoverT == null) return null
+    const at = new Date(hoverT)
+    const timeLabel = formatDateTimeCompact(at)
+    const rows = series
+      .map((item, index) => {
+        let scoreAt = 0
+        let delta = 0
+        for (const point of item.points) {
+          if (point.t > hoverT) break
+          scoreAt = point.score
+          delta = point.score
+        }
+        // delta: score increase at this exact time (if solved at hoverT)
+        const solvedHere = item.points.find((point) => point.t === hoverT)
+        if (solvedHere) {
+          const beforeIdx = item.points.findIndex((point) => point.t === hoverT) - 1
+          const before = beforeIdx >= 0 ? item.points[beforeIdx].score : 0
+          delta = solvedHere.score - before
+        } else {
+          delta = 0
+        }
+        const label = item.entry.display_name || item.entry.username
+        const style = lineStyles[index % lineStyles.length]
+        return {
+          key: item.entry.user_id,
+          rank: item.entry.rank,
+          label,
+          scoreAt,
+          delta,
+          stroke: style.stroke,
+        }
+      })
+      .sort((a, b) => b.scoreAt - a.scoreAt)
+
+    return { timeLabel, rows }
+  }, [hoverT, lineStyles, series])
+
+  const hoverX = hoverT != null ? xOf(hoverT) : null
+
+  const onMouseMove = useCallback(
+    (event: React.MouseEvent<SVGSVGElement>) => {
+      if (hoverLocked) return
+      const rect = event.currentTarget.getBoundingClientRect()
+      const x = event.clientX - rect.left
+      const t = domain.min + clamp((x - padX) / innerWidth, 0, 1) * span
+      const closest = findClosestTime(t)
+      if (closest == null) return
+      setHoverT(closest)
+    },
+    [domain.min, findClosestTime, hoverLocked, innerWidth, padX, span],
+  )
+
+  const onMouseLeave = useCallback(() => {
+    if (hoverLocked) return
+    setHoverT(null)
+  }, [hoverLocked])
+
   return (
     <div className="scoreboard-trend-block">
-      <svg className="scoreboard-sparkline" viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-label="top players score over time">
+      <svg
+        className="scoreboard-sparkline"
+        viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+        role="img"
+        aria-label="top players score over time"
+        onMouseMove={onMouseMove}
+        onMouseLeave={onMouseLeave}
+        onClick={() => setHoverLocked((v) => !v)}
+      >
         <g className="scoreboard-sparkline-grid">
           {[0, 0.5, 1].map((ratio) => {
             const y = padTop + innerHeight * ratio
@@ -1540,13 +1632,27 @@ function ScoreboardLeadersChart(props: { entries: ScoreboardEntry[]; topN: 3 | 5
           })}
         </g>
 
+        {hoverX != null ? (
+          <g className="scoreboard-sparkline-hover">
+            <line x1={hoverX} y1={padTop} x2={hoverX} y2={padTop + innerHeight} />
+          </g>
+        ) : null}
+
         {series.map((item, index) => {
           const style = lineStyles[index % lineStyles.length]
           const path = buildStepPath(item.points)
-          const endScore = item.points.length ? item.points[item.points.length - 1].score : 0
-          const endTime = item.points.length ? item.points[item.points.length - 1].t : domain.min
-          const cx = xOf(endTime)
-          const cy = yOf(endScore)
+          const solvedHere = hoverT != null && item.points.some((point) => point.t === hoverT)
+          const highlight = hoverT != null
+          const opacity = highlight ? (solvedHere ? 1 : 0.32) : style.opacity
+          const strokeWidth = highlight ? (solvedHere ? style.width + 0.6 : Math.max(1.6, style.width - 0.5)) : style.width
+
+          const activePoint =
+            hoverT != null
+              ? item.points.find((point) => point.t === hoverT) ?? item.points.filter((point) => point.t < hoverT).slice(-1)[0] ?? null
+              : null
+
+          const cx = activePoint ? xOf(activePoint.t) : null
+          const cy = activePoint ? yOf(activePoint.score) : null
 
           return (
             <g key={item.entry.user_id} className="scoreboard-sparkline-series">
@@ -1554,15 +1660,36 @@ function ScoreboardLeadersChart(props: { entries: ScoreboardEntry[]; topN: 3 | 5
                 d={path}
                 className="scoreboard-sparkline-line"
                 stroke={style.stroke}
-                strokeWidth={style.width}
+                strokeWidth={strokeWidth}
                 strokeDasharray={style.dash}
-                strokeOpacity={style.opacity}
+                strokeOpacity={opacity}
               />
-              <circle cx={cx} cy={cy} r={3.2} fill={style.stroke} opacity={style.opacity} />
+              {cx != null && cy != null ? (
+                <circle cx={cx} cy={cy} r={solvedHere ? 4.6 : 3.2} fill={style.stroke} opacity={opacity} />
+              ) : null}
             </g>
           )
         })}
       </svg>
+
+      {tooltip ? (
+        <div className={`scoreboard-tooltip ${hoverLocked ? 'locked' : ''}`}>
+          <div className="scoreboard-tooltip-head">
+            <strong>{tooltip.timeLabel}</strong>
+            <span className="hint-text">{hoverLocked ? '锁定' : '悬浮'} · 点击可锁定/取消</span>
+          </div>
+          <div className="scoreboard-tooltip-body">
+            {tooltip.rows.map((row) => (
+              <div key={row.key} className="scoreboard-tooltip-row">
+                <span className="scoreboard-tooltip-dot" style={{ background: row.stroke }} aria-hidden="true" />
+                <span className="scoreboard-tooltip-name">#{row.rank} {row.label}</span>
+                <span className="scoreboard-tooltip-score">{row.scoreAt}</span>
+                <span className={`scoreboard-tooltip-delta ${row.delta ? 'active' : ''}`}>{row.delta ? `+${row.delta}` : ''}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div className="scoreboard-range hint-text">
         <span>{rangeLeft}</span>

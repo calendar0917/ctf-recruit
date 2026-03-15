@@ -56,6 +56,18 @@
   --focus-ring: rgba(96, 165, 250, 0.26);
 
   --brand-filter: brightness(0) invert(1) opacity(0.86);
+
+  /* chart series colors (dark) */
+  --series-1: #93c5fd;
+  --series-2: #34d399;
+  --series-3: #fbbf24;
+  --series-4: #f472b6;
+  --series-5: #a78bfa;
+  --series-6: #22d3ee;
+  --series-7: #fb7185;
+  --series-8: #f97316;
+  --series-9: #60a5fa;
+  --series-10: #4ade80;
 }
 
 :root[data-theme="light"] {
@@ -94,6 +106,18 @@
   --focus-ring: rgba(3, 105, 161, 0.18);
 
   --brand-filter: saturate(0) brightness(0.25);
+
+  /* chart series colors (light) */
+  --series-1: #075985;
+  --series-2: #047857;
+  --series-3: #b45309;
+  --series-4: #be185d;
+  --series-5: #6d28d9;
+  --series-6: #0e7490;
+  --series-7: #be123c;
+  --series-8: #c2410c;
+  --series-9: #1d4ed8;
+  --series-10: #166534;
 
   /* light mode: reduce shadow to keep it clean */
   --shadow-lg: 0 16px 40px rgba(15, 23, 42, 0.07);
@@ -1567,6 +1591,80 @@ textarea::placeholder {
   border-radius: 14px;
   border: 1px solid var(--line);
   background: linear-gradient(180deg, color-mix(in srgb, var(--surface-strong) 55%, transparent), var(--surface-soft));
+  cursor: pointer;
+}
+
+.scoreboard-sparkline-hover line {
+  stroke: color-mix(in srgb, var(--cta) 55%, transparent);
+  stroke-width: 1.4;
+}
+
+.scoreboard-sparkline-series {
+  transition: opacity 160ms ease;
+}
+
+.scoreboard-tooltip {
+  display: grid;
+  gap: 10px;
+  padding: 12px 12px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface-strong) 88%, transparent);
+}
+
+.scoreboard-tooltip.locked {
+  border-color: color-mix(in srgb, var(--cta) 30%, var(--line));
+}
+
+.scoreboard-tooltip-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.scoreboard-tooltip-body {
+  display: grid;
+  gap: 8px;
+}
+
+.scoreboard-tooltip-row {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.scoreboard-tooltip-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--surface-strong) 70%, transparent);
+}
+
+.scoreboard-tooltip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scoreboard-tooltip-score {
+  font-family: var(--font-mono);
+  color: var(--ink);
+  min-width: 40px;
+  text-align: right;
+}
+
+.scoreboard-tooltip-delta {
+  font-family: var(--font-mono);
+  color: var(--muted);
+  min-width: 46px;
+  text-align: right;
+}
+
+.scoreboard-tooltip-delta.active {
+  color: var(--success);
 }
 
 .scoreboard-sparkline-grid line {
@@ -1578,6 +1676,7 @@ textarea::placeholder {
   fill: none;
   stroke-linecap: round;
   stroke-linejoin: round;
+  transition: stroke-width 160ms ease, stroke-opacity 160ms ease;
 }
 
 .scoreboard-range {
