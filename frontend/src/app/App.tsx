@@ -1434,6 +1434,7 @@ function ScoreboardRow(props: { entry: ScoreboardEntry; currentUserID: number | 
 
 function ScoreboardLeadersChart(props: { entries: ScoreboardEntry[]; topN: 3 | 5 | 10 }): React.JSX.Element {
   const [hoverT, setHoverT] = useState<number | null>(null)
+  const [hoverSeriesKey, setHoverSeriesKey] = useState<number | null>(null)
   const [hoverLocked, setHoverLocked] = useState(false)
 
   const leaders = useMemo(() => {
@@ -1477,21 +1478,51 @@ function ScoreboardLeadersChart(props: { entries: ScoreboardEntry[]; topN: 3 | 5
     return Math.max(1, maxScore)
   }, [series])
 
+  const scoreAtTime = useCallback((points: Array<{ t: number; score: number }>, t: number): { score: number; exact: boolean; deltaAt: number } => {
+    const exact = points.find((point) => point.t === t)
+    if (exact) {
+      const idx = points.findIndex((point) => point.t === t)
+      const before = idx > 0 ? points[idx - 1].score : 0
+      return { score: exact.score, exact: true, deltaAt: exact.score - before }
+    }
+    const before = points.filter((point) => point.t < t).slice(-1)[0]
+    return { score: before?.score ?? 0, exact: false, deltaAt: 0 }
+  }, [])
+
   if (!domain) {
     return <div className="hint-text">趋势数据不足（至少需要两个不同时间点的解题记录）。</div>
   }
 
-  const chartWidth = 640
-  const chartHeight = 180
-  const padX = 16
-  const padTop = 10
-  const padBottom = 20
-  const innerWidth = chartWidth - padX * 2
+  const chartWidth = 720
+  const chartHeight = 260
+  const padX = 52
+  const padTop = 16
+  const padBottom = 42
+  const padRight = 14
+  const innerWidth = chartWidth - padX - padRight
   const innerHeight = chartHeight - padTop - padBottom
   const span = Math.max(1, domain.max - domain.min)
 
   const xOf = (t: number): number => padX + ((t - domain.min) / span) * innerWidth
   const yOf = (score: number): number => padTop + innerHeight - (score / yMax) * innerHeight
+
+  const yTicks = useMemo(() => {
+    const steps = 4
+    const ticks: number[] = []
+    for (let i = 0; i <= steps; i += 1) {
+      ticks.push(Math.round((yMax * (steps - i)) / steps))
+    }
+    return ticks
+  }, [yMax])
+
+  const xTicks = useMemo(() => {
+    const steps = 4
+    const ticks: number[] = []
+    for (let i = 0; i <= steps; i += 1) {
+      ticks.push(domain.min + (span * i) / steps)
+    }
+    return ticks
+  }, [domain.min, span])
 
   const findClosestTime = useCallback(
     (t: number): number | null => {
@@ -1554,22 +1585,7 @@ function ScoreboardLeadersChart(props: { entries: ScoreboardEntry[]; topN: 3 | 5
     const timeLabel = formatDateTimeCompact(at)
     const rows = series
       .map((item, index) => {
-        let scoreAt = 0
-        let delta = 0
-        for (const point of item.points) {
-          if (point.t > hoverT) break
-          scoreAt = point.score
-          delta = point.score
-        }
-        // delta: score increase at this exact time (if solved at hoverT)
-        const solvedHere = item.points.find((point) => point.t === hoverT)
-        if (solvedHere) {
-          const beforeIdx = item.points.findIndex((point) => point.t === hoverT) - 1
-          const before = beforeIdx >= 0 ? item.points[beforeIdx].score : 0
-          delta = solvedHere.score - before
-        } else {
-          delta = 0
-        }
+        const { score: scoreAt, deltaAt: delta } = scoreAtTime(item.points, hoverT)
         const label = item.entry.display_name || item.entry.username
         const style = lineStyles[index % lineStyles.length]
         return {
@@ -1587,23 +1603,46 @@ function ScoreboardLeadersChart(props: { entries: ScoreboardEntry[]; topN: 3 | 5
   }, [hoverT, lineStyles, series])
 
   const hoverX = hoverT != null ? xOf(hoverT) : null
+  const hoverY = useMemo(() => {
+    if (hoverT == null || hoverSeriesKey == null) return null
+    const item = series.find((candidate) => candidate.entry.user_id === hoverSeriesKey)
+    if (!item) return null
+    const { score } = scoreAtTime(item.points, hoverT)
+    return yOf(score)
+  }, [hoverSeriesKey, hoverT, scoreAtTime, series, yOf])
 
   const onMouseMove = useCallback(
     (event: React.MouseEvent<SVGSVGElement>) => {
       if (hoverLocked) return
       const rect = event.currentTarget.getBoundingClientRect()
       const x = event.clientX - rect.left
+      const y = event.clientY - rect.top
       const t = domain.min + clamp((x - padX) / innerWidth, 0, 1) * span
       const closest = findClosestTime(t)
       if (closest == null) return
       setHoverT(closest)
+
+      let bestKey: number | null = null
+      let bestDist = Number.POSITIVE_INFINITY
+      for (const item of series) {
+        const { score } = scoreAtTime(item.points, closest)
+        const cx = xOf(closest)
+        const cy = yOf(score)
+        const dist = Math.hypot(cx - x, cy - y)
+        if (dist < bestDist) {
+          bestDist = dist
+          bestKey = item.entry.user_id
+        }
+      }
+      setHoverSeriesKey(bestKey)
     },
-    [domain.min, findClosestTime, hoverLocked, innerWidth, padX, span],
+    [domain.min, findClosestTime, hoverLocked, innerWidth, padX, scoreAtTime, series, span, xOf, yOf],
   )
 
   const onMouseLeave = useCallback(() => {
     if (hoverLocked) return
     setHoverT(null)
+    setHoverSeriesKey(null)
   }, [hoverLocked])
 
   return (
@@ -1617,17 +1656,31 @@ function ScoreboardLeadersChart(props: { entries: ScoreboardEntry[]; topN: 3 | 5
         onMouseLeave={onMouseLeave}
         onClick={() => setHoverLocked((v) => !v)}
       >
-        <g className="scoreboard-sparkline-grid">
-          {[0, 0.5, 1].map((ratio) => {
-            const y = padTop + innerHeight * ratio
+        <g className="scoreboard-sparkline-axes">
+          {yTicks.map((tick) => {
+            const y = yOf(tick)
             return (
-              <line
-                key={ratio}
-                x1={padX}
-                y1={y}
-                x2={chartWidth - padX}
-                y2={y}
-              />
+              <g key={tick}>
+                <line x1={padX} y1={y} x2={chartWidth - padRight} y2={y} />
+                <text x={padX - 10} y={y + 4} textAnchor="end">
+                  {tick}
+                </text>
+              </g>
+            )
+          })}
+
+          <line x1={padX} y1={padTop} x2={padX} y2={padTop + innerHeight} />
+          <line x1={padX} y1={padTop + innerHeight} x2={chartWidth - padRight} y2={padTop + innerHeight} />
+
+          {xTicks.map((tick) => {
+            const x = xOf(tick)
+            return (
+              <g key={tick}>
+                <line x1={x} y1={padTop + innerHeight} x2={x} y2={padTop + innerHeight + 6} />
+                <text x={x} y={padTop + innerHeight + 24} textAnchor="middle">
+                  {formatDateTimeCompact(new Date(tick))}
+                </text>
+              </g>
             )
           })}
         </g>
@@ -1638,13 +1691,20 @@ function ScoreboardLeadersChart(props: { entries: ScoreboardEntry[]; topN: 3 | 5
           </g>
         ) : null}
 
+        {hoverX != null && hoverY != null ? (
+          <g className="scoreboard-sparkline-hover">
+            <circle cx={hoverX} cy={hoverY} r={6.4} />
+          </g>
+        ) : null}
+
         {series.map((item, index) => {
           const style = lineStyles[index % lineStyles.length]
           const path = buildStepPath(item.points)
           const solvedHere = hoverT != null && item.points.some((point) => point.t === hoverT)
           const highlight = hoverT != null
-          const opacity = highlight ? (solvedHere ? 1 : 0.32) : style.opacity
-          const strokeWidth = highlight ? (solvedHere ? style.width + 0.6 : Math.max(1.6, style.width - 0.5)) : style.width
+          const active = hoverSeriesKey != null && hoverSeriesKey === item.entry.user_id
+          const opacity = highlight ? (active ? 1 : 0.14) : style.opacity
+          const strokeWidth = highlight ? (active ? style.width + 0.9 : Math.max(1.2, style.width - 0.9)) : style.width
 
           const activePoint =
             hoverT != null
@@ -1665,7 +1725,7 @@ function ScoreboardLeadersChart(props: { entries: ScoreboardEntry[]; topN: 3 | 5
                 strokeOpacity={opacity}
               />
               {cx != null && cy != null ? (
-                <circle cx={cx} cy={cy} r={solvedHere ? 4.6 : 3.2} fill={style.stroke} opacity={opacity} />
+                <circle cx={cx} cy={cy} r={solvedHere ? 5.6 : 4.4} fill={style.stroke} opacity={active ? 1 : opacity} />
               ) : null}
             </g>
           )

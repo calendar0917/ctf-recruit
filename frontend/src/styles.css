@@ -1594,8 +1594,18 @@ textarea::placeholder {
   cursor: pointer;
 }
 
+.scoreboard-sparkline:hover {
+  border-color: color-mix(in srgb, var(--cta) 22%, var(--line));
+}
+
 .scoreboard-sparkline-hover line {
   stroke: color-mix(in srgb, var(--cta) 55%, transparent);
+  stroke-width: 1.4;
+}
+
+.scoreboard-sparkline-hover circle {
+  fill: color-mix(in srgb, var(--cta) 35%, transparent);
+  stroke: color-mix(in srgb, var(--cta) 85%, transparent);
   stroke-width: 1.4;
 }
 
@@ -1667,9 +1677,14 @@ textarea::placeholder {
   color: var(--success);
 }
 
-.scoreboard-sparkline-grid line {
+.scoreboard-sparkline-axes line {
   stroke: color-mix(in srgb, var(--line-strong) 70%, transparent);
   stroke-width: 1;
+}
+
+.scoreboard-sparkline-axes text {
+  fill: var(--muted);
+  font-size: 10px;
 }
 
 .scoreboard-sparkline-line {
