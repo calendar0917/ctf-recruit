@@ -5,6 +5,8 @@ import { NoticeBanner } from '../../components/NoticeBanner'
 import type { Notice } from '../../utils/errors'
 import { errorToNotice } from '../../utils/errors'
 
+import { hasAdminPermission } from '../utils/permissions'
+
 function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
   const units = ['B', 'KB', 'MB', 'GB']
@@ -75,6 +77,8 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
   const [buildTag, setBuildTag] = useState('')
   const [buildResult, setBuildResult] = useState<{ stdout: string; stderr: string; exit_code: number; duration_ms: number; command: string[]; error?: string } | null>(null)
 
+  const [meRole, setMeRole] = useState('')
+
   const markDirty = (key: string): void => {
     setDirtyFields((current) => {
       const next = new Set(current)
@@ -123,6 +127,16 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
     return true
   }, [deriveTemplateFromDraft])
 
+  const canDoServerLocal = useMemo(() => {
+    // Frontend helper only (backend still enforces).
+    return hasAdminPermission({ role: meRole } as any, 'instance:write')
+  }, [meRole])
+
+  const canManageAuthors = useMemo(() => {
+    // Backend: PUT authors is admin-only.
+    return hasAdminPermission({ role: meRole } as any, 'user:write')
+  }, [meRole])
+
   const loadList = async (): Promise<void> => {
     setLoading(true)
     setNotice(null)
@@ -136,6 +150,15 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
       setNotice(errorToNotice(error, '题目列表加载失败。'))
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadMe = async (): Promise<void> => {
+    try {
+      const response = await api.me(props.token)
+      setMeRole(response.user.role)
+    } catch {
+      setMeRole('')
     }
   }
 
@@ -207,6 +230,10 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
 
   const saveAuthors = async (): Promise<void> => {
     if (!activeID) return
+    if (!canManageAuthors) {
+      setNotice({ tone: 'neutral', text: '当前账号无权限修改作者集合。' })
+      return
+    }
     setSaving(true)
     setNotice(null)
     try {
@@ -224,6 +251,7 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
 
   useEffect(() => {
     void loadList()
+    void loadMe()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -287,6 +315,10 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
   }
 
   const importChallenges = async (): Promise<void> => {
+    if (!canDoServerLocal) {
+      setNotice({ tone: 'neutral', text: '当前账号无权限执行 server-local 导入（仅 admin/ops）。' })
+      return
+    }
     setSaving(true)
     setNotice(null)
     try {
@@ -305,6 +337,10 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
   }
 
   const importForActiveChallenge = async (): Promise<void> => {
+    if (!canDoServerLocal) {
+      setNotice({ tone: 'neutral', text: '当前账号无权限执行 server-local 导入（仅 admin/ops）。' })
+      return
+    }
     const template = deriveTemplateFromDraft
     if (!template.trim()) {
       setNotice({ tone: 'neutral', text: '请先填写 slug（用于定位 templates 目录）。' })
@@ -335,6 +371,10 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
   }
 
   const buildImage = async (): Promise<void> => {
+    if (!canDoServerLocal) {
+      setNotice({ tone: 'neutral', text: '当前账号无权限构建镜像。' })
+      return
+    }
     if (!buildTemplate.trim()) {
       setNotice({ tone: 'neutral', text: '请填写 template。' })
       return
@@ -361,6 +401,10 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
   }
 
   const buildImageForActiveChallenge = async (): Promise<void> => {
+    if (!canDoServerLocal) {
+      setNotice({ tone: 'neutral', text: '当前账号无权限构建镜像。' })
+      return
+    }
     const template = deriveTemplateFromDraft
     if (!template.trim()) {
       setNotice({ tone: 'neutral', text: '请先填写 slug（用于定位 templates 目录）。' })
@@ -928,7 +972,7 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
                 <button className="ghost-button" type="button" disabled={saving || authorsLoading} onClick={() => void loadAuthors()}>
                   {authorsLoading ? '加载中…' : '刷新'}
                 </button>
-                <button className="primary-button" type="button" disabled={saving} onClick={() => void saveAuthors()}>
+                <button className="primary-button" type="button" disabled={saving || !canManageAuthors} onClick={() => void saveAuthors()}>
                   {saving ? '保存中…' : '保存作者'}
                 </button>
               </div>

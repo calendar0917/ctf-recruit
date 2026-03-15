@@ -128,6 +128,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/admin/challenges/{challengeID}/authors", s.requirePermission("challenge:read", http.HandlerFunc(s.handleAdminChallengeAuthors)))
 	mux.Handle("PUT /api/v1/admin/challenges/{challengeID}/authors", s.requirePermission("challenge:write", http.HandlerFunc(s.handleAdminUpdateChallengeAuthors)))
 	mux.Handle("POST /api/v1/admin/challenges/{challengeID}/attachments", s.requirePermission("attachment:write", http.HandlerFunc(s.handleAdminCreateAttachment)))
+	mux.Handle("GET /api/v1/admin/challenges/{challengeID}/attachments/{attachmentID}", s.requirePermission("challenge:read", http.HandlerFunc(s.handleAdminAttachmentDownload)))
 	mux.Handle("GET /api/v1/admin/announcements", s.requirePermission("announcement:read", http.HandlerFunc(s.handleAdminAnnouncements)))
 	mux.Handle("POST /api/v1/admin/announcements", s.requirePermission("announcement:write", http.HandlerFunc(s.handleAdminCreateAnnouncement)))
 	mux.Handle("DELETE /api/v1/admin/announcements/{announcementID}", s.requirePermission("announcement:write", http.HandlerFunc(s.handleAdminDeleteAnnouncement)))
@@ -137,7 +138,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/admin/users", s.requirePermission("user:read", http.HandlerFunc(s.handleAdminUsers)))
 	mux.Handle("PATCH /api/v1/admin/users/{userID}", s.requirePermission("user:write", http.HandlerFunc(s.handleAdminUpdateUser)))
 	mux.Handle("GET /api/v1/admin/audit-logs", s.requirePermission("audit:read", http.HandlerFunc(s.handleAdminAuditLogs)))
-	mux.Handle("POST /api/v1/admin/challenges/import", s.requirePermission("challenge:write", http.HandlerFunc(s.handleAdminImportChallenges)))
+	mux.Handle("POST /api/v1/admin/challenges/import", s.requirePermission("instance:write", http.HandlerFunc(s.handleAdminImportChallenges)))
 	mux.Handle("POST /api/v1/admin/challenges/build-image", s.requirePermission("instance:write", http.HandlerFunc(s.handleAdminBuildChallengeImage)))
 	return loggingMiddleware(s.metrics, mux)
 }
@@ -829,6 +830,54 @@ func (s *Server) handleAdminCreateAttachment(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	httpx.WriteJSON(w, http.StatusCreated, map[string]any{"attachment": attachment})
+}
+
+func (s *Server) handleAdminAttachmentDownload(w http.ResponseWriter, r *http.Request) {
+	challengeID, err := strconv.ParseInt(r.PathValue("challengeID"), 10, 64)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_challenge_id", "challenge id must be numeric")
+		return
+	}
+	attachmentID, err := strconv.ParseInt(r.PathValue("attachmentID"), 10, 64)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_attachment_id", "attachment id must be numeric")
+		return
+	}
+	actor, ok := adminActorFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
+		return
+	}
+	attachment, storagePath, err := s.admin.Attachment(r.Context(), actor, challengeID, attachmentID)
+	if err != nil {
+		if errors.Is(err, admin.ErrResourceNotFound) {
+			httpx.WriteError(w, http.StatusNotFound, "attachment_not_found", err.Error())
+			return
+		}
+		logError("admin.attachment.download.lookup_failed", map[string]any{"error": err.Error()})
+		httpx.WriteError(w, http.StatusBadGateway, "repository_error", "failed to load attachment")
+		return
+	}
+
+	file, err := os.Open(storagePath)
+	if err != nil {
+		logError("admin.attachment.download.open_failed", map[string]any{"error": err.Error()})
+		httpx.WriteError(w, http.StatusBadGateway, "attachment_unavailable", "failed to open attachment")
+		return
+	}
+	defer file.Close()
+
+	contentType := attachment.ContentType
+	if contentType == "" {
+		contentType = mime.TypeByExtension(filepath.Ext(attachment.Filename))
+		if contentType == "" {
+			contentType = "application/octet-stream"
+		}
+	}
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", attachment.Filename))
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.Copy(w, file)
 }
 
 func (s *Server) handleAdminContest(w http.ResponseWriter, r *http.Request) {

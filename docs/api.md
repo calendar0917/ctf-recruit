@@ -425,6 +425,7 @@
 - `GET /api/v1/admin/audit-logs`
 - `POST /api/v1/admin/challenges/import`
 - `POST /api/v1/admin/challenges/build-image`
+- `GET /api/v1/admin/challenges/{challengeID}/attachments/{attachmentID}`
 
 ## 管理接口返回结构（节选）
 
@@ -549,6 +550,10 @@
 ```json
 {"result":{"command":["docker","build","-t","ctf/web-welcome:dev","../challenges/templates/web-welcome"],"duration_ms":1234,"exit_code":0,"stdout":"...","stderr":"..."}}
 ```
+
+### `GET /api/v1/admin/challenges/{challengeID}/attachments/{attachmentID}`
+
+后台专用附件下载（用于校验/排障，不受 public phase 限制）。需要 Bearer Token + 后台权限。
 
 ## 当前约定
 

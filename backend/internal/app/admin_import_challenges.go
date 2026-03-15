@@ -39,6 +39,10 @@ func (s *Server) handleAdminImportChallenges(w http.ResponseWriter, r *http.Requ
 		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authenticated user")
 		return
 	}
+	if actor.Role != "admin" && actor.Role != "ops" {
+		httpx.WriteError(w, http.StatusForbidden, "forbidden", "only admin/ops can import challenges")
+		return
+	}
 
 	var input adminImportChallengesRequest
 	if err := decodeJSON(r, &input); err != nil {

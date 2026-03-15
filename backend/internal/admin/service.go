@@ -21,6 +21,21 @@ type Service struct {
 	attachmentStorageDir string
 }
 
+type challengeOwnerChecker interface {
+	GetChallenge(context.Context, Actor, int64) (ChallengeDetail, error)
+}
+
+func challengeOwnedByUser(ctx context.Context, repo challengeOwnerChecker, challengeID int64, userID int64) (bool, error) {
+	_, err := repo.GetChallenge(ctx, Actor{UserID: userID, Role: "author"}, challengeID)
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, ErrResourceNotFound) {
+		return false, nil
+	}
+	return false, err
+}
+
 func NewService(repo Repository, attachmentStorageDir string) *Service {
 	return NewServiceWithManager(repo, attachmentStorageDir, nil)
 }
@@ -148,7 +163,16 @@ func (s *Service) CreateAttachment(ctx context.Context, actor Actor, challengeID
 	return attachment, nil
 }
 
-func (s *Service) Attachment(ctx context.Context, challengeID int64, attachmentID int64) (Attachment, string, error) {
+func (s *Service) Attachment(ctx context.Context, actor Actor, challengeID int64, attachmentID int64) (Attachment, string, error) {
+	if actor.RestrictToOwnedChallenges() {
+		allowed, err := challengeOwnedByUser(ctx, s.repo, challengeID, actor.UserID)
+		if err != nil {
+			return Attachment{}, "", err
+		}
+		if !allowed {
+			return Attachment{}, "", ErrResourceNotFound
+		}
+	}
 	return s.repo.GetAttachment(ctx, challengeID, attachmentID)
 }
 
