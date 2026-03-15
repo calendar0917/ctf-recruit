@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 
-import { api, type AdminChallengeInput, type AdminChallengeSummary } from '../../../api'
+import { api, type AdminChallengeAuthor, type AdminChallengeInput, type AdminChallengeSummary } from '../../../api'
 import { NoticeBanner } from '../../components/NoticeBanner'
 import type { Notice } from '../../utils/errors'
 import { errorToNotice } from '../../utils/errors'
@@ -28,11 +28,11 @@ function defaultChallengeInput(): AdminChallengeInput {
       exposed_protocol: 'http',
       container_port: 80,
       default_ttl_seconds: 1800,
-      max_renew_count: 1,
+      max_renew_count: 0,
       memory_limit_mb: 256,
       cpu_limit_millicores: 500,
-      max_active_instances: 100,
-      user_cooldown_seconds: 30,
+      max_active_instances: 0,
+      user_cooldown_seconds: 0,
       env: {},
       command: [],
     },
@@ -44,10 +44,19 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
   const [saving, setSaving] = useState(false)
   const [notice, setNotice] = useState<Notice | null>(null)
 
+  const [lastSavedDraft, setLastSavedDraft] = useState<AdminChallengeInput>(defaultChallengeInput)
+  const [dirtyFields, setDirtyFields] = useState<Set<string>>(() => new Set())
+
   const [items, setItems] = useState<AdminChallengeSummary[]>([])
   const [activeID, setActiveID] = useState<number | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [draft, setDraft] = useState<AdminChallengeInput>(defaultChallengeInput)
+
+  const [authors, setAuthors] = useState<AdminChallengeAuthor[]>([])
+  const [authorsLoading, setAuthorsLoading] = useState(false)
+  const [usersLoading, setUsersLoading] = useState(false)
+  const [authorSearch, setAuthorSearch] = useState('')
+  const [authorCandidates, setAuthorCandidates] = useState<Array<{ id: number; username: string; display_name: string; email: string; role: string }>>([])
 
   const [importRoot, setImportRoot] = useState('../challenges')
   const [importPath, setImportPath] = useState('')
@@ -56,6 +65,54 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
   const [buildTemplate, setBuildTemplate] = useState('web-welcome')
   const [buildTag, setBuildTag] = useState('')
   const [buildResult, setBuildResult] = useState<{ stdout: string; stderr: string; exit_code: number; duration_ms: number; command: string[]; error?: string } | null>(null)
+
+  const markDirty = (key: string): void => {
+    setDirtyFields((current) => {
+      const next = new Set(current)
+      next.add(key)
+      return next
+    })
+  }
+
+  const patchDraft = (key: string, update: Partial<AdminChallengeInput>): void => {
+    setDraft((current) => ({ ...current, ...update }))
+    markDirty(key)
+  }
+
+  const patchRuntime = (key: string, update: Partial<NonNullable<AdminChallengeInput['runtime_config']>>): void => {
+    setDraft((current) => ({
+      ...current,
+      runtime_config: {
+        ...(current.runtime_config ?? defaultChallengeInput().runtime_config!),
+        ...update,
+      },
+    }))
+    markDirty(key)
+  }
+
+  const patchRuntimeEnv = (key: string, update: Record<string, string>): void => {
+    patchRuntime(key, { env: update })
+  }
+
+  const activeSummary = useMemo(() => items.find((item) => item.id === activeID) ?? null, [activeID, items])
+
+  const deriveTemplateFromDraft = useMemo(() => {
+    const slug = draft.slug.trim()
+    if (slug) return slug
+    if (activeSummary?.slug?.trim()) return activeSummary.slug.trim()
+    return ''
+  }, [activeSummary?.slug, draft.slug])
+
+  const canBuildForDraft = useMemo(() => {
+    if (!draft.dynamic_enabled) return false
+    if (!deriveTemplateFromDraft) return false
+    return true
+  }, [deriveTemplateFromDraft, draft.dynamic_enabled])
+
+  const canImportForDraft = useMemo(() => {
+    if (!deriveTemplateFromDraft) return false
+    return true
+  }, [deriveTemplateFromDraft])
 
   const loadList = async (): Promise<void> => {
     setLoading(true)
@@ -79,7 +136,7 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
     try {
       const response = await api.adminChallenge(props.token, id)
       const ch = response.challenge
-      setDraft({
+      const nextDraft: AdminChallengeInput = {
         slug: ch.slug,
         title: ch.title,
         category_slug: ch.category,
@@ -93,11 +150,66 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
         visible: ch.visible,
         sort_order: ch.sort_order,
         runtime_config: ch.runtime_config,
-      })
+      }
+      setDraft(nextDraft)
+      setLastSavedDraft(nextDraft)
+      setDirtyFields(new Set())
+      setBuildTemplate(ch.slug)
+      setBuildTag(ch.runtime_config?.image_name ?? '')
+
+      // Keep authors in a separate state so admin can edit without having to patch challenge detail schema.
+      setAuthors(ch.authors ?? [])
     } catch (error) {
       setNotice(errorToNotice(error, '题目详情加载失败。'))
     } finally {
       setDetailLoading(false)
+    }
+  }
+
+  const loadAuthorCandidates = async (): Promise<void> => {
+    setUsersLoading(true)
+    setNotice(null)
+    try {
+      const response = await api.adminUsers(props.token)
+      const candidates = response.items
+        .filter((u) => u.role === 'admin' || u.role === 'author')
+        .map((u) => ({ id: u.id, username: u.username, display_name: u.display_name, email: u.email, role: u.role }))
+      setAuthorCandidates(candidates)
+    } catch (error) {
+      setNotice(errorToNotice(error, '加载作者候选失败。'))
+    } finally {
+      setUsersLoading(false)
+    }
+  }
+
+  const loadAuthors = async (): Promise<void> => {
+    if (!activeID) return
+    setAuthorsLoading(true)
+    setNotice(null)
+    try {
+      const response = await api.adminChallengeAuthors(props.token, activeID)
+      setAuthors(response.items)
+    } catch (error) {
+      setNotice(errorToNotice(error, '加载题目作者失败。'))
+    } finally {
+      setAuthorsLoading(false)
+    }
+  }
+
+  const saveAuthors = async (): Promise<void> => {
+    if (!activeID) return
+    setSaving(true)
+    setNotice(null)
+    try {
+      const userIDs = authors.map((a) => a.user_id)
+      await api.updateAdminChallengeAuthors(props.token, activeID, userIDs)
+      setNotice({ tone: 'ok', text: '已保存题目作者。' })
+      await loadAuthors()
+      await loadList()
+    } catch (error) {
+      setNotice(errorToNotice(error, '保存作者失败。'))
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -111,7 +223,10 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeID])
 
-  const activeSummary = useMemo(() => items.find((item) => item.id === activeID) ?? null, [activeID, items])
+  useEffect(() => {
+    void loadAuthorCandidates()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const save = async (): Promise<void> => {
     if (!activeID) return
@@ -120,6 +235,8 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
     try {
       await api.updateAdminChallenge(props.token, activeID, draft)
       setNotice({ tone: 'ok', text: '已保存题目。' })
+      setLastSavedDraft(draft)
+      setDirtyFields(new Set())
       await loadList()
     } catch (error) {
       setNotice(errorToNotice(error, '保存题目失败。'))
@@ -134,6 +251,8 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
     try {
       const response = await api.createAdminChallenge(props.token, draft)
       setNotice({ tone: 'ok', text: '已创建题目。' })
+      setLastSavedDraft(draft)
+      setDirtyFields(new Set())
       await loadList()
       setActiveID(response.challenge.id)
     } catch (error) {
@@ -176,6 +295,36 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
     }
   }
 
+  const importForActiveChallenge = async (): Promise<void> => {
+    const template = deriveTemplateFromDraft
+    if (!template.trim()) {
+      setNotice({ tone: 'neutral', text: '请先填写 slug（用于定位 templates 目录）。' })
+      return
+    }
+    if (!confirm(`将从 templates/${template}/challenge.yaml 导入并覆盖当前题目信息（含 runtime_config）。继续？`)) return
+
+    setSaving(true)
+    setNotice(null)
+    try {
+      const root = importRoot.trim() || '../challenges'
+      const normalizedRoot = root.replace(/\/+$/, '')
+      const response = await api.adminImportChallenges(props.token, {
+        root,
+        path: `${normalizedRoot}/templates/${template}/challenge.yaml`,
+        attachment_dir: importAttachmentDir.trim() || undefined,
+      })
+      setNotice({ tone: 'ok', text: `已导入：${response.result.slugs.join(', ')}` })
+      await loadList()
+      if (activeID) {
+        await loadDetail(activeID)
+      }
+    } catch (error) {
+      setNotice(errorToNotice(error, '导入失败。'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const buildImage = async (): Promise<void> => {
     if (!buildTemplate.trim()) {
       setNotice({ tone: 'neutral', text: '请填写 template。' })
@@ -201,6 +350,75 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
       setSaving(false)
     }
   }
+
+  const buildImageForActiveChallenge = async (): Promise<void> => {
+    const template = deriveTemplateFromDraft
+    if (!template.trim()) {
+      setNotice({ tone: 'neutral', text: '请先填写 slug（用于定位 templates 目录）。' })
+      return
+    }
+    if (!draft.dynamic_enabled) {
+      setNotice({ tone: 'neutral', text: '该题未启用 dynamic_enabled；无需构建镜像。' })
+      return
+    }
+    const tag = (draft.runtime_config?.image_name ?? '').trim()
+    if (!tag) {
+      setNotice({ tone: 'neutral', text: '请先在 Runtime 配置中填写 image_name（用于 docker tag）。' })
+      return
+    }
+
+    setSaving(true)
+    setNotice(null)
+    setBuildResult(null)
+    try {
+      const response = await api.adminBuildChallengeImage(props.token, {
+        template,
+        tag,
+      })
+      setBuildResult({ ...response.result, error: response.error })
+      if (response.result.exit_code === 0) {
+        setNotice({ tone: 'ok', text: `镜像构建完成：${tag}` })
+      } else {
+        setNotice({ tone: 'danger', text: '镜像构建失败，请查看输出。' })
+      }
+    } catch (error) {
+      setNotice(errorToNotice(error, '镜像构建失败。'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const runtimeEnabled = Boolean(draft.runtime_config?.enabled)
+  const runtimeEnv = draft.runtime_config?.env ?? {}
+  const runtimeCommandText = useMemo(() => {
+    const cmd = draft.runtime_config?.command ?? []
+    return cmd.join(' ')
+  }, [draft.runtime_config?.command])
+
+  const runtimeDirty = useMemo(() => {
+    for (const key of dirtyFields) {
+      if (key.startsWith('runtime.')) return true
+    }
+    return false
+  }, [dirtyFields])
+
+  const attachments = useMemo(() => {
+    return (draft as any)?.attachments ?? []
+  }, [draft])
+
+  const filteredCandidates = useMemo(() => {
+    const q = authorSearch.trim().toLowerCase()
+    if (!q) return authorCandidates
+    return authorCandidates.filter((u) => {
+      return (
+        u.username.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q) ||
+        (u.display_name ?? '').toLowerCase().includes(q)
+      )
+    })
+  }, [authorCandidates, authorSearch])
+
+  const authorIDSet = useMemo(() => new Set(authors.map((a) => a.user_id)), [authors])
 
   return (
     <section className="player-board-shell workspace-grid admin-grid">
@@ -237,11 +455,13 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
 
         <details className="detail-row" style={{ marginTop: 12 }}>
           <summary style={{ cursor: 'pointer' }}>
-            <strong>导入挑战（server-local）</strong>
+            <strong>导入 / 构建（工具箱）</strong>
           </summary>
+
           <div className="hint-text" style={{ marginTop: 10 }}>
-            用于从仓库内的 `challenge.yaml` 批量导入（类似 `scripts/import-challenges.sh`），不会自动构建镜像。
+            说明：本项目的“动态题”运行依赖 `runtime_config.image_name`（数据库），镜像构建只负责把 `templates/&lt;slug&gt;` 的 Dockerfile build 成该 tag。
           </div>
+
           <div className="form-grid" style={{ marginTop: 12 }}>
             <label className="field" style={{ gridColumn: '1 / -1' }}>
               <span>root</span>
@@ -259,25 +479,25 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
               <small className="hint-text">不填则用后端默认配置。</small>
             </label>
           </div>
+
           <div className="wrap-actions" style={{ marginTop: 12 }}>
-            <button className="primary-button" type="button" disabled={saving} onClick={() => void importChallenges()}>
-              {saving ? '导入中…' : '开始导入'}
+            <button className="ghost-button" type="button" disabled={saving} onClick={() => void importChallenges()}>
+              {saving ? '导入中…' : '批量导入（按 root/path）'}
+            </button>
+            <button className="primary-button" type="button" disabled={saving || !canImportForDraft} onClick={() => void importForActiveChallenge()}>
+              {saving ? '导入中…' : `导入当前题（templates/${deriveTemplateFromDraft || '…'}/challenge.yaml）`}
             </button>
           </div>
-        </details>
 
-        <details className="detail-row" style={{ marginTop: 12 }}>
-          <summary style={{ cursor: 'pointer' }}>
-            <strong>构建镜像（server-exec）</strong>
-          </summary>
-          <div className="hint-text" style={{ marginTop: 10 }}>
-            受限执行：只允许构建 `../challenges/templates/&lt;template&gt;` 下的 Dockerfile。
+          <div className="divider-line" style={{ marginTop: 14 }}>
+            <span>镜像</span>
           </div>
+
           <div className="form-grid" style={{ marginTop: 12 }}>
             <label className="field" style={{ gridColumn: '1 / -1' }}>
               <span>template</span>
               <input value={buildTemplate} onChange={(e) => setBuildTemplate(e.target.value)} placeholder="web-welcome" />
-              <small className="hint-text">对应 templates 目录名。</small>
+              <small className="hint-text">工具箱模式：手动指定 templates 目录名（不绑定题目）。</small>
             </label>
             <label className="field" style={{ gridColumn: '1 / -1' }}>
               <span>tag（可选）</span>
@@ -285,9 +505,13 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
               <small className="hint-text">不填则默认 `ctf/&lt;template&gt;:dev`。</small>
             </label>
           </div>
+
           <div className="wrap-actions" style={{ marginTop: 12 }}>
-            <button className="primary-button" type="button" disabled={saving} onClick={() => void buildImage()}>
-              {saving ? '构建中…' : '开始构建'}
+            <button className="ghost-button" type="button" disabled={saving} onClick={() => void buildImage()}>
+              {saving ? '构建中…' : '构建（工具箱）'}
+            </button>
+            <button className="primary-button" type="button" disabled={saving || !canBuildForDraft} onClick={() => void buildImageForActiveChallenge()}>
+              {saving ? '构建中…' : `构建当前题（${(draft.runtime_config?.image_name ?? '').trim() || '请先填 image_name'}）`}
             </button>
           </div>
 
@@ -329,6 +553,7 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
               <p className="panel-subtitle">保存后即写入后端；points 与 status 影响公开列表与得分。</p>
             </div>
             <div className="inline-actions">
+              {dirtyFields.size ? <span className="badge badge-accent">未保存 {dirtyFields.size}</span> : <span className="badge">已同步</span>}
               {activeID ? (
                 <button className="primary-button" type="button" disabled={saving || detailLoading} onClick={() => void save()}>
                   {saving ? '保存中…' : '保存'}
@@ -346,21 +571,21 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
           <div className="form-grid">
             <label className="field">
               <span>slug</span>
-              <input value={draft.slug} onChange={(e) => setDraft((v) => ({ ...v, slug: e.target.value }))} placeholder="web-welcome" />
+              <input value={draft.slug} onChange={(e) => patchDraft('meta.slug', { slug: e.target.value })} placeholder="web-welcome" />
             </label>
             <label className="field">
               <span>title</span>
-              <input value={draft.title} onChange={(e) => setDraft((v) => ({ ...v, title: e.target.value }))} placeholder="Welcome" />
+              <input value={draft.title} onChange={(e) => patchDraft('meta.title', { title: e.target.value })} placeholder="Welcome" />
             </label>
 
             <label className="field">
               <span>category</span>
-              <input value={draft.category_slug} onChange={(e) => setDraft((v) => ({ ...v, category_slug: e.target.value }))} placeholder="web" />
+              <input value={draft.category_slug} onChange={(e) => patchDraft('meta.category', { category_slug: e.target.value })} placeholder="web" />
             </label>
 
             <label className="field">
               <span>difficulty</span>
-              <select value={draft.difficulty} onChange={(e) => setDraft((v) => ({ ...v, difficulty: e.target.value }))}>
+              <select value={draft.difficulty} onChange={(e) => patchDraft('meta.difficulty', { difficulty: e.target.value })}>
                 {DIFFICULTIES.map((d) => (
                   <option key={d} value={d}>
                     {d}
@@ -374,14 +599,14 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
               <input
                 type="number"
                 value={draft.points}
-                onChange={(e) => setDraft((v) => ({ ...v, points: Number(e.target.value) }))}
+                onChange={(e) => patchDraft('meta.points', { points: Number(e.target.value) })}
                 min={0}
               />
             </label>
 
             <label className="field">
               <span>status</span>
-              <select value={draft.status} onChange={(e) => setDraft((v) => ({ ...v, status: e.target.value }))}>
+              <select value={draft.status} onChange={(e) => patchDraft('meta.status', { status: e.target.value })}>
                 {CHALLENGE_STATUSES.map((s) => (
                   <option key={s} value={s}>
                     {s}
@@ -392,12 +617,12 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
 
             <label className="field" style={{ gridColumn: '1 / -1' }}>
               <span>description</span>
-              <textarea value={draft.description} onChange={(e) => setDraft((v) => ({ ...v, description: e.target.value }))} rows={6} />
+              <textarea value={draft.description} onChange={(e) => patchDraft('meta.description', { description: e.target.value })} rows={6} />
             </label>
 
             <label className="field">
               <span>flag_type</span>
-              <select value={draft.flag_type} onChange={(e) => setDraft((v) => ({ ...v, flag_type: e.target.value }))}>
+              <select value={draft.flag_type} onChange={(e) => patchDraft('flag.type', { flag_type: e.target.value })}>
                 <option value="static">static</option>
                 <option value="case_insensitive">case_insensitive</option>
                 <option value="regex">regex</option>
@@ -405,25 +630,230 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
             </label>
             <label className="field">
               <span>flag_value</span>
-              <input value={draft.flag_value} onChange={(e) => setDraft((v) => ({ ...v, flag_value: e.target.value }))} />
+              <input value={draft.flag_value} onChange={(e) => patchDraft('flag.value', { flag_value: e.target.value })} />
             </label>
 
             <label className="field">
               <span>dynamic_enabled</span>
-              <select value={String(draft.dynamic_enabled)} onChange={(e) => setDraft((v) => ({ ...v, dynamic_enabled: e.target.value === 'true' }))}>
+              <select value={String(draft.dynamic_enabled)} onChange={(e) => patchDraft('meta.dynamic_enabled', { dynamic_enabled: e.target.value === 'true' })}>
                 <option value="false">false</option>
                 <option value="true">true</option>
               </select>
             </label>
             <label className="field">
               <span>visible</span>
-              <select value={String(draft.visible)} onChange={(e) => setDraft((v) => ({ ...v, visible: e.target.value === 'true' }))}>
+              <select value={String(draft.visible)} onChange={(e) => patchDraft('meta.visible', { visible: e.target.value === 'true' })}>
                 <option value="false">false</option>
                 <option value="true">true</option>
               </select>
             </label>
           </div>
         </section>
+
+        {activeID ? (
+          <section className="panel">
+            <header className="panel-head">
+              <div>
+                <p className="eyebrow">Runtime</p>
+                <h2>动态运行配置</h2>
+                <p className="panel-subtitle">一个 dynamic 题目最终对应一个 `image_name`（docker tag）。构建镜像只是在把模板 build 成这个 tag。</p>
+              </div>
+              <div className="inline-actions">
+                {runtimeDirty ? <span className="badge badge-accent">未保存</span> : <span className="badge">已同步</span>}
+                <button
+                  className="ghost-button"
+                  type="button"
+                  disabled={saving || detailLoading}
+                  onClick={() => {
+                    setDraft(lastSavedDraft)
+                    setDirtyFields(new Set())
+                    setNotice({ tone: 'neutral', text: '已还原到上次保存版本。' })
+                  }}
+                >
+                  撤销
+                </button>
+                <button className="primary-button" type="button" disabled={saving || detailLoading} onClick={() => void save()}>
+                  {saving ? '保存中…' : '保存'}
+                </button>
+              </div>
+            </header>
+
+            <div className="form-grid" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+              <label className="field">
+                <span>enabled</span>
+                <select value={String(runtimeEnabled)} onChange={(e) => patchRuntime('runtime.enabled', { enabled: e.target.value === 'true' })}>
+                  <option value="false">false</option>
+                  <option value="true">true</option>
+                </select>
+              </label>
+              <label className="field">
+                <span>exposed_protocol</span>
+                <select
+                  value={draft.runtime_config?.exposed_protocol ?? 'http'}
+                  onChange={(e) => patchRuntime('runtime.exposed_protocol', { exposed_protocol: e.target.value })}
+                >
+                  <option value="http">http</option>
+                  <option value="https">https</option>
+                  <option value="tcp">tcp</option>
+                  <option value="udp">udp</option>
+                </select>
+              </label>
+
+              <label className="field" style={{ gridColumn: '1 / -1' }}>
+                <span>image_name</span>
+                <input
+                  value={draft.runtime_config?.image_name ?? ''}
+                  onChange={(e) => patchRuntime('runtime.image_name', { image_name: e.target.value })}
+                  placeholder="ctf/web-welcome:dev"
+                />
+                <small className="hint-text">建议与 templates 目录同名；动态实例启动时会直接拉取/使用该 tag。</small>
+              </label>
+
+              <label className="field">
+                <span>container_port</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={draft.runtime_config?.container_port ?? 80}
+                  onChange={(e) => patchRuntime('runtime.container_port', { container_port: Number(e.target.value) })}
+                />
+              </label>
+              <label className="field">
+                <span>default_ttl_seconds</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={draft.runtime_config?.default_ttl_seconds ?? 1800}
+                  onChange={(e) => patchRuntime('runtime.default_ttl_seconds', { default_ttl_seconds: Number(e.target.value) })}
+                />
+              </label>
+
+              <label className="field">
+                <span>memory_limit_mb</span>
+                <input
+                  type="number"
+                  min={16}
+                  value={draft.runtime_config?.memory_limit_mb ?? 256}
+                  onChange={(e) => patchRuntime('runtime.memory_limit_mb', { memory_limit_mb: Number(e.target.value) })}
+                />
+              </label>
+              <label className="field">
+                <span>cpu_limit_millicores</span>
+                <input
+                  type="number"
+                  min={50}
+                  value={draft.runtime_config?.cpu_limit_millicores ?? 500}
+                  onChange={(e) => patchRuntime('runtime.cpu_limit_millicores', { cpu_limit_millicores: Number(e.target.value) })}
+                />
+              </label>
+
+              <label className="field">
+                <span>max_renew_count</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={draft.runtime_config?.max_renew_count ?? 0}
+                  onChange={(e) => patchRuntime('runtime.max_renew_count', { max_renew_count: Number(e.target.value) })}
+                />
+              </label>
+              <label className="field">
+                <span>max_active_instances</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={draft.runtime_config?.max_active_instances ?? 0}
+                  onChange={(e) => patchRuntime('runtime.max_active_instances', { max_active_instances: Number(e.target.value) })}
+                />
+              </label>
+
+              <label className="field">
+                <span>user_cooldown_seconds</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={draft.runtime_config?.user_cooldown_seconds ?? 0}
+                  onChange={(e) => patchRuntime('runtime.user_cooldown_seconds', { user_cooldown_seconds: Number(e.target.value) })}
+                />
+              </label>
+
+              <label className="field" style={{ gridColumn: '1 / -1' }}>
+                <span>command</span>
+                <input
+                  value={runtimeCommandText}
+                  onChange={(e) => {
+                    const nextText = e.target.value
+                    const parts = nextText
+                      .split(' ')
+                      .map((p) => p.trim())
+                      .filter(Boolean)
+                    patchRuntime('runtime.command', { command: parts })
+                  }}
+                  placeholder="/app/start.sh --port 80"
+                />
+                <small className="hint-text">简单按空格切分（不支持引号转义）；复杂 command 建议通过导入 spec 写入。</small>
+              </label>
+            </div>
+
+            <div className="divider-line" style={{ marginTop: 14 }}>
+              <span>Env</span>
+            </div>
+
+            <div className="detail-stack" style={{ marginTop: 12 }}>
+              {Object.keys(runtimeEnv).length === 0 ? <div className="hint-text">暂无 env（可添加）。</div> : null}
+              {Object.entries(runtimeEnv).map(([k, v]) => (
+                <div key={k} className="row-card" style={{ gridTemplateColumns: 'minmax(0, 1fr)', padding: 12 }}>
+                  <div className="hint-text" style={{ marginBottom: 10 }}>{k}</div>
+                  <input
+                    value={v}
+                    onChange={(e) => patchRuntimeEnv(`runtime.env.${k}`, { ...runtimeEnv, [k]: e.target.value })}
+                  />
+                  <div className="wrap-actions" style={{ marginTop: 10 }}>
+                    <button
+                      className="ghost-button danger-button"
+                      type="button"
+                      onClick={() => {
+                        const next = { ...runtimeEnv }
+                        delete next[k]
+                        patchRuntimeEnv(`runtime.env.${k}`, next)
+                      }}
+                    >
+                      删除
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              <div className="wrap-actions" style={{ marginTop: 12 }}>
+                <button
+                  className="ghost-button"
+                  type="button"
+                  onClick={() => {
+                    const key = prompt('新增 env key（例如 MODE）')
+                    if (!key) return
+                    const trimmed = key.trim()
+                    if (!trimmed) return
+                    if (trimmed in runtimeEnv) {
+                      setNotice({ tone: 'neutral', text: '该 key 已存在。' })
+                      return
+                    }
+                    patchRuntimeEnv(`runtime.env.${trimmed}`, { ...runtimeEnv, [trimmed]: '' })
+                  }}
+                >
+                  添加变量
+                </button>
+                <button
+                  className="primary-button"
+                  type="button"
+                  disabled={saving || !canBuildForDraft}
+                  onClick={() => void buildImageForActiveChallenge()}
+                  title={!canBuildForDraft ? '需要 dynamic_enabled=true 且 slug 可用' : undefined}
+                >
+                  构建当前题镜像
+                </button>
+              </div>
+            </div>
+          </section>
+        ) : null}
 
         {activeID ? (
           <section className="panel">
@@ -447,10 +877,118 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
                   />
                   上传
                 </label>
+                <button className="ghost-button" type="button" disabled={saving || detailLoading} onClick={() => activeID && void loadDetail(activeID)}>
+                  刷新
+                </button>
               </div>
             </header>
 
-            <div className="hint-text">上传能力已接通；附件列表刷新会在后端返回详情后显示。</div>
+            {attachments.length ? (
+              <div className="attachment-list" style={{ marginTop: 12 }}>
+                {attachments.map((item: any) => (
+                  <a
+                    key={item.id}
+                    className="attachment-row"
+                    href={`/api/v1/admin/challenges/${activeID}/attachments/${item.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <div style={{ display: 'grid', gap: 2 }}>
+                      <strong>{item.filename}</strong>
+                      <small className="hint-text">{item.content_type}</small>
+                    </div>
+                    <span className="badge">{Math.round((item.size_bytes / 1024) * 10) / 10} KB</span>
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <div className="hint-text">暂无附件。上传后会出现在这里，并可直接下载验证。</div>
+            )}
+          </section>
+        ) : null}
+
+        {activeID ? (
+          <section className="panel">
+            <header className="panel-head">
+              <div>
+                <p className="eyebrow">Authors</p>
+                <h2>题目负责人</h2>
+                <p className="panel-subtitle">用于 author 角色可见性与写权限（仅 admin 可修改作者集合）。</p>
+              </div>
+              <div className="inline-actions">
+                <button className="ghost-button" type="button" disabled={saving || authorsLoading} onClick={() => void loadAuthors()}>
+                  {authorsLoading ? '加载中…' : '刷新'}
+                </button>
+                <button className="primary-button" type="button" disabled={saving} onClick={() => void saveAuthors()}>
+                  {saving ? '保存中…' : '保存作者'}
+                </button>
+              </div>
+            </header>
+
+            <div className="form-grid" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+              <label className="field">
+                <span>搜索候选</span>
+                <input value={authorSearch} onChange={(e) => setAuthorSearch(e.target.value)} placeholder="username / email / display_name" />
+              </label>
+              <div className="field" />
+            </div>
+
+            {usersLoading ? <div className="hint-text">加载候选中…</div> : null}
+
+            <div className="card-list" style={{ marginTop: 12, gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+              {filteredCandidates.slice(0, 12).map((u) => {
+                const active = authorIDSet.has(u.id)
+                return (
+                  <button
+                    key={u.id}
+                    type="button"
+                    className={`challenge-card challenge-card-player ${active ? 'active' : ''}`}
+                    onClick={() => {
+                      if (active) {
+                        setAuthors((list) => list.filter((a) => a.user_id !== u.id))
+                        return
+                      }
+                      setAuthors((list) => [...list, { user_id: u.id, username: u.username, email: u.email, display_name: u.display_name, role: u.role }])
+                    }}
+                  >
+                    <strong>{u.display_name || u.username}</strong>
+                    <div className="challenge-card-subline">
+                      <small>@{u.username}</small>
+                      <small>{u.role}</small>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="divider-line" style={{ marginTop: 14 }}>
+              <span>当前作者</span>
+            </div>
+
+            {authors.length ? (
+              <div className="compact-list" style={{ marginTop: 12 }}>
+                {authors.map((a) => (
+                  <article key={a.user_id} className="entry-card" style={{ padding: 12 }}>
+                    <div className="badge-row">
+                      <span className="badge">#{a.user_id}</span>
+                      <span className="badge">{a.role}</span>
+                      <span className="badge">@{a.username}</span>
+                      <span className="badge">{a.email}</span>
+                    </div>
+                    <strong>{a.display_name || a.username}</strong>
+                    <div className="wrap-actions" style={{ marginTop: 10 }}>
+                      <button className="ghost-button danger-button" type="button" onClick={() => setAuthors((list) => list.filter((x) => x.user_id !== a.user_id))}>
+                        移除
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="hint-text" style={{ marginTop: 12 }}>
+                尚未设置作者。author 角色将无法看到/编辑该题（会返回 404）。
+              </div>
+            )}
           </section>
         ) : null}
       </section>

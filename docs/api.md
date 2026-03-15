@@ -423,6 +423,8 @@
 - `GET /api/v1/admin/users`
 - `PATCH /api/v1/admin/users/{userID}`
 - `GET /api/v1/admin/audit-logs`
+- `POST /api/v1/admin/challenges/import`
+- `POST /api/v1/admin/challenges/build-image`
 
 ## 管理接口返回结构（节选）
 
@@ -502,6 +504,50 @@
 
 ```json
 {"attachment":{"id":1,"filename":"challenge.zip","content_type":"application/zip","size_bytes":12345}}
+```
+
+### `POST /api/v1/admin/challenges/import`
+
+从 server-local 路径导入 `challenge.yaml`（开发态/受控部署用）。
+
+请求：
+
+```json
+{"contest_slug":"recruit-2025","root":"../challenges","path":"../challenges/templates/web-welcome/challenge.yaml","attachment_dir":"/tmp/ctf-attachments"}
+```
+
+说明：
+
+- `contest_slug` 为空时默认 `recruit-2025`
+- `path` 优先级高于 `root`；不填 `path` 时会扫描 `root` 下所有 `challenge.yaml`
+- 导入会写入题目基础信息、附件元数据与 `runtime_config`
+
+响应：
+
+```json
+{"result":{"imported":1,"slugs":["web-welcome"]}}
+```
+
+### `POST /api/v1/admin/challenges/build-image`
+
+受限执行 `docker build`：仅允许构建 `../challenges/templates/<template>` 下的 Dockerfile。
+
+请求：
+
+```json
+{"template":"web-welcome","tag":"ctf/web-welcome:dev"}
+```
+
+说明：
+
+- `tag` 不填则默认 `ctf/<template>:dev`
+- 输出会截断为最后 64KB（避免日志爆炸）
+- 该接口不会自动修改数据库中的 `runtime_config.image_name`（前端建议把两者绑定）
+
+响应（节选）：
+
+```json
+{"result":{"command":["docker","build","-t","ctf/web-welcome:dev","../challenges/templates/web-welcome"],"duration_ms":1234,"exit_code":0,"stdout":"...","stderr":"..."}}
 ```
 
 ## 当前约定

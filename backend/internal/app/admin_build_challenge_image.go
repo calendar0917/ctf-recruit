@@ -47,11 +47,23 @@ func (s *Server) handleAdminBuildChallengeImage(w http.ResponseWriter, r *http.R
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_template", "template is required")
 		return
 	}
+	if name == "." || name == string(filepath.Separator) {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_template", "template name is not allowed")
+		return
+	}
+	if filepath.Base(name) != name || strings.Contains(name, "..") {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_template", "template name is not allowed")
+		return
+	}
 	// Whitelist: templates are under ../challenges/templates/<name>
 	// The API runs from backend/, so use ../challenges.
 	base := filepath.Clean(filepath.Join("..", "challenges", "templates"))
 	templateDir := filepath.Clean(filepath.Join(base, name))
-	if !strings.HasPrefix(templateDir, base+string(filepath.Separator)) && templateDir != base {
+	if templateDir == base {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_template", "template name is not allowed")
+		return
+	}
+	if !strings.HasPrefix(templateDir, base+string(filepath.Separator)) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_template", "template path is not allowed")
 		return
 	}
