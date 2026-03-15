@@ -49,6 +49,10 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
   const [detailLoading, setDetailLoading] = useState(false)
   const [draft, setDraft] = useState<AdminChallengeInput>(defaultChallengeInput)
 
+  const [importRoot, setImportRoot] = useState('../challenges')
+  const [importPath, setImportPath] = useState('')
+  const [importAttachmentDir, setImportAttachmentDir] = useState('')
+
   const loadList = async (): Promise<void> => {
     setLoading(true)
     setNotice(null)
@@ -150,6 +154,24 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
     }
   }
 
+  const importChallenges = async (): Promise<void> => {
+    setSaving(true)
+    setNotice(null)
+    try {
+      const response = await api.adminImportChallenges(props.token, {
+        root: importRoot.trim() || undefined,
+        path: importPath.trim() || undefined,
+        attachment_dir: importAttachmentDir.trim() || undefined,
+      })
+      setNotice({ tone: 'ok', text: `已导入 ${response.result.imported} 个 challenge：${response.result.slugs.slice(0, 6).join(', ')}${response.result.slugs.length > 6 ? '…' : ''}` })
+      await loadList()
+    } catch (error) {
+      setNotice(errorToNotice(error, '导入失败。'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <section className="player-board-shell workspace-grid admin-grid">
       <aside className="panel rail-panel">
@@ -182,6 +204,37 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
             </button>
           </div>
         </div>
+
+        <details className="detail-row" style={{ marginTop: 12 }}>
+          <summary style={{ cursor: 'pointer' }}>
+            <strong>导入挑战（server-local）</strong>
+          </summary>
+          <div className="hint-text" style={{ marginTop: 10 }}>
+            用于从仓库内的 `challenge.yaml` 批量导入（类似 `scripts/import-challenges.sh`），不会自动构建镜像。
+          </div>
+          <div className="form-grid" style={{ marginTop: 12 }}>
+            <label className="field" style={{ gridColumn: '1 / -1' }}>
+              <span>root</span>
+              <input value={importRoot} onChange={(e) => setImportRoot(e.target.value)} placeholder="./challenges" />
+              <small className="hint-text">扫描目录，自动发现所有 `challenge.yaml`。</small>
+            </label>
+            <label className="field" style={{ gridColumn: '1 / -1' }}>
+              <span>path（可选）</span>
+              <input value={importPath} onChange={(e) => setImportPath(e.target.value)} placeholder="challenges/templates/web-welcome/challenge.yaml" />
+              <small className="hint-text">填写则只导入单个 spec，优先级高于 root。</small>
+            </label>
+            <label className="field" style={{ gridColumn: '1 / -1' }}>
+              <span>attachment_dir（可选）</span>
+              <input value={importAttachmentDir} onChange={(e) => setImportAttachmentDir(e.target.value)} placeholder="/tmp/ctf-attachments" />
+              <small className="hint-text">不填则用后端默认配置。</small>
+            </label>
+          </div>
+          <div className="wrap-actions" style={{ marginTop: 12 }}>
+            <button className="primary-button" type="button" disabled={saving} onClick={() => void importChallenges()}>
+              {saving ? '导入中…' : '开始导入'}
+            </button>
+          </div>
+        </details>
 
         <div className="challenge-card-list" style={{ marginTop: 12 }}>
           {items.map((item) => (
@@ -340,4 +393,3 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
     </section>
   )
 }
-

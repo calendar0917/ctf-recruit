@@ -137,6 +137,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/admin/users", s.requirePermission("user:read", http.HandlerFunc(s.handleAdminUsers)))
 	mux.Handle("PATCH /api/v1/admin/users/{userID}", s.requirePermission("user:write", http.HandlerFunc(s.handleAdminUpdateUser)))
 	mux.Handle("GET /api/v1/admin/audit-logs", s.requirePermission("audit:read", http.HandlerFunc(s.handleAdminAuditLogs)))
+	mux.Handle("POST /api/v1/admin/challenges/import", s.requirePermission("challenge:write", http.HandlerFunc(s.handleAdminImportChallenges)))
 	return loggingMiddleware(s.metrics, mux)
 }
 

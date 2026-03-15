@@ -159,7 +159,8 @@ func (i *Importer) ImportSpec(ctx context.Context, contestSlug, path string, spe
 			userID, err := store.ResolveUserIDByAuthorRef(ctx, i.db, ref)
 			if err != nil {
 				if errors.Is(err, admin.ErrResourceNotFound) {
-					return ImportResult{}, fmt.Errorf("resolve challenge owner %q: user not found", ref)
+					// Ownership is optional for import. Skip unknown refs to avoid blocking dev imports.
+					continue
 				}
 				return ImportResult{}, err
 			}

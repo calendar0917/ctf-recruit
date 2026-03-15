@@ -471,4 +471,15 @@ export const api = {
   adminAuditLogs(token: string) {
     return request<{ items: AdminAuditLog[] }>('/api/v1/admin/audit-logs', undefined, token)
   },
+
+  adminImportChallenges(token: string, payload: { contest_slug?: string; root?: string; path?: string; attachment_dir?: string }) {
+    return request<{ result: { imported: number; slugs: string[] } }>(
+      '/api/v1/admin/challenges/import',
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+      token,
+    )
+  },
 }
