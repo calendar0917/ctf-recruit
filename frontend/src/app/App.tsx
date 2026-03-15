@@ -20,6 +20,12 @@ import { describeError, errorToNotice, isUnauthorized, type Notice } from './uti
 import { AdminShell, type AdminView } from './admin/components/AdminShell'
 import { canAccessAdmin } from './admin/utils/permissions'
 import { AdminContestPage } from './admin/pages/AdminContestPage'
+import { AdminChallengesPage } from './admin/pages/AdminChallengesPage'
+import { AdminAnnouncementsPage } from './admin/pages/AdminAnnouncementsPage'
+import { AdminSubmissionsPage } from './admin/pages/AdminSubmissionsPage'
+import { AdminInstancesPage } from './admin/pages/AdminInstancesPage'
+import { AdminUsersPage } from './admin/pages/AdminUsersPage'
+import { AdminAuditLogsPage } from './admin/pages/AdminAuditLogsPage'
 
 import brandMark from '../assets/yulin-long.svg'
 
@@ -1407,7 +1413,12 @@ export function App(): React.JSX.Element {
             {token && authUser ? (
               <>
                 {adminView === 'contest' ? <AdminContestPage token={token} /> : null}
-                {adminView !== 'contest' ? <div className="empty-state">该模块建设中…</div> : null}
+                  {adminView === 'challenges' ? <AdminChallengesPage token={token} /> : null}
+                  {adminView === 'announcements' ? <AdminAnnouncementsPage token={token} /> : null}
+                  {adminView === 'submissions' ? <AdminSubmissionsPage token={token} /> : null}
+                  {adminView === 'instances' ? <AdminInstancesPage token={token} /> : null}
+                  {adminView === 'users' ? <AdminUsersPage token={token} /> : null}
+                  {adminView === 'audit' ? <AdminAuditLogsPage token={token} /> : null}
               </>
             ) : null}
           </AdminShell>
