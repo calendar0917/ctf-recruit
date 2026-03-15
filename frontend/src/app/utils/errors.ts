@@ -32,6 +32,9 @@ export function isForbidden(error: unknown): boolean {
 
 export function errorToNotice(error: unknown, fallback: string): Notice {
   const code = readErrorCode(error)
+  if (code === 'forbidden') {
+    return { tone: 'danger', text: '权限不足。' }
+  }
   if (code === 'contest_not_public') {
     return { tone: 'neutral', text: '比赛尚未公开或当前内容未开放。' }
   }
