@@ -74,6 +74,8 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
   const [importRoot, setImportRoot] = useState('../challenges')
   const [importAttachmentDir, setImportAttachmentDir] = useState('')
 
+  const [importResult, setImportResult] = useState<null | { imported: number; slugs: string[] }>(null)
+
   const [buildResult, setBuildResult] = useState<{ stdout: string; stderr: string; exit_code: number; duration_ms: number; command: string[]; error?: string } | null>(null)
 
   const [myInstance, setMyInstance] = useState<null | {
@@ -401,6 +403,7 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
 
     setSaving(true)
     setNotice(null)
+    setImportResult(null)
     try {
       const root = importRoot.trim() || '../challenges'
       const normalizedRoot = root.replace(/\/+$/, '')
@@ -410,12 +413,42 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
         attachment_dir: importAttachmentDir.trim() || undefined,
       })
       setNotice({ tone: 'ok', text: `已导入：${response.result.slugs.join(', ')}` })
+      setImportResult(response.result)
       await loadList()
       if (activeID) {
         await loadDetail(activeID)
       }
     } catch (error) {
       setNotice(errorToNotice(error, '导入失败。'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const importAllFromRoot = async (): Promise<void> => {
+    if (!canDoServerLocal) {
+      setNotice({ tone: 'neutral', text: '当前账号无权限执行 server-local 导入（仅 admin/ops）。' })
+      return
+    }
+    const root = importRoot.trim() || '../challenges'
+    if (!confirm(`将扫描 ${root} 下所有 challenge.yaml 并幂等导入/更新题目（含 runtime_config）。继续？`)) return
+
+    setSaving(true)
+    setNotice(null)
+    setImportResult(null)
+    try {
+      const response = await api.adminImportChallenges(props.token, {
+        root,
+        attachment_dir: importAttachmentDir.trim() || undefined,
+      })
+      setImportResult(response.result)
+      setNotice({ tone: 'ok', text: `批量导入完成：${response.result.imported} 题` })
+      await loadList()
+      if (activeID) {
+        await loadDetail(activeID)
+      }
+    } catch (error) {
+      setNotice(errorToNotice(error, '批量导入失败。'))
     } finally {
       setSaving(false)
     }
@@ -555,10 +588,20 @@ export function AdminChallengesPage(props: { token: string }): React.JSX.Element
             <button className="primary-button" type="button" disabled={saving || !canDoServerLocal || !canImportForDraft} onClick={() => void importForActiveChallenge()}>
               {saving ? '导入中…' : `导入当前题（templates/${deriveTemplateFromDraft || '…'}/challenge.yaml）`}
             </button>
+            <button className="ghost-button" type="button" disabled={saving || !canDoServerLocal} onClick={() => void importAllFromRoot()}>
+              {saving ? '导入中…' : '批量导入（扫描 root）'}
+            </button>
             <button className="primary-button" type="button" disabled={saving || !canDoServerLocal || !canBuildForDraft} onClick={() => void buildImageForActiveChallenge()}>
               {saving ? '构建中…' : `构建当前题（${(draft.runtime_config?.image_name ?? '').trim() || '请先填 image_name'}）`}
             </button>
           </div>
+
+          {importResult ? (
+            <div className="detail-stack" style={{ marginTop: 12 }}>
+              <div className="hint-text">imported {importResult.imported}</div>
+              <pre className="code-block">{importResult.slugs.join('\n') || '(no slugs)'}</pre>
+            </div>
+          ) : null}
 
           {buildResult ? (
             <div className="detail-stack" style={{ marginTop: 12 }}>
